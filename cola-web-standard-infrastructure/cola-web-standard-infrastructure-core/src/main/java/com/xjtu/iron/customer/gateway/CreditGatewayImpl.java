@@ -1,4 +1,4 @@
-package com.xjtu.iron.customer;
+package com.xjtu.iron.customer.gateway;
 
 import com.xjtu.iron.domain.customer.Credit;
 import com.xjtu.iron.domain.customer.gateway.CreditGateway;

@@ -7,10 +7,9 @@ import com.xjtu.iron.api.CustomerServiceI;
 import com.xjtu.iron.dto.CustomerAddCmd;
 import com.xjtu.iron.dto.CustomerListByNameQry;
 import com.xjtu.iron.dto.data.CustomerDTO;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.xjtu.iron.customer.executor.CustomerAddCmdExe;
+import com.xjtu.iron.customer.executor.service.CustomerAddCmdExe;
 import com.xjtu.iron.customer.executor.query.CustomerListByNameQryExe;
 
 import javax.annotation.Resource;

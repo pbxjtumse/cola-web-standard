@@ -17,9 +17,15 @@
             <groupId>com.xjtu.iron.cola.web</groupId>
             <artifactId>cola-web-standard-client</artifactId>
         </dependency>
+
+<!--        <dependency>-->
+<!--            <groupId>com.xjtu.iron.cola.web</groupId>-->
+<!--            <artifactId>cola-web-standard-infrastructure-util</artifactId>-->
+<!--        </dependency>-->
+
         <dependency>
             <groupId>com.xjtu.iron.cola.web</groupId>
-            <artifactId>cola-web-standard-infrastructure</artifactId>
+            <artifactId>cola-web-standard-domain</artifactId>
         </dependency>
 
         <dependency>

@@ -1,0 +1,1 @@
+1.gateway 、repo 接口在domain，infra层实现domain 这样子domain 引用对应的gateway 以及repo

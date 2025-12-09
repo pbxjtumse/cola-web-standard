@@ -1,5 +1,7 @@
-package com.xjtu.iron.customer;
+package com.xjtu.iron.customer.gateway;
 
+import com.xjtu.iron.customer.dbo.CustomerDO;
+import com.xjtu.iron.customer.mapper.CustomerMapper;
 import com.xjtu.iron.domain.customer.Customer;
 import com.xjtu.iron.domain.customer.gateway.CustomerGateway;
 

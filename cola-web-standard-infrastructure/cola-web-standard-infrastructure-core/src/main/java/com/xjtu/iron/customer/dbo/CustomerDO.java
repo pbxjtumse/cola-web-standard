@@ -1,4 +1,4 @@
-package com.xjtu.iron.customer;
+package com.xjtu.iron.customer.dbo;
 
 import lombok.Data;
 

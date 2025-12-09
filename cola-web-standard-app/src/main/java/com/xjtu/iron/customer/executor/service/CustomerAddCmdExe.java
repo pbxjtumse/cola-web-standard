@@ -1,5 +1,5 @@
 
-package com.xjtu.iron.customer.executor;
+package com.xjtu.iron.customer.executor.service;
 
 import com.alibaba.cola.dto.Response;
 import com.alibaba.cola.exception.BizException;
