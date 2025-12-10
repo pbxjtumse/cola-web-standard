@@ -8,10 +8,10 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>cola-web-standard-infrastructure</artifactId>
+    <artifactId>cola-web-standard-component</artifactId>
     <packaging>jar</packaging>
 
-    <name>cola-web-standard-infrastructure</name>
+    <name>cola-web-standard-component</name>
     <url>http://maven.apache.org</url>
 
     <properties>
@@ -24,17 +24,6 @@
             <artifactId>junit</artifactId>
             <version>3.8.1</version>
             <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>com.xjtu.iron.cola.web</groupId>
-            <artifactId>cola-web-standard-domain</artifactId>
-        </dependency>
-
-        <!-- 这里才是正常使用 Spring Boot 依赖的方式 -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
         </dependency>
     </dependencies>
 </project>
