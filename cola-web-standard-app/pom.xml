@@ -18,15 +18,16 @@
             <artifactId>cola-web-standard-client</artifactId>
         </dependency>
 
-<!--        <dependency>-->
-<!--            <groupId>com.xjtu.iron.cola.web</groupId>-->
-<!--            <artifactId>cola-web-standard-infrastructure-util</artifactId>-->
-<!--        </dependency>-->
-
         <dependency>
             <groupId>com.xjtu.iron.cola.web</groupId>
             <artifactId>cola-web-standard-domain</artifactId>
         </dependency>
+
+        <dependency>
+            <groupId>com.xjtu.iron.cola.web</groupId>
+            <artifactId>cola-web-standard-component</artifactId>
+        </dependency>
+
 
         <dependency>
             <groupId>com.alibaba.cola</groupId>

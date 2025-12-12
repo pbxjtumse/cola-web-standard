@@ -9,10 +9,13 @@
     </parent>
 
     <artifactId>cola-web-standard-component</artifactId>
-    <packaging>jar</packaging>
+    <packaging>pom</packaging>
 
     <name>cola-web-standard-component</name>
     <url>http://maven.apache.org</url>
+    <modules>
+        <module>cola-threadpool-component</module>
+    </modules>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
