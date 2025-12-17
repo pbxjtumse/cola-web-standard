@@ -1,7 +1,7 @@
 package com.xjtu.iron.cola.web.enums;
 
 /**
- * 发送状态
+ * 发送状态 回答了发送的状态
  * @author pbxjtu
  */
 public enum SendStatusEnum {
@@ -14,7 +14,8 @@ public enum SendStatusEnum {
      */
     FAIL,
     /**
-     * 不确定（超时 / 网络）
+     * 无法确认：超时、网络断开、连接重置
+     * 最危险，可能成功也可能失败
      */
     UNCERTAIN
 }

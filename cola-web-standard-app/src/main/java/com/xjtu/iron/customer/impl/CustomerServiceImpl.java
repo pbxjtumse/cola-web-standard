@@ -1,4 +1,4 @@
-package com.xjtu.iron.customer;
+package com.xjtu.iron.customer.impl;
 
 import com.alibaba.cola.dto.MultiResponse;
 import com.alibaba.cola.dto.Response;

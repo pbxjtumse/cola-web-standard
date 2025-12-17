@@ -1,7 +1,9 @@
-package com.xjtu.iron.domain.customer;
+package com.xjtu.iron.domain.customer.model;
 
 import com.alibaba.cola.domain.Entity;
 import com.alibaba.cola.exception.BizException;
+import com.xjtu.iron.domain.customer.CompanyType;
+import com.xjtu.iron.domain.customer.SourceType;
 import lombok.Data;
 
 //Domain Entity can choose to extend the domain model which is used for DTO
