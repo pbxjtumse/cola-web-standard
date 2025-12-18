@@ -30,6 +30,8 @@
         <module>cola-web-standard-infrastructure</module>
         <module>cola-web-standard-component</module>
         <module>start</module>
+        <module>cola-web-standard-component/cola-concurrency-component/concurrency-governance</module>
+        <module>cola-web-standard-component/cola-concurrency-component/concurrency-bridge</module>
     </modules>
 
     <dependencies>

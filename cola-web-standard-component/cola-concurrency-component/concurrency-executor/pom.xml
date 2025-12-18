@@ -3,26 +3,28 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.xjtu.iron.cola.web</groupId>
-        <artifactId>cola-web-standard-parent</artifactId>
+        <artifactId>cola-concurrency-component</artifactId>
         <version>1.0.0-SNAPSHOT</version>
-        <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>cola-web-standard-component</artifactId>
-    <packaging>pom</packaging>
+    <artifactId>concurrency-executor</artifactId>
+    <packaging>jar</packaging>
 
-    <name>cola-web-standard-component</name>
+    <name>concurrency-executor</name>
     <url>http://maven.apache.org</url>
-    <modules>
-        <module>cola-concurrency-component</module>
-        <module>cola-message-component</module>
-    </modules>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <transmittable-thread-local.version>2.14.2</transmittable-thread-local.version>
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>transmittable-thread-local</artifactId>
+            <version>${transmittable-thread-local.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
