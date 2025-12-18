@@ -13,8 +13,6 @@ public class ConcurrentExecution implements ConsumeExecution {
         this.executor = executor;
     }
 
-    @Override
-    public void execute(Message<?> message, Runnable handler) {executor.execute(handler);
-    }
+
 }
 

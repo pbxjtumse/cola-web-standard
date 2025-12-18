@@ -3,20 +3,15 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.xjtu.iron.cola.web</groupId>
-        <artifactId>cola-web-standard-parent</artifactId>
+        <artifactId>cola-concurrency-component</artifactId>
         <version>1.0.0-SNAPSHOT</version>
-        <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>cola-web-standard-component</artifactId>
-    <packaging>pom</packaging>
+    <artifactId>concurrency-reactive</artifactId>
+    <packaging>jar</packaging>
 
-    <name>cola-web-standard-component</name>
+    <name>concurrency-reactive</name>
     <url>http://maven.apache.org</url>
-    <modules>
-        <module>cola-concurrency-component</module>
-        <module>cola-message-component</module>
-    </modules>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

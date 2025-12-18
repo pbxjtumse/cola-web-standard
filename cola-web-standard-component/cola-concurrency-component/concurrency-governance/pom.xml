@@ -3,14 +3,15 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.xjtu.iron.cola.web</groupId>
-        <artifactId>cola-web-standard-component</artifactId>
+        <artifactId>cola-web-standard-parent</artifactId>
         <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>cola-threadpool-component</artifactId>
+    <artifactId>concurrency-governance</artifactId>
     <packaging>jar</packaging>
 
-    <name>cola-threadpool-component</name>
+    <name>concurrency-governance</name>
     <url>http://maven.apache.org</url>
 
     <properties>
