@@ -22,7 +22,7 @@ public class ContextAwareExecutor {
             try {
                 return task.call();
             } finally {
-                log.debug("Callable cost {} ms", System.currentTimeMillis() - start);
+                //log.debug("Callable cost {} ms", System.currentTimeMillis() - start);
             }
         });
     }

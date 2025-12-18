@@ -2,6 +2,8 @@ package com.xjtu.iron.cola.web.execution.impl.produce;
 
 import com.xjtu.iron.cola.web.Message;
 import com.xjtu.iron.cola.web.client.MqProducerClient;
+import com.xjtu.iron.cola.web.enums.SendFailTypeEnum;
+import com.xjtu.iron.cola.web.exception.*;
 import com.xjtu.iron.cola.web.execution.SendExecution;
 import com.xjtu.iron.cola.web.result.SendResult;
 
@@ -12,19 +14,27 @@ import com.xjtu.iron.cola.web.result.SendResult;
  */
 public class SyncSendExecution implements SendExecution {
 
-    /**
-     *
-     */
     private final MqProducerClient client;
 
-    /**
-     * @param message
-     * @return {@link SendResult }
-     */
+    public SyncSendExecution(MqProducerClient client) {
+        this.client = client;
+    }
+
     @Override
     public SendResult execute(Message<?> message) {
-
-        client.send(message);
-
+        try {
+            client.send(message);
+            return SendResult.success();
+        } catch (MqSerializationException e) {
+            return SendResult.fail(SendFailTypeEnum.CLIENT_FAIL, e);
+        } catch (MqAuthorizationException | MqBrokerRejectException e) {
+            return SendResult.fail(SendFailTypeEnum.BROKER_REJECT, e);
+        } catch (MqTimeoutException | MqNetworkException | MqUnknownException e) {
+            return SendResult.uncertain(e);
+        } catch (MqException e) {
+            // 理论兜底
+            return SendResult.uncertain(e);
+        }
     }
 }
+
