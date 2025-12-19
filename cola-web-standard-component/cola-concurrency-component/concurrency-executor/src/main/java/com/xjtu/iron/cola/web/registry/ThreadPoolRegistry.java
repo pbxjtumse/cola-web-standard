@@ -26,7 +26,7 @@ public final class ThreadPoolRegistry {
      *存储方式：注册线程池到 POOLS 中 然后并对标签map 存储
      *  pool_name → ExecutorService
      *  tag → poolNameList
-     *使用方式：可以使用横切管理 能够 governor.limitByTag("mq", maxConcurrency = 50);
+     *使用方式：可以使用横切管理 能够 impl.limitByTag("mq", maxConcurrency = 50);
      *   所有tag = mq的线程池、限制总并发数不超50 超出->拒绝或者降级，
      *   在executor 不做治理决策 在治理模块做 决定是否提交  决定是否降级  决定是否拒绝
      *   App -> Governance（限流 / 舱壁）-> Executor
