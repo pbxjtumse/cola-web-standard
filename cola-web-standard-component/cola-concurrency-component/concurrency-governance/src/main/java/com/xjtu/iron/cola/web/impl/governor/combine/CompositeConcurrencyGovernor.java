@@ -36,6 +36,7 @@ public class CompositeConcurrencyGovernor implements ConcurrencyGovernor {
         final List<Permit> acquired = new ArrayList<Permit>();
 
         for (ConcurrencyGovernor governor : governors) {
+            //注意这里是非CompositeConcurrencyGovernor 注意！
             Permit permit = governor.tryAcquire(context);
             if (!permit.isAcquired()) {
                 // 回滚

@@ -9,6 +9,7 @@ import java.util.function.Supplier;
 
 /**
  * GovernanceExecutor 不创建 Executor，只“消费” Executor
+ * Governor 只认 context，不认业务对象
  * @author pbxjt
  * @date 2025/12/19
  */

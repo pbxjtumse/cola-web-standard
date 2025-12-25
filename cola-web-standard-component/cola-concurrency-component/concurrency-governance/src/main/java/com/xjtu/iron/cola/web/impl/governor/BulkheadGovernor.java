@@ -13,7 +13,7 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * 同时干活的人数
+ * 同时干活的人数 （并发舱壁）
  * @author pangbo
  * @date 2025/12/19
  */

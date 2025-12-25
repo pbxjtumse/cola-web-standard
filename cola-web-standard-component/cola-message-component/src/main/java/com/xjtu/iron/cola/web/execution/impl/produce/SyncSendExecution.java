@@ -6,12 +6,16 @@ import com.xjtu.iron.cola.web.enums.SendFailTypeEnum;
 import com.xjtu.iron.cola.web.exception.*;
 import com.xjtu.iron.cola.web.execution.SendExecution;
 import com.xjtu.iron.cola.web.result.SendResult;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
 
 /**
  * SyncSendExecution 返回 SUCCESS / FAIL / UNCERTAIN
  * @author pangbo
  * @date 2025/12/17
  */
+@Component
+@Qualifier("syncSendExecution")
 public class SyncSendExecution implements SendExecution {
 
     private final MqProducerClient client;
