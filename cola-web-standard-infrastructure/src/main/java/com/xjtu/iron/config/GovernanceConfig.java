@@ -13,16 +13,8 @@ public class GovernanceConfig {
     @Bean
     public BulkheadRegistry bulkheadRegistry() {
         BulkheadRegistry registry = new BulkheadRegistry();
-
-        registry.register(TagRule.builder().api("order.create").build(),
-                new SemaphoreBulkhead(50)
-        );
-
-        registry.register(
-                TagRule.builder().api("order.create").tenant("vip").build(),
-                new SemaphoreBulkhead(20)
-        );
-
+        registry.register(TagRule.builder().api("order.create").build(), new SemaphoreBulkhead(50));
+        registry.register(TagRule.builder().api("order.create").tenant("vip").build(), new SemaphoreBulkhead(20));
         return registry;
     }
 

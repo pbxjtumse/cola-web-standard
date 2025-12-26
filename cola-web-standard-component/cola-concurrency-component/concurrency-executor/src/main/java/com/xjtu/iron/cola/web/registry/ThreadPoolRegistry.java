@@ -1,5 +1,7 @@
 package com.xjtu.iron.cola.web.registry;
 
+import org.springframework.stereotype.Component;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -10,6 +12,7 @@ import java.util.stream.Collectors;
  * @author pangbo
  * @date 2025/12/18
  */
+@Component
 public final class ThreadPoolRegistry {
 
     /**
