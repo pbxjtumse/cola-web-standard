@@ -13,23 +13,35 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * 同时干活的人数
+ * 「裁决者」 Governor 决定：这次请求是否能获得所有必要资源
+ *
  * @author pangbo
  * @date 2025/12/19
  */
 @Component
 public class BulkheadGovernor implements ConcurrencyGovernor {
 
+    /**
+     *
+     */
     private final BulkheadRegistry registry;
 
+    /**
+     * @param registry
+     */
     public BulkheadGovernor(BulkheadRegistry registry) {
         this.registry = registry;
     }
 
+    /**
+     * @param context
+     * @return {@link Permit }
+     */
     @Override
     public Permit tryAcquire(GovernorContext context) {
+        //关键逻辑 只是批评对应的标签规则
         List<Bulkhead> bulkheads = registry.match(context);
-        // 最严格优先
+        // 最严格优先按照数量
         Collections.sort(bulkheads, Comparator.comparingInt(Bulkhead::getLimit));
         final List<Bulkhead> acquired = new ArrayList<Bulkhead>();
 

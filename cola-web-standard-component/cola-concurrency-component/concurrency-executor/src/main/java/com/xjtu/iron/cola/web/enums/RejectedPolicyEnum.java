@@ -16,16 +16,15 @@ import java.util.concurrent.ConcurrentHashMap;
 @Getter
 public enum RejectedPolicyEnum {
     CALLER_RUNS("CALLER_RUNS","CALLER_RUNS"),
-    DISCARD("DISCARD","DISCARD"),
-    DISCARD_OLDEST("DISCARD_OLDEST","DISCARD_OLDEST"),
-    ABORT("ABORT","ABORT");
+    DISCARD("DISCARD","丢弃任务"),
+    DISCARD_OLDEST("DISCARD_OLDEST","丢弃线程池最老的任务"),
+    ABORT("ABORT","直接废弃，默认情况");
     private final String code;
     private final String value;
     // 缓存映射，提高查找性能
     private static final Map<String, RejectedPolicyEnum> CODE_MAP = new ConcurrentHashMap<>();
     static {
-        Arrays.stream(RejectedPolicyEnum.values())
-                .forEach(policy -> CODE_MAP.put(policy.getCode(), policy));
+        Arrays.stream(RejectedPolicyEnum.values()).forEach(policy -> CODE_MAP.put(policy.getCode(), policy));
     }
 
     /**

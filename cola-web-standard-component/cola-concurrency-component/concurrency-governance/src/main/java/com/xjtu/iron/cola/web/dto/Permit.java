@@ -55,7 +55,11 @@ public  class Permit {
      */
     public void release() {
         for (Runnable r : releaseActions) {
-            r.run();
+            try {
+                r.run();
+            } catch (Throwable t) {
+                // log but never break
+            }
         }
     }
 }
