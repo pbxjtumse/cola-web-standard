@@ -2,9 +2,10 @@ package com.xjtu.iron.config;
 
 
 import com.xjtu.iron.cola.web.config.ThreadPoolConfig;
-import com.xjtu.iron.cola.web.enums.RejectedPolicyEnum;
 import com.xjtu.iron.cola.web.factory.ThreadPoolFactory;
+import com.xjtu.iron.cola.web.metric.ThreadPoolMetricsBinder;
 import com.xjtu.iron.cola.web.registry.ThreadPoolRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -13,16 +14,20 @@ import javax.annotation.PostConstruct;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
 
 @Configuration
 @EnableConfigurationProperties(ExecutorProperties.class)
 public class ExecutorBootstrap {
 
     @Autowired
-    private  ExecutorProperties properties;
+    private ExecutorProperties properties;
 
     @Autowired
-    private  ThreadPoolRegistry registry;
+    private ThreadPoolRegistry registry;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
 
     @PostConstruct
     public void init() {
@@ -34,16 +39,15 @@ public class ExecutorBootstrap {
                     .coreSize(item.getCoreSize())
                     .maxSize(item.getMaxSize())
                     .queueSize(item.getQueueSize())
-                    .rejectPolicy(RejectedPolicyEnum.valueOf(item.getRejectPolicy().name()).getCode())
+                    .rejectPolicy(item.getRejectedPolicy().getCode())
                     .build();
-
             ExecutorService executor = ThreadPoolFactory.create(config);
-            registry.register(
-                    name,
-                    executor,
-                    new HashSet<>(item.getTags())
-            );
+            // 注册线程池
+            registry.register(name, executor, new HashSet<>(item.getTags()));
+            // 绑定 Prometheus
+            ThreadPoolMetricsBinder.bind(meterRegistry, name, (ThreadPoolExecutor) executor);
         }
     }
 }
+
 

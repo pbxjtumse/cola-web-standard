@@ -1,35 +1,16 @@
+server:
+  port: 8080
+
 executors:
   order:
-    core-size: 16
-    max-size: 32
-    queue-size: 1000
-    keep-alive-time: 45
-    rejected-policy: CALLER_RUNS
+    coreSize: 20
+    maxSize: 50
+    queueSize: 1000
+    rejectPolicy: CALLER_RUNS
     tags: [order, api]
 
-  pay:
-    core-size: 8
-    max-size: 16
-    queue-size: 500
-    keep-alive-time: 45
-    rejected-policy: ABORT
-    tags: [pay]
-
-thread-pool-executors:
-  items:
-    - name: order-executor
-      corePoolSize: 50
-      maximumPoolSize: 100
-      queueCapacity: 1000
-      rejectedPolicy: CALLER_RUNS
-      tags:
-        - order
-        - api
-
-    - name: user-executor
-      corePoolSize: 20
-      maximumPoolSize: 50
-      queueCapacity: 500
-      rejectedPolicy: ABORT
-      tags:
-        - user
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus

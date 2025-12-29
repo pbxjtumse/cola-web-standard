@@ -10,6 +10,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * 声明“线程池长什么样”
+ * @author pbxjt
+ * @date 2025/12/29
+ */
 @Component
 @Getter
 @Setter
@@ -24,30 +29,30 @@ public class ExecutorProperties {
         private int maxSize;
         private long keepAliveSeconds;
         private int queueSize;
-        private RejectedPolicyEnum rejectPolicy;
+        private RejectedPolicyEnum rejectedPolicy;
         private Set<String> tags;
 
         // 构造方法
         public ExecutorItem() {}
 
         public ExecutorItem(String name, int coreSize, int maxSize,
-                           int queueSize, RejectedPolicyEnum rejectPolicy, Set<String> tags) {
+                            int queueSize, RejectedPolicyEnum rejectedPolicy, Set<String> tags) {
             this.name = name;
             this.coreSize = coreSize;
             this.maxSize = maxSize;
             this.queueSize = queueSize;
-            this.rejectPolicy = rejectPolicy;
+            this.rejectedPolicy = rejectedPolicy;
             this.tags = tags;
         }
 
-        // Additional convenience constructor without keepAliveSeconds
+        // Additional convenience constructor wit hout keepAliveSeconds
         public ExecutorItem(String name, int coreSize, int maxSize,
-                           int queueSize, RejectedPolicyEnum rejectPolicy, Set<String> tags, long keepAliveSeconds) {
+                            int queueSize, RejectedPolicyEnum rejectedPolicy, Set<String> tags, long keepAliveSeconds) {
             this.name = name;
             this.coreSize = coreSize;
             this.maxSize = maxSize;
             this.queueSize = queueSize;
-            this.rejectPolicy = rejectPolicy;
+            this.rejectedPolicy = rejectedPolicy;
             this.tags = tags;
             this.keepAliveSeconds = keepAliveSeconds;
         }
