@@ -1,4 +1,4 @@
-package com.xjtu.iron.config;
+package com.xjtu.iron.config.properties;
 
 import com.xjtu.iron.cola.web.enums.RejectedPolicyEnum;
 import lombok.Getter;

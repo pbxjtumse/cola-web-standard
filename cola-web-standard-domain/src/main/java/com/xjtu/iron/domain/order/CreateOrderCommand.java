@@ -1,11 +1,11 @@
 package com.xjtu.iron.domain.order;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.*;
 
 @Data
 @AllArgsConstructor
-public class Order{
+@RequiredArgsConstructor
+public class CreateOrderCommand {
     private String userId;
     private String skuId;
 }

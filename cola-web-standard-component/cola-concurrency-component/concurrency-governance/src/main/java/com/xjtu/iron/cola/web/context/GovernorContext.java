@@ -5,7 +5,18 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * GovernorContext 是一次请求在“治理视角”下的事实描述，不是业务对象。
+ * 1.GovernorContext 是一次请求在“治理视角”下的事实描述，不是业务对象。注意不能混入执行路由信息
+ *    这里的标签是维度标签、技术表现为键值型标签 ，而不是分组标签 例如分组order 、
+ * 2.维度标签 👉 用于 规则匹配 / 治理决策  这类标签：
+ *  ✔ 有语义
+ *  ✔ 有层级
+ *  ✔ 有值
+ *  ✔ 可组合
+ *  ✔ 可精确匹配
+ * 3. 分组标签  👉 用于 线程池选择 / executor 路由  这类标签：这是 ExecutorSelector / ThreadPoolRegistry 该关心的。
+ *  ✔ 只是“归类”
+ *  ✔ 没有值
+ *  ✔ 不参与治理规则匹配
  * @author pbxjt
  * @date 2025/12/26
  */
@@ -38,7 +49,7 @@ public class GovernorContext {
         /**
          *
          */
-        private final Map<String, String> tags = new HashMap<>();
+        public final Map<String, String> tags = new HashMap<>();
 
         /**
          * @param api
@@ -64,15 +75,6 @@ public class GovernorContext {
          */
         public Builder biz(String biz) {
             tags.put("biz", biz);
-            return this;
-        }
-
-        /**
-         * @param tag
-         * @return {@link Builder }
-         */
-        public Builder tag(String tag) {
-            tags.put("tag", tag);
             return this;
         }
 

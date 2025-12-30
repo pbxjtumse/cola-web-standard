@@ -9,6 +9,8 @@ import com.xjtu.iron.cola.web.impl.executor.DefaultGovernanceExecutor;
 import com.xjtu.iron.cola.web.impl.governor.BulkheadGovernor;
 import org.springframework.context.annotation.Bean;
 
+import java.util.List;
+
 public class GovernanceConfig {
     @Bean
     public BulkheadRegistry bulkheadRegistry() {
@@ -24,7 +26,7 @@ public class GovernanceConfig {
     }
 
     @Bean
-    public GovernanceExecutor governanceExecutor(ConcurrencyGovernor governor) {
-        return new DefaultGovernanceExecutor(governor);
+    public GovernanceExecutor governanceExecutor(List<ConcurrencyGovernor> governorList) {
+        return new DefaultGovernanceExecutor(governorList);
     }
 }

@@ -9,8 +9,30 @@ executors:
     rejectPolicy: CALLER_RUNS
     tags: [order, api]
 
+bulkheads:
+  - name: order-api
+    rule:
+      api: order.create
+    limit: 50
+
+ratelimits:
+  - name: order-api
+    rule:
+      api: order.create
+    qps: 200
+
+timeouts:
+  - name: order-api
+    rule:
+      api: order.create
+    timeoutMs: 300
+
+
 management:
   endpoints:
     web:
       exposure:
         include: prometheus
+
+
+

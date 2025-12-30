@@ -2,6 +2,7 @@ package com.xjtu.iron.cola.web.impl.bulk;
 import com.xjtu.iron.cola.web.Bulkhead;
 import com.xjtu.iron.cola.web.dto.TagRule;
 import com.xjtu.iron.cola.web.context.GovernorContext;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -13,6 +14,7 @@ import java.util.stream.Collectors;
  * @author pbxjt
  * @date 2025/12/26
  */
+@Component
 public class BulkheadRegistry {
     /**
      *
