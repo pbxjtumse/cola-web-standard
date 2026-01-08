@@ -9,6 +9,7 @@ import com.xjtu.iron.domain.order.OrderDomainService;
 import com.xjtu.iron.dto.CustomerAddCmd;
 import com.xjtu.iron.dto.CustomerListByNameQry;
 import com.xjtu.iron.dto.data.CustomerDTO;
+import com.xjtu.iron.order.OrderApplicationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,7 +19,7 @@ public class CustomerController {
     @Autowired
     private CustomerServiceI customerService;
     @Autowired
-    private OrderDomainService orderDomainService;
+    private OrderApplicationService orderApplicationService;
 
     @GetMapping(value = "/helloworld")
     public String helloWorld(){
@@ -40,7 +41,7 @@ public class CustomerController {
     @PostMapping("/create")
     public OrderDTO create(@RequestBody CreateOrderRequest req) throws Exception {
         CreateOrderCommand cmd = req.totoCommand();
-        Order order = orderDomainService.create(cmd);
+        Order order = orderApplicationService.createOrder(cmd);
         return OrderDTO.from(order);
     }
 }

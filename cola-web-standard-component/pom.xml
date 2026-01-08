@@ -16,7 +16,7 @@
     <modules>
         <module>cola-concurrency-component</module>
         <module>cola-message-component</module>
-        <module>cola-thread-component</module>
+        <module>cola-transaction-component</module>
     </modules>
 
     <properties>
