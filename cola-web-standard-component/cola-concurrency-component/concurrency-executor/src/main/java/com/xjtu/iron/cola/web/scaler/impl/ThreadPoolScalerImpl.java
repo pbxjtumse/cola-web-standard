@@ -2,6 +2,8 @@ package com.xjtu.iron.cola.web.scaler.impl;
 
 import com.xjtu.iron.cola.web.registry.ThreadPoolRegistry;
 import com.xjtu.iron.cola.web.scaler.ThreadPoolScaler;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ThreadPoolExecutor;
 
@@ -9,15 +11,18 @@ import java.util.concurrent.ThreadPoolExecutor;
  * @author pangbo
  * @date 2025/12/18
  */
+@Component
 public class ThreadPoolScalerImpl implements ThreadPoolScaler {
 
+    @Autowired
+    private ThreadPoolRegistry threadPoolRegistry;
     /**
      * @param poolName
      * @param newCoreSize
      */
     @Override
     public void resizeCorePoolSize(String poolName, int newCoreSize) {
-        ThreadPoolExecutor executor = ThreadPoolRegistry.getRawExecutor(poolName);
+        ThreadPoolExecutor executor = threadPoolRegistry.getRawExecutor(poolName);
         if (executor == null) {
             throw new IllegalArgumentException("Pool not found: " + poolName);
         }
@@ -30,7 +35,7 @@ public class ThreadPoolScalerImpl implements ThreadPoolScaler {
      */
     @Override
     public void resizeMaxPoolSize(String poolName, int newMaxSize) {
-        ThreadPoolExecutor executor = ThreadPoolRegistry.getRawExecutor(poolName);
+        ThreadPoolExecutor executor = threadPoolRegistry.getRawExecutor(poolName);
         if (executor == null) {
             throw new IllegalArgumentException("Pool not found: " + poolName);
         }
@@ -44,7 +49,7 @@ public class ThreadPoolScalerImpl implements ThreadPoolScaler {
      */
     @Override
     public void resize(String poolName, int newCoreSize, int newMaxSize) {
-        ThreadPoolExecutor executor = ThreadPoolRegistry.getRawExecutor(poolName);
+        ThreadPoolExecutor executor = threadPoolRegistry.getRawExecutor(poolName);
         if (executor == null) {
             throw new IllegalArgumentException("Pool not found: " + poolName);
         }

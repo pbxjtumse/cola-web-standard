@@ -33,6 +33,7 @@ public class ExecutorBootstrap {
     @PostConstruct
     public void init() {
         for (Map.Entry<String, ExecutorProperties.ExecutorItem> e : properties.getItems().entrySet()) {
+            //遍历参数
             String name = e.getKey();
             ExecutorProperties.ExecutorItem item = e.getValue();
             ThreadPoolConfig config = ThreadPoolConfig.builder()
@@ -40,8 +41,10 @@ public class ExecutorBootstrap {
                     .coreSize(item.getCoreSize())
                     .maxSize(item.getMaxSize())
                     .queueSize(item.getQueueSize())
+                    .keepAliveSeconds(item.getKeepAliveSeconds())
                     .rejectPolicy(item.getRejectedPolicy().getCode())
                     .build();
+            //构造线程池
             ExecutorService executor = ThreadPoolFactory.create(config);
             // 注册线程池
             registry.register(name, executor, new HashSet<>(item.getTags()));

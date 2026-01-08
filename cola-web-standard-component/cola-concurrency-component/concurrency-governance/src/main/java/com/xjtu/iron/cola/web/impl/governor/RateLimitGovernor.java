@@ -3,6 +3,8 @@ package com.xjtu.iron.cola.web.impl.governor;
 import com.xjtu.iron.cola.web.ConcurrencyGovernor;
 import com.xjtu.iron.cola.web.dto.Permit;
 import com.xjtu.iron.cola.web.context.GovernorContext;
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 
@@ -11,6 +13,8 @@ import java.util.Collections;
  * @author pbxjt
  * @date 2025/12/19
  */
+@Component
+@Order(10)
 public class RateLimitGovernor implements ConcurrencyGovernor {
 
     /**

@@ -2,18 +2,21 @@ server:
   port: 8080
 
 executors:
-  order:
-    coreSize: 20
-    maxSize: 50
-    queueSize: 1000
-    rejectPolicy: CALLER_RUNS
-    tags: [order, api]
+  items:
+    order-executor:
+      coreSize: 20
+      maxSize: 100
+      queueSize: 2000
+      keepAliveSeconds: 1000
+      rejectedPolicy: CALLER_RUNS
+      tags: [order, api]
 
 bulkheads:
-  - name: order-api
-    rule:
-      api: order.create
-    limit: 50
+  items:
+    - name: order-create
+      rule:
+        api: order.create
+      limit: 50
 
 ratelimits:
   - name: order-api

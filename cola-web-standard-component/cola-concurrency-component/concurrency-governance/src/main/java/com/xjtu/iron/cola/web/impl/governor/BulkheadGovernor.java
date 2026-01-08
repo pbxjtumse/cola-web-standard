@@ -5,6 +5,7 @@ import com.xjtu.iron.cola.web.impl.bulk.BulkheadRegistry;
 import com.xjtu.iron.cola.web.ConcurrencyGovernor;
 import com.xjtu.iron.cola.web.dto.Permit;
 import com.xjtu.iron.cola.web.context.GovernorContext;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ import java.util.List;
  * @date 2025/12/19
  */
 @Component
+@Order(0)
 public class BulkheadGovernor implements ConcurrencyGovernor {
 
     /**

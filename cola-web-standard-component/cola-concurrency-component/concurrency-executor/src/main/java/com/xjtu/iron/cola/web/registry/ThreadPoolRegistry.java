@@ -18,11 +18,11 @@ public final class ThreadPoolRegistry {
     /**
      * 线程池实例 Map集合
      */
-    private static final Map<String, ExecutorService> POOLS = new ConcurrentHashMap<>();
+    private  final Map<String, ExecutorService> POOLS = new ConcurrentHashMap<>();
     /**
      * 线程池Tag Map集合
      */
-    private static final Map<String, Set<String>> TAG_INDEX = new ConcurrentHashMap<>();
+    private  final Map<String, Set<String>> TAG_INDEXS = new ConcurrentHashMap<>();
 
     /**
      *含义： TAG_INDEX 在治理里的真实价值是 TAG_INDEX = 线程池的语义分组
@@ -37,16 +37,18 @@ public final class ThreadPoolRegistry {
      * @param pool 线程池实例
      * @param tags 线程标签
      */
-    public static void register(String name, ExecutorService pool, Set<String> tags) {
+    public void register(String name, ExecutorService pool, Set<String> tags) {
         POOLS.put(name, pool);
-        tags.forEach(tag -> TAG_INDEX.computeIfAbsent(tag, k -> ConcurrentHashMap.newKeySet()).add(name));
+        for (String tag : tags) {
+            TAG_INDEXS.computeIfAbsent(tag, k -> ConcurrentHashMap.newKeySet()).add(name);
+        }
     }
 
     /**
      * @param name
      * @return {@link ExecutorService }
      */
-    public static ExecutorService get(String name) {
+    public  ExecutorService get(String name) {
         return POOLS.get(name);
     }
 
@@ -55,8 +57,8 @@ public final class ThreadPoolRegistry {
      * @param tag 标签纸
      * @return {@link List }<{@link ExecutorService }>
      */
-    public static List<ExecutorService> getByTag(String tag) {
-        Set<String> names = TAG_INDEX.get(tag);
+    public  List<ExecutorService> getByTag(String tag) {
+        Set<String> names = TAG_INDEXS.get(tag);
         if (names == null || names.isEmpty()) {
             return Collections.emptyList();
         }
@@ -66,7 +68,7 @@ public final class ThreadPoolRegistry {
                 .collect(Collectors.toList());
     }
 
-    public static ThreadPoolExecutor getRawExecutor(String name) {
+    public  ThreadPoolExecutor getRawExecutor(String name) {
         ExecutorService executor = POOLS.get(name);
         if (executor == null) {
             return null;
@@ -82,7 +84,7 @@ public final class ThreadPoolRegistry {
     /**
      *
      */
-    public static void shutdownAll() {
+    public  void shutdownAll() {
         POOLS.values().forEach(ExecutorService::shutdown);
     }
 }
