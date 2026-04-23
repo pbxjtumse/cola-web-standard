@@ -14,7 +14,7 @@ import com.xjtu.iron.cola.web.result.SendResult;
  */
 public class BackgroundSendExecution implements SendExecution {
 
-    private final OutboxRepository outboxRepository;
+    //private final OutboxRepository outboxRepository;
 
     /**
      * @param message
@@ -22,7 +22,7 @@ public class BackgroundSendExecution implements SendExecution {
      */
     @Override
     public SendResult execute(Message<?> message) {
-        outboxRepository.save(message);
+        //outboxRepository.save(message);
         return SendResult.success();
     }
 }

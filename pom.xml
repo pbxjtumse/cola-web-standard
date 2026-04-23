@@ -30,6 +30,7 @@
         <module>start</module>
         <module>cola-web-standard-component/cola-concurrency-component/concurrency-governance</module>
         <module>cola-web-standard-component/cola-concurrency-component/concurrency-bridge</module>
+        <module>cola-web-standard-component/cola-observability-component</module>
     </modules>
 
     <dependencies>

@@ -51,9 +51,9 @@ public class RobustTransactionTemplate extends TransactionTemplate {
         this.asyncExecutor = asyncExecutor;
     }
 
-    /* =========================================================
+    /* =================================================================================================================
      * 1) 默认语义：对齐 Spring
-     * ========================================================= */
+     * ================================================================================================================= */
 
     /**
      * 默认执行：遵循 Spring 语义（RuntimeException/Error 回滚；checked 默认不回滚）
@@ -80,7 +80,6 @@ public class RobustTransactionTemplate extends TransactionTemplate {
                 return callable.call();
             } catch (Throwable t) {
                 boolean rollback = rr.rollbackOn.test(t);
-
                 if (rollback) {
                     status.setRollbackOnly();
                     safeCallback(rr.onRollback, t, "onRollback");
@@ -98,9 +97,9 @@ public class RobustTransactionTemplate extends TransactionTemplate {
         });
     }
 
-    /* =========================================================
+    /* =================================================================================================================
      * 2) 显式语义：异常也可能提交，但不再抛出异常给调用方
-     * ========================================================= */
+     * =================================================================================================================*/
 
     /**
      * 显式“异常但提交”API：
@@ -137,9 +136,9 @@ public class RobustTransactionTemplate extends TransactionTemplate {
         });
     }
 
-    /* =========================================================
+    /* =================================================================================================================
      * 3) 异步：仅换线程，新线程新事务
-     * ========================================================= */
+     * =================================================================================================================*/
 
     public <T> CompletableFuture<T> executeAsync(Callable<T> callable) {
         return executeAsync(callable, RollbackRule.springDefault());
@@ -155,9 +154,9 @@ public class RobustTransactionTemplate extends TransactionTemplate {
         return CompletableFuture.supplyAsync(() -> executeCommitOnException(callable, rule), asyncExecutor);
     }
 
-    /* =========================================================
+    /* =================================================================================================================
      * 4) Builder：构造独立 definition，避免污染共享模板
-     * ========================================================= */
+     * =================================================================================================================*/
 
     public DefinitionBuilder withDefinition() {
         return new DefinitionBuilder(getTransactionManager(), asyncExecutor);
@@ -227,9 +226,9 @@ public class RobustTransactionTemplate extends TransactionTemplate {
         }
     }
 
-    /* =========================================================
+    /* =================================================================================================================
      * 5) RollbackRule：更贴近 Spring + 更可控
-     * ========================================================= */
+     * =================================================================================================================*/
 
     public static final class RollbackRule {
         private final Predicate<Throwable> rollbackOn;
@@ -295,9 +294,9 @@ public class RobustTransactionTemplate extends TransactionTemplate {
         }
     }
 
-    /* =========================================================
+    /* =================================================================================================================
      * 6) TxOutcome：显式表达“提交/回滚/提交但异常”
-     * ========================================================= */
+     * ================================================================================================================= */
 
     public static final class TxOutcome<T> {
         private final TransactionStatusEnums transactionStatusEnums;
@@ -331,9 +330,9 @@ public class RobustTransactionTemplate extends TransactionTemplate {
         public boolean isCommittedWithException() { return transactionStatusEnums == TransactionStatusEnums.COMMITTED_WITH_EXCEPTION; }
     }
 
-    /* =========================================================
+    /* =================================================================================================================
      * 7) utils
-     * ========================================================= */
+     * =================================================================================================================*/
 
     private static RuntimeException wrapToRuntime(Throwable t) {
         if (t instanceof RuntimeException) {
