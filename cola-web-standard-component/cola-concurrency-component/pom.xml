@@ -16,6 +16,8 @@
         <module>concurrency-executor</module>
         <module>concurrency-future</module>
         <module>concurrency-reactive</module>
+        <module>concurrency-bridge</module>
+        <module>concurrency-governance</module>
     </modules>
 
     <properties>
