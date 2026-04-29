@@ -2,7 +2,6 @@ package com.xjtu.iron.cola.web.result;
 
 import com.xjtu.iron.cola.web.enums.SendFailTypeEnum;
 import com.xjtu.iron.cola.web.enums.SendStatusEnum;
-import com.xjtu.iron.cola.web.enums.SendStatusEnumEnum;
 import lombok.Getter;
 
 /**

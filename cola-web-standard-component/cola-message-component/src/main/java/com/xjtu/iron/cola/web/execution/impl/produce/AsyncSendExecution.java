@@ -20,8 +20,13 @@ import com.xjtu.iron.cola.web.result.SendResult;
 
 public class AsyncSendExecution implements SendExecution {
 
-    private final MqProducerClient mqClient;
+    private final MqProducerClient mqClient ;
     private final AsyncSendRecorder recorder;
+
+    public AsyncSendExecution(MqProducerClient mqClient, AsyncSendRecorder recorder) {
+        this.mqClient = mqClient;
+        this.recorder = recorder;
+    }
 
     /**
      * @param message

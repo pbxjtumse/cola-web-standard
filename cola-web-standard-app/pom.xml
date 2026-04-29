@@ -22,30 +22,9 @@
             <groupId>com.xjtu.iron.cola.web</groupId>
             <artifactId>cola-web-standard-domain</artifactId>
         </dependency>
-
-        <dependency>
-            <groupId>com.xjtu.iron.cola.web</groupId>
-            <artifactId>cola-web-standard-component</artifactId>
-        </dependency>
-
-
         <dependency>
             <groupId>com.alibaba.cola</groupId>
             <artifactId>cola-component-catchlog-starter</artifactId>
-        </dependency>
-
-        <!-- JSR 303 Validation -->
-        <dependency>
-            <groupId>org.hibernate.validator</groupId>
-            <artifactId>hibernate-validator</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>javax.el</groupId>
-            <artifactId>javax.el-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.glassfish</groupId>
-            <artifactId>jakarta.el</artifactId>
         </dependency>
         <dependency>
             <groupId>com.xjtu.iron.cola.web</groupId>

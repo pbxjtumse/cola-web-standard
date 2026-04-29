@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 import com.xjtu.iron.customer.executor.service.CustomerAddCmdExe;
 import com.xjtu.iron.customer.executor.query.CustomerListByNameQryExe;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 
 @Service

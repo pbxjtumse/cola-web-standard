@@ -9,13 +9,13 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.*;
 
-
+import java.util.Properties;
 
 
 public class KafkaMqProduceClient implements MqProducerClient {
 
-    private final KafkaProducer<String, byte[]> producer;
-    private final TopicResolver topicResolver;
+    private final KafkaProducer<String, byte[]> producer = new KafkaProducer<>(new Properties());
+    //private final TopicResolver topicResolver;
 
     @Override
     public void send(Message<?> message) {
@@ -38,6 +38,10 @@ public class KafkaMqProduceClient implements MqProducerClient {
         catch (Exception e) {
             throw new MqUnknownException(e);
         }
+    }
+
+    private ProducerRecord<String,byte[]> buildRecord(Message<?> message) {
+        return null;
     }
 
     @Override
