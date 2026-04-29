@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: observability-demo-app
+
+xy:
+  observability:
+    enabled: true
+    instrumentation-name: observability-demo-app
+    trace-aspect-enabled: true

@@ -13,16 +13,16 @@ import java.io.IOException;
 public class TraceFilter implements Filter {
 
     @Autowired
-    private TraceService traceService;
+    private ITraceService ITraceService;
 
     @Override
     public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
             throws IOException, ServletException {
 
-        TraceSpan span = traceService.startSpan(((HttpServletRequest) req).getRequestURI());
+        TraceSpan span = ITraceService.startSpan(((HttpServletRequest) req).getRequestURI());
 
         try {
-            TraceMdc.inject(traceService);
+            TraceMdc.inject(ITraceService);
             chain.doFilter(req, res);
         } finally {
             span.end();

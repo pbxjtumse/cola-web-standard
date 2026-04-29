@@ -15,7 +15,7 @@
 
     <modules>
         <module>observability-core</module>
-        <module>observability-spring-boot-starter</module>
+        <module>observability-starter</module>
         <module>observability-api</module>
         <module>observability-otel</module>
         <module>observability-demo-app</module>
