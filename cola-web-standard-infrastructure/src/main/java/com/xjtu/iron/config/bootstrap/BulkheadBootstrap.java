@@ -4,13 +4,12 @@ import com.xjtu.iron.cola.web.Bulkhead;
 import com.xjtu.iron.cola.web.dto.TagRule;
 import com.xjtu.iron.cola.web.impl.bulk.BulkheadRegistry;
 import com.xjtu.iron.cola.web.impl.bulk.semaphore.SemaphoreBulkhead;
-import com.xjtu.iron.cola.web.registry.ThreadPoolRegistry;
+import jakarta.annotation.PostConstruct;
 import com.xjtu.iron.config.properties.BulkheadProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
-import javax.annotation.PostConstruct;
 
 @Configuration
 @EnableConfigurationProperties(BulkheadProperties.class)
@@ -22,7 +21,7 @@ public class BulkheadBootstrap {
     @Autowired
     private BulkheadProperties properties;
 
-    @PostConstruct
+
     public void init() {
         for (BulkheadProperties.Item item : properties.getItems()) {
             TagRule.Builder ruleBuilder = TagRule.builder();

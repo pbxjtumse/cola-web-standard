@@ -2,7 +2,7 @@ package com.xjtu.iron.dto.data;
 
 import lombok.Data;
 
-import javax.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotEmpty;
 
 @Data
 public class CustomerDTO{

@@ -29,6 +29,11 @@ public class SemaphoreBulkhead implements Bulkhead {
         this.semaphore = new AdjustableSemaphore(initialLimit);
     }
 
+    public SemaphoreBulkhead() {
+        this.limit.set(0);
+        this.semaphore = new AdjustableSemaphore(0);
+    }
+
     /**
      * @return boolean
      */

@@ -1,5 +1,7 @@
 package com.xjtu.iron.cola.web;
 
+import org.slf4j.MDC;
+
 import java.util.Map;
 
 public final class TaskWrapper {
@@ -12,11 +14,11 @@ public final class TaskWrapper {
                 if (mdc != null) MDC.setContextMap(mdc);
                 task.run();
             } catch (Throwable t) {
-                log.error("Async task failed", t);
+                //log.error("Async task failed", t);
                 throw t;
             } finally {
                 MDC.clear();
-                log.debug("Task cost {} ms", System.currentTimeMillis() - start);
+                //log.debug("Task cost {} ms", System.currentTimeMillis() - start);
             }
         };
     }
