@@ -15,7 +15,8 @@
     <dependencies>
         <dependency>
             <groupId>com.xjtu.iron.cola.web</groupId>
-            <artifactId>cola-web-standard-adapter</artifactId>
+            <artifactId>adapter</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
         <dependency>

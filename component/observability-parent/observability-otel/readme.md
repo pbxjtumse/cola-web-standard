@@ -1,0 +1,1 @@
+业务层永远不直接依赖 OpenTelemetry 的 Span / Tracer 
