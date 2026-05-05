@@ -7,3 +7,6 @@ xy:
     enabled: true
     instrumentation-name: observability-demo-app
     trace-aspect-enabled: true
+#    web-mdc-enabled: true
+#    method-mdc-enabled: true
+#    emplate-mdc-enabled: true

@@ -10,7 +10,7 @@
     <artifactId>observability-starter</artifactId>
     <packaging>jar</packaging>
 
-    <name>observability-spring-boot-starter</name>
+    <name>observability-starter</name>
     <url>http://maven.apache.org</url>
 
     <properties>
@@ -18,6 +18,10 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>

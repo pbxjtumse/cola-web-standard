@@ -145,3 +145,14 @@ exception
 errorCode
 rootCause
 stack
+
+
+
+
+
+Metrics 指标
+Logs 日志采集
+Traces 链路追踪
+Alerting 告警
+Dashboard 大盘
+Collector 数据转发
