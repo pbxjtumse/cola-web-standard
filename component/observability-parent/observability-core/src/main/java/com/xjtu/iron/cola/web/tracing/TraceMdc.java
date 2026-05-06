@@ -7,40 +7,93 @@ import java.util.Map;
 /**
  * Trace 日志上下文工具。
  *
- * <p>负责把 traceId / spanId 写入 MDC，
- * 让日志可以通过 %X{traceId} / %X{spanId} 打印链路信息。</p>
+ * <p>负责把当前 trace_id / span_id 写入 MDC，
+ * 让日志可以通过 logback pattern 输出链路信息。</p>
  *
- * <p>这里使用 MdcScope 而不是简单 clear()，
- * 是为了支持嵌套 Span。</p>
+ * <p>本类只维护标准字段：</p>
+ * <pre>
+ * trace_id
+ * span_id
+ * </pre>
+ *
+ * <p>不再维护 traceId / spanId，避免日志字段风格混乱。</p>
  */
 public final class TraceMdc {
 
-    public static final String TRACE_ID = "traceId";
+    /**
+     * 标准 trace id key。
+     */
+    public static final String TRACE_ID = "trace_id";
 
-    public static final String SPAN_ID = "spanId";
+    /**
+     * 标准 span id key。
+     */
+    public static final String SPAN_ID = "span_id";
 
     private TraceMdc() {
     }
 
     /**
-     * 写入当前 traceId / spanId，并返回一个作用域对象。
+     * 将当前 Trace 上下文写入 MDC。
      *
-     * <p>调用方必须在 finally 中调用返回对象的 close()，
-     * 用于恢复进入前的 MDC。</p>
+     * <p>进入时保存旧 MDC，退出时通过 MdcScope 恢复旧 MDC。</p>
+     *
+     * <p>这里不能简单 MDC.clear()，因为存在嵌套场景：</p>
+     * <pre>
+     * 请求级 MDC
+     *   └── 方法级 MDC
+     *         └── 模板级 MDC
+     * </pre>
+     *
+     * @param traceService trace 服务
+     * @return MDC 作用域
      */
     public static MdcScope put(ITraceService traceService) {
         Map<String, String> previous = MDC.getCopyOfContextMap();
 
         if (traceService != null) {
-            MDC.put(TRACE_ID, safe(traceService.traceId()));
-            MDC.put(SPAN_ID, safe(traceService.spanId()));
+            String traceId = safe(traceService.traceId());
+            String spanId = safe(traceService.spanId());
+
+            putIfNotBlank(TRACE_ID, traceId);
+            putIfNotBlank(SPAN_ID, spanId);
         }
 
         return MdcScope.of(previous);
     }
 
+    /**
+     * 获取当前 MDC 中的 trace_id。
+     *
+     * <p>用于异常响应、响应头、统一日志等场景。</p>
+     *
+     * @return 当前 trace_id；没有则返回空字符串
+     */
+    public static String currentTraceId() {
+        return safe(MDC.get(TRACE_ID));
+    }
+
+    /**
+     * 获取当前 MDC 中的 span_id。
+     *
+     * @return 当前 span_id；没有则返回空字符串
+     */
+    public static String currentSpanId() {
+        return safe(MDC.get(SPAN_ID));
+    }
+
+    private static void putIfNotBlank(String key, String value) {
+        if (!isBlank(value)) {
+            MDC.put(key, value);
+        }
+    }
+
     private static String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     /**

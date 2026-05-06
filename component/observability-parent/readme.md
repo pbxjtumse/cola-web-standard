@@ -148,6 +148,32 @@ stack
 
 
 
+@Trace
+↓
+TraceAspect
+↓
+TraceService.startSpan()
+↓
+TraceSpan
+↓
+OtelTraceSpan
+↓
+OpenTelemetry Span
+TraceTemplate
+↓
+TraceService.startSpan()
+↓
+TraceSpan
+TraceMdc
+↓
+traceService.traceId()
+↓
+MDC
+↓
+日志打印 traceId
+
+
+
 
 
 Metrics 指标
@@ -272,4 +298,4 @@ curl -i http://localhost:8080/biz-error
 
 curl -i http://localhost:8080/system-error
 
--javaagent:/Users/xy/IdeaProjects/cola-web-standard/component/observability-parent/tools/otel/opentelemetry-javaagent.jar -Dotel.service.name=observability-demo-app -Dotel.traces.exporter=console -Dotel.metrics.exporter=none -Dotel.logs.exporter=none -Dotel.javaagent.debug=false
+-javaagent:/Users/faywong/IdeaProjects/cola-web-standard/component/observability-parent/tools/otel/opentelemetry-javaagent.jar -Dotel.service.name=observability-demo-app -Dotel.traces.exporter=console -Dotel.metrics.exporter=none -Dotel.logs.exporter=none -Dotel.javaagent.debug=false

@@ -59,6 +59,16 @@ public class TraceTemplate {
         }
     }
 
+    /**
+     * 执行一段有返回值的业务逻辑，并自动创建 Span，回调函数中可以拿到当前 Span 对象
+     * 比普通 callback 多了一个能力：可以加业务标签。
+     * @param spanName Span名称
+     * @param callback 执行业务逻辑 具有返回值
+     * @param <T> 结果T
+     * @param <E> 异常类型
+     * @return 执行结果
+     * @throws E 异常类型
+     */
     public <T, E extends Throwable> T execute(String spanName, ITraceSpanCallback<T, E> callback) throws E {
         ITraceSpan span = safeStartSpan(spanName);
         TraceMdc.MdcScope mdcScope = safePutMdc();
@@ -73,6 +83,13 @@ public class TraceTemplate {
         }
     }
 
+    /**
+     * 执行一段有返回值的业务逻辑，没有返回值
+     * @param spanName Span名称
+     * @param runnable 执行业务逻辑 没有返回值
+     * @param <E> 异常类型
+     * @throws E 异常类型
+     */
     public <E extends Throwable> void executeWithoutResult(String spanName, ITraceRunnable<E> runnable) throws E {
         ITraceSpan span = safeStartSpan(spanName);
         TraceMdc.MdcScope mdcScope = safePutMdc();

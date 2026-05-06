@@ -45,11 +45,35 @@ public class ObservabilityWebFilter extends OncePerRequestFilter {
 
         try {
             mdcScope = TraceMdc.put(traceService);
+
+            setTraceResponseHeader(response);
+
             filterChain.doFilter(request, response);
         } finally {
+            setTraceResponseHeader(response);
+
             if (mdcScope != null) {
                 mdcScope.close();
             }
         }
+    }
+
+    private void setTraceResponseHeader(HttpServletResponse response) {
+        if (response.isCommitted()) {
+            return;
+        }
+
+        String traceId = TraceMdc.currentTraceId();
+        if (isBlank(traceId) && traceService != null) {
+            traceId = traceService.traceId();
+        }
+
+        if (!isBlank(traceId)) {
+            response.setHeader("X-Trace-Id", traceId);
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }
