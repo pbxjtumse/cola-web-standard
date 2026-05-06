@@ -214,6 +214,46 @@ ObservabilityWebFilter
   ObservabilityWebFilter finally
 - 恢复请求进入前 MDC
 
+
+
+
+
+1. 用户访问接口
+   curl http://localhost:8080/template
+
+2. 请求进入 Spring Boot / Tomcat
+
+3. OpenTelemetry Java Agent 自动创建 HTTP Server Span
+   Span 名称类似：
+   GET /template
+
+4. 你的 TraceAspect 拦截 @Trace
+   创建方法级 Span：
+   demo.template.api
+
+5. 你的 TraceTemplate 创建代码块级 Span：
+   demo.template.inner
+
+6. 请求结束，Span 关闭
+
+7. OpenTelemetry Java Agent 把这些 Span 收集起来
+
+8. Java Agent 通过 OTLP 协议发送到 Collector
+   例如：
+   http://localhost:4318/v1/traces
+
+9. Collector 的 OTLP receiver 接收数据
+
+10. Collector 的 processor 处理数据
+    比如 batch、memory_limiter、attributes、resource 等
+
+11. Collector 的 exporter 把数据导出到后端
+    比如 Tempo、SkyWalking、Jaeger
+
+12. 你在 Grafana / SkyWalking UI / Jaeger UI 里查询 traceId
+
+
+
 阶段 1：Tracing + MDC 本地闭环
 
 你现在正在这里。
@@ -298,4 +338,10 @@ curl -i http://localhost:8080/biz-error
 
 curl -i http://localhost:8080/system-error
 
--javaagent:/Users/faywong/IdeaProjects/cola-web-standard/component/observability-parent/tools/otel/opentelemetry-javaagent.jar -Dotel.service.name=observability-demo-app -Dotel.traces.exporter=console -Dotel.metrics.exporter=none -Dotel.logs.exporter=none -Dotel.javaagent.debug=false
+-javaagent:/Users/faywong/IdeaProjects/cola-web-standard/component/observability-parent/tools/otel/opentelemetry-javaagent.jar -Dotel.service.name=observability-demo-app
+-Dotel.traces.exporter=otlp
+-Dotel.exporter.otlp.endpoint=http://localhost:4318
+-Dotel.exporter.otlp.protocol=http/protobuf
+-Dotel.metrics.exporter=none
+-Dotel.logs.exporter=none
+-Dotel.javaagent.debug=false
