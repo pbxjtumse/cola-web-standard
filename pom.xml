@@ -30,6 +30,7 @@
         <module>infrastructure</module>
         <module>component</module>
         <module>start</module>
+        <module>component/governance-component</module>
     </modules>
 
     <dependencies>
