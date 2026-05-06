@@ -5,8 +5,14 @@ spring:
 xy:
   observability:
     enabled: true
-    instrumentation-name: observability-demo-app
-    trace-aspect-enabled: true
-#    web-mdc-enabled: true
-#    method-mdc-enabled: true
-#    emplate-mdc-enabled: true
+
+    provider: otel
+    agent-type: otel
+
+    service-name: observability-demo-app
+    instrumentation-scope-name: xjtu-iron-observability
+
+    web-mdc-enabled: true
+    method-tracing-enabled: true
+    method-mdc-enabled: true
+    template-mdc-enabled: true

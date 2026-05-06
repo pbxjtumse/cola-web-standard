@@ -1,5 +1,6 @@
 package com.xjtu.iron.cola.web.tracing;
 
+import com.xjtu.iron.cola.web.tracing.resolver.TraceErrorResolver;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;

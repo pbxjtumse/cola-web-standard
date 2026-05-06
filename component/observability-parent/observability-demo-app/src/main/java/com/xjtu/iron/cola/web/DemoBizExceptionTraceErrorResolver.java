@@ -1,7 +1,7 @@
 package com.xjtu.iron.cola.web;
 
 import com.xjtu.iron.cola.web.tracing.ITraceSpan;
-import com.xjtu.iron.cola.web.tracing.TraceErrorResolver;
+import com.xjtu.iron.cola.web.tracing.resolver.TraceErrorResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

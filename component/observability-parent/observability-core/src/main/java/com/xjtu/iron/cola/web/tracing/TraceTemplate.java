@@ -1,6 +1,9 @@
 package com.xjtu.iron.cola.web.tracing;
 
 import com.xjtu.iron.cola.web.tracing.noop.NoopTraceSpan;
+import com.xjtu.iron.cola.web.tracing.template.ITraceCallback;
+import com.xjtu.iron.cola.web.tracing.template.ITraceRunnable;
+import com.xjtu.iron.cola.web.tracing.template.ITraceSpanCallback;
 
 import java.util.Map;
 import java.util.Objects;
@@ -25,13 +28,23 @@ public class TraceTemplate {
 
     private final ITraceService traceService;
 
+    /**
+     * 是否启用模板级 MDC。
+     *
+     * <p>开启后，TraceTemplate 创建代码块级 Span 后，
+     * 会把该 Span 的 traceId/spanId 临时写入 MDC。</p>
+     */
+    private final boolean mdcEnabled;
+
     public TraceTemplate(ITraceService traceService) {
-        this.traceService = Objects.requireNonNull(traceService, "traceService must not be null");
+        this(traceService, true);
     }
 
-    /**
-     * 执行一段有返回值的业务逻辑。
-     */
+    public TraceTemplate(ITraceService traceService, boolean mdcEnabled) {
+        this.traceService = Objects.requireNonNull(traceService, "traceService must not be null");
+        this.mdcEnabled = mdcEnabled;
+    }
+
     public <T, E extends Throwable> T execute(String spanName, ITraceCallback<T, E> callback) throws E {
         ITraceSpan span = safeStartSpan(spanName);
         TraceMdc.MdcScope mdcScope = safePutMdc();
@@ -46,9 +59,6 @@ public class TraceTemplate {
         }
     }
 
-    /**
-     * 执行一段有返回值、并允许调用方操作 Span 的业务逻辑。
-     */
     public <T, E extends Throwable> T execute(String spanName, ITraceSpanCallback<T, E> callback) throws E {
         ITraceSpan span = safeStartSpan(spanName);
         TraceMdc.MdcScope mdcScope = safePutMdc();
@@ -63,9 +73,6 @@ public class TraceTemplate {
         }
     }
 
-    /**
-     * 执行一段无返回值的业务逻辑。
-     */
     public <E extends Throwable> void executeWithoutResult(String spanName, ITraceRunnable<E> runnable) throws E {
         ITraceSpan span = safeStartSpan(spanName);
         TraceMdc.MdcScope mdcScope = safePutMdc();
@@ -80,9 +87,6 @@ public class TraceTemplate {
         }
     }
 
-    /**
-     * 执行一段有返回值的业务逻辑，并批量写入标签。
-     */
     public <T, E extends Throwable> T execute(
             String spanName,
             Map<String, Object> tags,
@@ -112,6 +116,10 @@ public class TraceTemplate {
     }
 
     private TraceMdc.MdcScope safePutMdc() {
+        if (!mdcEnabled) {
+            return TraceMdc.MdcScope.noop();
+        }
+
         try {
             TraceMdc.MdcScope scope = TraceMdc.put(traceService);
             return scope == null ? TraceMdc.MdcScope.noop() : scope;

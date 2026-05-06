@@ -14,15 +14,37 @@ import java.lang.reflect.Method;
 import java.util.Objects;
 
 /**
- * @author pangbo
+ * 方法级 Trace 切面。
+ *
+ * <p>负责：</p>
+ * <ul>
+ *     <li>拦截 @Trace 方法</li>
+ *     <li>创建方法级 Span</li>
+ *     <li>根据配置决定是否写入方法级 MDC</li>
+ *     <li>记录异常</li>
+ *     <li>关闭 Span 并恢复 MDC</li>
+ * </ul>
  */
 @Aspect
 public class TraceAspect {
 
     private final ITraceService traceService;
 
+    /**
+     * 是否启用方法级 MDC。
+     *
+     * <p>关闭后，@Trace 仍然创建方法级 Span，
+     * 但不会把方法级 Span 的 traceId/spanId 写入 MDC。</p>
+     */
+    private final boolean mdcEnabled;
+
     public TraceAspect(ITraceService traceService) {
+        this(traceService, true);
+    }
+
+    public TraceAspect(ITraceService traceService, boolean mdcEnabled) {
         this.traceService = Objects.requireNonNull(traceService, "traceService must not be null");
+        this.mdcEnabled = mdcEnabled;
     }
 
     @Around("@annotation(com.xjtu.iron.cola.web.tracing.Trace)")
@@ -71,6 +93,10 @@ public class TraceAspect {
     }
 
     private TraceMdc.MdcScope safePutMdc() {
+        if (!mdcEnabled) {
+            return TraceMdc.MdcScope.noop();
+        }
+
         try {
             TraceMdc.MdcScope scope = TraceMdc.put(traceService);
             return scope == null ? TraceMdc.MdcScope.noop() : scope;

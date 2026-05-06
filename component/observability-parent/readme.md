@@ -156,3 +156,120 @@ Traces 链路追踪
 Alerting 告警
 Dashboard 大盘
 Collector 数据转发
+
+
+HTTP 请求进入
+↓
+ObservabilityWebFilter
+- web-mdc-enabled=true 时写请求级 MDC
+  ↓
+  DemoController.template()
+  ↓
+  TraceAspect
+- method-tracing-enabled=true，所以创建 demo.template.api Span
+- method-mdc-enabled=true，所以临时写方法级 MDC
+  ↓
+  log.info("template api called")
+  ↓
+  TraceTemplate.execute("demo.template.inner")
+- 创建代码块级 Span
+- template-mdc-enabled=true，所以临时写模板级 MDC
+  ↓
+  log.info("inside trace template")
+  ↓
+  TraceTemplate finally
+- close inner span
+- 恢复方法级 MDC
+  ↓
+  TraceAspect finally
+- close method span
+- 恢复请求级 MDC
+  ↓
+  ObservabilityWebFilter finally
+- 恢复请求进入前 MDC
+
+阶段 1：Tracing + MDC 本地闭环
+
+你现在正在这里。
+
+1. @Trace 方法级 Span
+2. TraceTemplate 代码块级 Span
+3. TraceErrorResolver 异常扩展解析
+4. 请求级 MDC Filter
+5. 方法级 MDC 开关
+6. 模板级 MDC 开关
+7. demo-app 本地验证
+
+当前还差：第 4、5、6 步真正接入代码。
+
+阶段 2：接入 OpenTelemetry Java Agent
+
+目标：
+
+1. 让 traceId / spanId 不再为空
+2. 自动采集 HTTP / JDBC / Redis / MQ
+3. 你的 @Trace / TraceTemplate 作为业务 Span 补充进去
+
+现在你日志里 traceId= 为空，主要就是还没到这个阶段。
+
+阶段 3：OpenTelemetry Collector
+
+目标：
+
+应用 / Java Agent
+↓
+OTel Collector
+↓
+Tempo / SkyWalking / Jaeger
+
+Collector 负责解耦后端，未来换后端不用动业务服务。
+
+阶段 4：Trace 后端
+
+你可以选一个先跑通：
+
+Tempo + Grafana
+或者
+SkyWalking OAP + UI
+
+长期来说，你的 SDK 不应该绑定后端。
+
+阶段 5：Metrics 指标
+
+这块你现在只是占了一个 metrics 包，还没真正做。
+
+后面要补：
+
+1. MetricsService 抽象
+2. Micrometer 适配
+3. JVM / HTTP / 业务指标
+4. Prometheus scrape
+5. Grafana dashboard
+   阶段 6：Logs 日志体系
+
+当前只是 MDC 打 traceId/spanId，还不算完整日志体系。
+
+后面要补：
+
+1. JSON 日志格式
+2. traceId/spanId 标准字段
+3. Loki / ELK / OpenSearch 接入
+4. 日志和 Trace 联动
+   阶段 7：告警与大盘
+
+最后才做：
+
+1. PrometheusRule
+2. Alertmanager
+3. Grafana dashboard
+4. 慢接口 / 错误率 / JVM / 业务异常告警
+5. 
+curl http://localhost:8080/hello
+
+curl http://localhost:8080/template
+
+curl -i http://localhost:8080/biz-error
+
+curl -i http://localhost:8080/system-error
+
+-javaagent:/Users/xy/IdeaProjects/cola-web-standard/component/observability-parent/tools/otel/opentelemetry-javaagent.jar -Dotel.service.name=observability-demo-app -Dotel.traces.exporter=console -Dotel.metrics.exporter=none -Dotel.logs.exporter=none -Dotel.javaagent.debug=false
