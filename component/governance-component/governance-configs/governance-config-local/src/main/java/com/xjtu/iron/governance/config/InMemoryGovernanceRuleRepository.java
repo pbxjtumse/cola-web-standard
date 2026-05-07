@@ -1,0 +1,18 @@
+package com.xjtu.iron.governance.config;
+
+import com.xjtu.iron.cola.web.GovernanceRuleRepository;
+import com.xjtu.iron.governance.model.rule.GovernanceRuleSet;
+
+public class InMemoryGovernanceRuleRepository implements GovernanceRuleRepository {
+
+    private final GovernanceRuleSet ruleSet;
+
+    public InMemoryGovernanceRuleRepository(GovernanceRuleSet ruleSet) {
+        this.ruleSet = ruleSet;
+    }
+
+    @Override
+    public GovernanceRuleSet current() {
+        return ruleSet;
+    }
+}
