@@ -18,6 +18,8 @@
         <module>message-component</module>
         <module>observability-parent</module>
         <module>transaction-component</module>
+        <module>governance-component</module>
+        <module>governance-component/governance-engine</module>
     </modules>
 
     <properties>
