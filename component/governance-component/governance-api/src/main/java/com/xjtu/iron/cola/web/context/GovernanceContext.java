@@ -1,8 +1,7 @@
 package com.xjtu.iron.cola.web.context;
 
-package com.xjtu.iron.governance.api.context;
 
-import com.xjtu.iron.governance.model.resource.GovernanceResourceType;
+import com.xjtu.iron.cola.web.model.resource.GovernanceResourceType;
 
 import java.time.Instant;
 import java.util.HashMap;
