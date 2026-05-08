@@ -3,19 +3,15 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.xjtu.iron.cola.web</groupId>
-        <artifactId>governance-component</artifactId>
+        <artifactId>governance-configs</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>governance-configs</artifactId>
-    <packaging>pom</packaging>
+    <artifactId>governance-config-api</artifactId>
+    <packaging>jar</packaging>
 
-    <name>governance-configs</name>
+    <name>governance-config-api</name>
     <url>http://maven.apache.org</url>
-    <modules>
-        <module>governance-config-api</module>
-        <module>governance-config-local</module>
-    </modules>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -23,21 +19,10 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.xjtu.iron.cola.web</groupId>
-            <artifactId>governance-model</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>3.8.1</version>
             <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.xjtu.iron.cola.web</groupId>
-            <artifactId>governance-model</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
         </dependency>
     </dependencies>
 </project>
