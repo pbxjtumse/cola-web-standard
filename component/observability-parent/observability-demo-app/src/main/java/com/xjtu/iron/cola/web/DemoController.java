@@ -1,7 +1,7 @@
 package com.xjtu.iron.cola.web;
 
-import com.xjtu.iron.cola.web.tracing.Trace;
-import com.xjtu.iron.cola.web.tracing.TraceTemplate;
+import com.xjtu.iron.observability.api.tracing.Trace;
+import com.xjtu.iron.observability.core.TraceTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;

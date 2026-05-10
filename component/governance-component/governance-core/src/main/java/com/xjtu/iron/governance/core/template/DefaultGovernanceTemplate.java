@@ -45,20 +45,8 @@ public class DefaultGovernanceTemplate implements GovernanceTemplate {
     }
 
     @Override
-    public void execute(String resourceName,
-                        Runnable runnable,
-                        Consumer<Throwable> fallback) {
-        execute(
-                resourceName,
-                () -> {
-                    runnable.run();
-                    return null;
-                },
-                throwable -> {
-                    fallback.accept(throwable);
-                    return null;
-                }
-        );
+    public void execute(String resourceName, Runnable runnable, Consumer<Throwable> fallback) {
+        execute(resourceName, () -> {runnable.run();return null;}, throwable -> {fallback.accept(throwable);return null;});
     }
 
     private GovernanceContext createContext(String resourceName) {

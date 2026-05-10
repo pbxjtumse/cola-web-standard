@@ -1,0 +1,52 @@
+package com.xjtu.iron.message.client.impl.produce;
+
+import com.xjtu.iron.message.Message;
+import com.xjtu.iron.message.client.MqProducerClient;
+import com.xjtu.iron.message.client.MqSendCallback;
+
+import com.xjtu.iron.message.exception.*;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.*;
+
+import java.util.Properties;
+
+
+public class KafkaMqProduceClient implements MqProducerClient {
+
+    private final KafkaProducer<String, byte[]> producer = new KafkaProducer<>(new Properties());
+    //private final TopicResolver topicResolver;
+
+    @Override
+    public void send(Message<?> message) {
+        try {
+            ProducerRecord<String, byte[]> record = buildRecord(message);
+            producer.send(record).get();
+        }
+        catch (SerializationException e) {
+            throw new MqSerializationException(e);
+        }
+        catch (AuthorizationException e) {
+            throw new MqAuthorizationException(e);
+        }
+        catch (TimeoutException e) {
+            throw new MqTimeoutException(e);
+        }
+        catch (NetworkException e) {
+            throw new MqNetworkException(e);
+        }
+        catch (Exception e) {
+            throw new MqUnknownException(e);
+        }
+    }
+
+    private ProducerRecord<String,byte[]> buildRecord(Message<?> message) {
+        return null;
+    }
+
+    @Override
+    public void sendAsync(Message<?> message, MqSendCallback callback) {
+
+    }
+}
+

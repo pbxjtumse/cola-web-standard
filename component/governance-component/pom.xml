@@ -24,6 +24,7 @@
         <module>governance-starters</module>
         <module>governance-demo</module>
         <module>governance-model</module>
+        <module>governance-engine</module>
     </modules>
 
     <properties>
