@@ -1,6 +1,6 @@
-package com.xjtu.iron.cola.web.dto;
+package com.xjtu.iron.dto;
 
-import com.xjtu.iron.cola.web.context.GovernorContext;
+import com.xjtu.iron.context.GovernorContext;
 
 import java.util.Collections;
 import java.util.HashMap;

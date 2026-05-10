@@ -1,10 +1,10 @@
-package com.xjtu.iron.cola.web.executor;
+package com.xjtu.iron.executor;
 
-import com.xjtu.iron.cola.web.ConcurrencyGovernor;
-import com.xjtu.iron.cola.web.GovernanceExecutor;
-import com.xjtu.iron.cola.web.GovernorChain;
-import com.xjtu.iron.cola.web.context.GovernorContext;
-import com.xjtu.iron.cola.web.dto.Permit;
+import com.xjtu.iron.ConcurrencyGovernor;
+import com.xjtu.iron.GovernanceExecutor;
+import com.xjtu.iron.GovernorChain;
+import com.xjtu.iron.context.GovernorContext;
+import com.xjtu.iron.dto.Permit;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

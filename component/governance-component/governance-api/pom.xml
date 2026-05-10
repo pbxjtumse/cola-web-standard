@@ -2,7 +2,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>com.xjtu.iron.cola.web</groupId>
+        <groupId>com.xjtu.iron</groupId>
         <artifactId>governance-component</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
@@ -26,7 +26,7 @@
         </dependency>
 
         <dependency>
-            <groupId>com.xjtu.iron.cola.web</groupId>
+            <groupId>com.xjtu.iron</groupId>
             <artifactId>governance-model</artifactId>
             <version>${project.version}</version>
             <scope>compile</scope>

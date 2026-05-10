@@ -1,4 +1,4 @@
-package com.xjtu.iron.cola.web.exception;
+package com.xjtu.iron.exception;
 
 /**
  * 不是线程池拒绝，是系统治理主动拒绝

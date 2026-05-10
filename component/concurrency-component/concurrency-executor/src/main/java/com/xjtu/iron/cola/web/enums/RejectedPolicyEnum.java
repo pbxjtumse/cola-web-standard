@@ -1,4 +1,4 @@
-package com.xjtu.iron.cola.web.enums;
+package com.xjtu.iron.enums;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

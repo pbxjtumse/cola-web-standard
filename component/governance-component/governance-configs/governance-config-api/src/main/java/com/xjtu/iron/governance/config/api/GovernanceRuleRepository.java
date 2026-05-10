@@ -1,4 +1,4 @@
-package com.xjtu.iron.cola.web;
+package com.xjtu.iron.governance.config.api;
 
 
 import com.xjtu.iron.governance.model.rule.GovernanceRuleSet;

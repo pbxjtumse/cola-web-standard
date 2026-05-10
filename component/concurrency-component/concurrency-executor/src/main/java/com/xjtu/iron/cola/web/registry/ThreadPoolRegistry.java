@@ -1,4 +1,4 @@
-package com.xjtu.iron.cola.web.registry;
+package com.xjtu.iron.registry;
 
 import org.springframework.stereotype.Component;
 

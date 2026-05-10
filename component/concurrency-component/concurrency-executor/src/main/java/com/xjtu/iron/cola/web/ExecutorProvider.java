@@ -1,6 +1,6 @@
-package com.xjtu.iron.cola.web;
+package com.xjtu.iron;
 
-import com.xjtu.iron.cola.web.registry.ThreadPoolRegistry;
+import com.xjtu.iron.registry.ThreadPoolRegistry;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.Executor;

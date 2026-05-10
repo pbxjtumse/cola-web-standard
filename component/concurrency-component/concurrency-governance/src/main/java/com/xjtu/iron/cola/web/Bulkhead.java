@@ -1,4 +1,4 @@
-package com.xjtu.iron.cola.web;
+package com.xjtu.iron;
 
 /**
  * 并发资源： 现在还能不能再多一个并发执行者？

@@ -1,8 +1,8 @@
-package com.xjtu.iron.cola.web.selector;
+package com.xjtu.iron.selector;
 
-import com.xjtu.iron.cola.web.ExecutorSelector;
-import com.xjtu.iron.cola.web.context.GovernorContext;
-import com.xjtu.iron.cola.web.registry.ThreadPoolRegistry;
+import com.xjtu.iron.ExecutorSelector;
+import com.xjtu.iron.context.GovernorContext;
+import com.xjtu.iron.registry.ThreadPoolRegistry;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.Executor;

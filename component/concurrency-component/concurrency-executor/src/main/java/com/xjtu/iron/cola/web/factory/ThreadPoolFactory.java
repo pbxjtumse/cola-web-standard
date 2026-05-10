@@ -1,7 +1,7 @@
-package com.xjtu.iron.cola.web.factory;
+package com.xjtu.iron.factory;
 
 import com.alibaba.ttl.threadpool.TtlExecutors;
-import com.xjtu.iron.cola.web.config.ThreadPoolConfig;
+import com.xjtu.iron.config.ThreadPoolConfig;
 
 import java.util.concurrent.*;
 

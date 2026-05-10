@@ -1,8 +1,8 @@
-package com.xjtu.iron.cola.web.governor;
+package com.xjtu.iron.governor;
 
-import com.xjtu.iron.cola.web.ConcurrencyGovernor;
-import com.xjtu.iron.cola.web.dto.Permit;
-import com.xjtu.iron.cola.web.context.GovernorContext;
+import com.xjtu.iron.ConcurrencyGovernor;
+import com.xjtu.iron.dto.Permit;
+import com.xjtu.iron.context.GovernorContext;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 

@@ -1,7 +1,7 @@
-package com.xjtu.iron.cola.web.scaler.impl;
+package com.xjtu.iron.scaler.impl;
 
-import com.xjtu.iron.cola.web.registry.ThreadPoolRegistry;
-import com.xjtu.iron.cola.web.scaler.ThreadPoolScaler;
+import com.xjtu.iron.registry.ThreadPoolRegistry;
+import com.xjtu.iron.scaler.ThreadPoolScaler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
