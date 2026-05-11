@@ -1,4 +1,4 @@
-package com.xjtu.iron.cola.web;
+package com.xjtu.iron;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;

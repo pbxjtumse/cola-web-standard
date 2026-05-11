@@ -1,4 +1,4 @@
-package com.xjtu.iron.cola.web.scaler;
+package com.xjtu.iron.scaler;
 
 
 /**

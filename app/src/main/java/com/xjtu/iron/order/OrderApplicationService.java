@@ -3,17 +3,15 @@ package com.xjtu.iron.order;
 //package by domain, not by duty
 
 
-import com.xjtu.iron.cola.web.ExecutorSelector;
-import com.xjtu.iron.cola.web.GovernanceExecutor;
-import com.xjtu.iron.cola.web.context.GovernorContext;
+import com.xjtu.iron.ExecutorSelector;
+import com.xjtu.iron.GovernanceExecutor;
+import com.xjtu.iron.context.GovernorContext;
 import com.xjtu.iron.domain.order.CreateOrderCommand;
 import com.xjtu.iron.domain.order.Order;
 import com.xjtu.iron.domain.order.OrderDomainService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.concurrent.Executor;
 
 @Service

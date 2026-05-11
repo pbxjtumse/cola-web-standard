@@ -1,4 +1,4 @@
-package com.xjtu.iron.cola.web.bulk.semaphore;
+package com.xjtu.iron.bulk.semaphore;
 
 import java.util.concurrent.Semaphore;
 

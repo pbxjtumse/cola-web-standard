@@ -1,6 +1,6 @@
 package com.xjtu.iron.config.properties;
 
-import com.xjtu.iron.cola.web.enums.RejectedPolicyEnum;
+import com.xjtu.iron.enums.RejectedPolicyEnum;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;

@@ -1,4 +1,4 @@
-package com.xjtu.iron.cola.web;
+package com.xjtu.iron;
 
 import org.slf4j.MDC;
 

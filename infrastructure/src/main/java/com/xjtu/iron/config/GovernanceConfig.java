@@ -1,12 +1,12 @@
 package com.xjtu.iron.config;
 
-import com.xjtu.iron.cola.web.ConcurrencyGovernor;
-import com.xjtu.iron.cola.web.GovernanceExecutor;
-import com.xjtu.iron.cola.web.dto.TagRule;
-import com.xjtu.iron.cola.web.bulk.BulkheadRegistry;
-import com.xjtu.iron.cola.web.bulk.semaphore.SemaphoreBulkhead;
-import com.xjtu.iron.cola.web.executor.DefaultGovernanceExecutor;
-import com.xjtu.iron.cola.web.governor.BulkheadGovernor;
+import com.xjtu.iron.ConcurrencyGovernor;
+import com.xjtu.iron.GovernanceExecutor;
+import com.xjtu.iron.dto.TagRule;
+import com.xjtu.iron.bulk.BulkheadRegistry;
+import com.xjtu.iron.bulk.semaphore.SemaphoreBulkhead;
+import com.xjtu.iron.executor.DefaultGovernanceExecutor;
+import com.xjtu.iron.governor.BulkheadGovernor;
 import org.springframework.context.annotation.Bean;
 
 import java.util.List;

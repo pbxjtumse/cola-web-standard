@@ -1,1 +1,1 @@
-com.xjtu.iron.cola.web.ObservabilityAutoConfiguration
+com.xjtu.iron.ObservabilityAutoConfiguration

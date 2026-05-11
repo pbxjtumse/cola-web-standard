@@ -1,6 +1,6 @@
-package com.xjtu.iron.cola.web.factory;
+package com.xjtu.iron.factory;
 
-import com.xjtu.iron.cola.web.enums.RejectedPolicyEnum;
+import com.xjtu.iron.enums.RejectedPolicyEnum;
 
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;

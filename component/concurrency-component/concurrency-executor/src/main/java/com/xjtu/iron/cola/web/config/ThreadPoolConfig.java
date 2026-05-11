@@ -1,4 +1,4 @@
-package com.xjtu.iron.cola.web.config;
+package com.xjtu.iron.config;
 
 import lombok.Builder;
 import lombok.Getter;

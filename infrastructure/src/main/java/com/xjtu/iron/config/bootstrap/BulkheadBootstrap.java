@@ -1,9 +1,9 @@
 package com.xjtu.iron.config.bootstrap;
 
-import com.xjtu.iron.cola.web.Bulkhead;
-import com.xjtu.iron.cola.web.dto.TagRule;
-import com.xjtu.iron.cola.web.bulk.BulkheadRegistry;
-import com.xjtu.iron.cola.web.bulk.semaphore.SemaphoreBulkhead;
+import com.xjtu.iron.Bulkhead;
+import com.xjtu.iron.dto.TagRule;
+import com.xjtu.iron.bulk.BulkheadRegistry;
+import com.xjtu.iron.bulk.semaphore.SemaphoreBulkhead;
 import jakarta.annotation.PostConstruct;
 import com.xjtu.iron.config.properties.BulkheadProperties;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -1,7 +1,7 @@
-package com.xjtu.iron.cola.web.bulk;
-import com.xjtu.iron.cola.web.Bulkhead;
-import com.xjtu.iron.cola.web.dto.TagRule;
-import com.xjtu.iron.cola.web.context.GovernorContext;
+package com.xjtu.iron.bulk;
+import com.xjtu.iron.Bulkhead;
+import com.xjtu.iron.dto.TagRule;
+import com.xjtu.iron.context.GovernorContext;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

@@ -1,4 +1,4 @@
-package com.xjtu.iron.cola.web.dto;
+package com.xjtu.iron.dto;
 
 import java.util.Collections;
 import java.util.List;

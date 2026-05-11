@@ -1,7 +1,7 @@
-package com.xjtu.iron.cola.web;
+package com.xjtu.iron;
 
-import com.xjtu.iron.cola.web.context.GovernorContext;
-import com.xjtu.iron.cola.web.dto.Permit;
+import com.xjtu.iron.context.GovernorContext;
+import com.xjtu.iron.dto.Permit;
 
 /**
  * 1.Governor 不能感知“业务语义”，但可以感知“业务标签” Governor 只认 context，不认业务对象

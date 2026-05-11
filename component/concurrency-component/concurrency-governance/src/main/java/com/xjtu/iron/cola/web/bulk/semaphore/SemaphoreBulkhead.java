@@ -1,7 +1,7 @@
-package com.xjtu.iron.cola.web.bulk.semaphore;
+package com.xjtu.iron.bulk.semaphore;
 
 
-import com.xjtu.iron.cola.web.Bulkhead;
+import com.xjtu.iron.Bulkhead;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.atomic.AtomicInteger;
