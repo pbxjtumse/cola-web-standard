@@ -20,6 +20,7 @@
 
         <spring-boot.version>3.5.14</spring-boot.version>
         <mybatis-starter.version>3.0.4</mybatis-starter.version>
+        <resilience4j.version>2.3.0</resilience4j.version>
     </properties>
 
     <modules>

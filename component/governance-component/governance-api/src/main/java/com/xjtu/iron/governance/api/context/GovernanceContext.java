@@ -8,6 +8,9 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ *
+ */
 public class GovernanceContext {
 
     private String resourceName;

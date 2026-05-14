@@ -5,6 +5,9 @@ import com.xjtu.iron.governance.model.resource.GovernanceResourceType;
 
 import java.lang.annotation.*;
 
+/**
+ * @author faywong
+ */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented

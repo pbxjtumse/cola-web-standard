@@ -1,4 +1,4 @@
-package com.xjtu.iron.governance.local;
+package com.xjtu.iron.governance.config.local;
 
 import com.xjtu.iron.governance.config.api.GovernanceRuleRepository;
 import com.xjtu.iron.governance.model.rule.GovernanceRuleSet;

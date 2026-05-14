@@ -17,4 +17,5 @@ public interface GovernanceEngine {
     Set<GovernanceEngineCapability> capabilities();
 
     <T> T execute(GovernanceContext context, GovernancePolicy policy, GovernanceInvocation<T> invocation) throws Throwable;
+
 }

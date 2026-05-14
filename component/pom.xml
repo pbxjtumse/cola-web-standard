@@ -19,6 +19,7 @@
         <module>observability-parent</module>
         <module>transaction-component</module>
         <module>governance-component</module>
+        <module>cache-component</module>
     </modules>
 
     <properties>

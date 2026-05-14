@@ -29,9 +29,7 @@
             <groupId>com.xjtu.iron</groupId>
             <artifactId>governance-model</artifactId>
             <version>${project.version}</version>
-            <scope>compile</scope>
         </dependency>
-
 
     </dependencies>
     <build>

@@ -2,6 +2,9 @@ package com.xjtu.iron.governance.api.annotation;
 
 import java.lang.annotation.*;
 
+/**
+ * @author faywong
+ */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented

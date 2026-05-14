@@ -8,10 +8,13 @@
     </parent>
 
     <artifactId>governance-starters</artifactId>
-    <packaging>jar</packaging>
+    <packaging>pom</packaging>
 
     <name>governance-starters</name>
     <url>http://maven.apache.org</url>
+    <modules>
+        <module>governance-spring-boot-starter</module>
+    </modules>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

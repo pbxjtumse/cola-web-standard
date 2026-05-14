@@ -8,10 +8,13 @@
     </parent>
 
     <artifactId>governance-integrations</artifactId>
-    <packaging>jar</packaging>
+    <packaging>pom</packaging>
 
     <name>governance-integrations</name>
     <url>http://maven.apache.org</url>
+    <modules>
+        <module>governance-integration-spring-aop</module>
+    </modules>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
