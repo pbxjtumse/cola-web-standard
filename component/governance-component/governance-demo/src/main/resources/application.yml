@@ -1,0 +1,97 @@
+server:
+  port: 18080
+
+governance:
+  enabled: true
+
+  timeout-executor:
+    core-pool-size: 20
+    max-pool-size: 100
+    queue-capacity: 1000
+
+  default-policy:
+    timeout:
+      enabled: true
+      timeout: 1s
+
+    retry:
+      enabled: false
+      max-attempts: 1
+      wait-duration: 100ms
+
+    circuit-breaker:
+      enabled: true
+      failure-rate-threshold: 50
+      slow-call-rate-threshold: 60
+      slow-call-duration-threshold: 1s
+      sliding-window-size: 20
+      minimum-number-of-calls: 10
+      wait-duration-in-open-state: 10s
+      permitted-number-of-calls-in-half-open-state: 3
+
+    bulkhead:
+      enabled: true
+      max-concurrent-calls: 50
+      max-wait-duration: 0ms
+
+    rate-limit:
+      enabled: false
+      limit-for-period: 100
+      limit-refresh-period: 1s
+      timeout-duration: 0ms
+
+  resources:
+    internal.coupon.queryUserCoupon:
+      timeout:
+        enabled: true
+        timeout: 1s
+
+      retry:
+        enabled: true
+        max-attempts: 2
+        wait-duration: 100ms
+
+      circuit-breaker:
+        enabled: true
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 60
+        slow-call-duration-threshold: 500ms
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+
+      bulkhead:
+        enabled: true
+        max-concurrent-calls: 10
+        max-wait-duration: 0ms
+
+      rate-limit:
+        enabled: true
+        limit-for-period: 20
+        limit-refresh-period: 1s
+        timeout-duration: 0ms
+
+    internal.coupon.slowQuery:
+      timeout:
+        enabled: true
+        timeout: 800ms
+
+      retry:
+        enabled: false
+        max-attempts: 1
+
+      circuit-breaker:
+        enabled: true
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 500ms
+        sliding-window-size: 5
+        minimum-number-of-calls: 3
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+
+      bulkhead:
+        enabled: true
+        max-concurrent-calls: 5
+        max-wait-duration: 0ms
