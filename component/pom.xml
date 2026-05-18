@@ -20,6 +20,7 @@
         <module>transaction-component</module>
         <module>governance-component</module>
         <module>cache-component</module>
+        <module>cache-component/cache-demo</module>
     </modules>
 
     <properties>

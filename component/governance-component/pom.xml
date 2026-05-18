@@ -17,7 +17,7 @@
         <module>governance-core</module>
         <module>governance-spi</module>
         <module>governance-configs</module>
-        <module>governance-integrations</module>
+        <module>governance-integration</module>
         <module>governance-observability</module>
         <module>governance-runtime</module>
         <module>governance-extensions</module>

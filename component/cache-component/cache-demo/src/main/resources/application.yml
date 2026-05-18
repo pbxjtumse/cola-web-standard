@@ -1,0 +1,78 @@
+server:
+  port: 18081
+
+spring:
+  application:
+    name: cache-demo
+
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      timeout: 2s
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+xjtu:
+  iron:
+    cache:
+      enabled: true
+
+      caffeine:
+        enabled: true
+        default-maximum-size: 10000
+
+      redis:
+        enabled: true
+        key-prefix: "cache:"
+
+      specs:
+        campaignRule:
+          enable-l1: true
+          enable-l2: true
+          ttl: 5m
+          null-value-ttl: 30s
+          ttl-jitter: 60s
+          mutex-load: true
+          null-policy: CACHE_NULL
+          degrade-policy: LOAD_SOURCE
+
+        merchantConfig:
+          enable-l1: true
+          enable-l2: true
+          ttl: 30m
+          null-value-ttl: 30s
+          ttl-jitter: 120s
+          mutex-load: true
+          null-policy: CACHE_NULL
+          degrade-policy: LOAD_SOURCE
+
+        userProfile:
+          enable-l1: false
+          enable-l2: true
+          ttl: 10m
+          null-value-ttl: 30s
+          ttl-jitter: 60s
+          mutex-load: true
+          null-policy: CACHE_NULL
+          degrade-policy: LOAD_SOURCE
+
+        paymentStatus:
+          enable-l1: false
+          enable-l2: true
+          ttl: 30s
+          null-value-ttl: 5s
+          ttl-jitter: 5s
+          mutex-load: false
+          null-policy: SKIP_NULL
+          degrade-policy: FAIL_FAST

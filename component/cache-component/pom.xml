@@ -8,10 +8,18 @@
     </parent>
 
     <artifactId>cache-component</artifactId>
-    <packaging>jar</packaging>
+    <packaging>pom</packaging>
 
     <name>cache-component</name>
     <url>http://maven.apache.org</url>
+    <modules>
+        <module>cache-api</module>
+        <module>cache-provider</module>
+        <module>cache-core</module>
+        <module>cache-spring-boot-starter</module>
+        <module>cache-config</module>
+        <module>cache-integrations</module>
+    </modules>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

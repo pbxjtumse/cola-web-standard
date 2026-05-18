@@ -1,0 +1,244 @@
+@startuml
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+
+package "cache-api\ncom.xjtu.iron.cache.api" {
+
+    interface CacheClient {
+        +get(CacheKey, Class<T>, CacheLoader<T>) : CacheResult<T>
+        +getIfPresent(CacheKey, Class<T>) : Optional<T>
+        +put(CacheKey, Object)
+        +put(CacheKey, Object, Duration)
+        +evict(CacheKey)
+        +refresh(CacheKey, Class<?>, CacheLoader<?>)
+    }
+
+    interface CacheLoader<T> {
+        +load() : T
+    }
+
+    class CacheKey {
+        -cacheName : String
+        -namespace : String
+        -bizKey : String
+        -version : String
+        +fullKey() : String
+    }
+
+    class CacheSpec {
+        -enableL1 : boolean
+        -enableL2 : boolean
+        -ttl : Duration
+        -nullValueTtl : Duration
+        -ttlJitter : Duration
+        -mutexLoad : boolean
+        -nullPolicy : CacheNullPolicy
+        -degradePolicy : CacheDegradePolicy
+    }
+
+    class CacheValue<T> {
+        -present : boolean
+        -nullValue : boolean
+        -value : T
+        -level : CacheLevel
+    }
+
+    class CacheResult<T> {
+        -value : T
+        -status : CacheResultStatus
+        -level : CacheLevel
+        -hit : boolean
+        -nullValue : boolean
+        -costMillis : long
+    }
+
+    enum CacheLevel {
+        L1
+        L2
+        SOURCE
+        NONE
+    }
+
+    enum CacheNullPolicy {
+        CACHE_NULL
+        SKIP_NULL
+    }
+
+    enum CacheDegradePolicy {
+        LOAD_SOURCE
+        RETURN_NULL
+        FAIL_FAST
+    }
+
+    enum CacheOperation {
+        GET
+        PUT
+        EVICT
+        REFRESH
+    }
+}
+
+package "cache-core\ncom.xjtu.iron.cache.core" {
+
+    class DefaultCacheClient {
+        -cacheProvider : CacheProvider
+        -specResolver : CacheSpecResolver
+        -ttlResolver : CacheTtlResolver
+        -loadGuard : CacheLoadGuard
+        -metricsRecorder : CacheMetricsRecorder
+    }
+
+    interface CacheProvider {
+        +name() : String
+        +get(CacheKey, Class<T>, CacheSpec) : CacheValue<T>
+        +put(CacheKey, Object, Duration, CacheSpec)
+        +putNullValue(CacheKey, Duration, CacheSpec)
+        +evict(CacheKey)
+    }
+
+    interface CacheSpecResolver {
+        +resolve(CacheKey) : CacheSpec
+        +resolve(String) : CacheSpec
+    }
+
+    class CacheTtlResolver {
+        +resolveNormalTtl(CacheSpec) : Duration
+        +resolveNullValueTtl(CacheSpec) : Duration
+    }
+
+    interface CacheLoadGuard {
+        +execute(String, Callable<T>) : T
+    }
+
+    class LocalMutexCacheLoadGuard {
+        -locks : Map<String, ReentrantLock>
+    }
+
+    interface CacheMetricsRecorder {
+        +recordHit(CacheKey, CacheLevel, long)
+        +recordMiss(CacheKey, long)
+        +recordLoad(CacheKey, long)
+        +recordError(CacheKey, CacheOperation, Throwable)
+    }
+
+    class NoopCacheMetricsRecorder
+}
+
+package "cache-config\ncom.xjtu.iron.cache.config" {
+    class MapCacheSpecResolver {
+        -specMap : Map<String, CacheSpec>
+    }
+
+    interface DynamicCacheSpecProvider
+    interface CacheSpecChangeListener
+}
+
+package "cache-provider.caffeine\ncom.xjtu.iron.cache.provider.caffeine" {
+    class CaffeineCacheProvider {
+        -cacheManager : CaffeineCacheManager
+    }
+
+    class CaffeineCacheManager {
+        -caches : Map<String, Cache<String, LocalCacheEntry>>
+    }
+
+    class LocalCacheEntry {
+        -value : Object
+        -nullValue : boolean
+        -expireAtMillis : long
+    }
+}
+
+package "cache-provider.redis\ncom.xjtu.iron.cache.provider.redis" {
+    class RedisCacheProvider {
+        -redisClient : RedisBinaryClient
+        -serializer : RedisCacheSerializer
+        -keyPrefix : String
+    }
+
+    interface RedisBinaryClient {
+        +get(String) : byte[]
+        +set(String, byte[], Duration)
+        +del(String)
+        +put(String, byte[], Duration)
+    }
+
+    class SpringDataRedisBinaryClient {
+        -redisTemplate : RedisTemplate<String, byte[]>
+    }
+
+    interface RedisCacheSerializer {
+        +serialize(Object) : byte[]
+        +deserialize(byte[], Class<T>) : T
+    }
+
+    class JacksonRedisCacheSerializer
+}
+
+package "cache-provider.composite\ncom.xjtu.iron.cache.provider.composite" {
+    class CompositeCacheProvider {
+        -l1Provider : CacheProvider
+        -l2Provider : CacheProvider
+    }
+}
+
+package "cache-integrations\ncom.xjtu.iron.cache.integrations" {
+    class MicrometerCacheMetricsRecorder {
+        -meterRegistry : MeterRegistry
+    }
+
+    interface CacheGovernanceExecutor
+    class NoopCacheGovernanceExecutor
+}
+
+package "cache-spring-boot-starter\ncom.xjtu.iron.cache.starter" {
+    class XjtuIronCacheProperties
+    class PropertiesCacheSpecResolver
+    class XjtuIronCacheAutoConfiguration
+}
+
+DefaultCacheClient ..|> CacheClient
+DefaultCacheClient --> CacheProvider
+DefaultCacheClient --> CacheSpecResolver
+DefaultCacheClient --> CacheTtlResolver
+DefaultCacheClient --> CacheLoadGuard
+DefaultCacheClient --> CacheMetricsRecorder
+
+LocalMutexCacheLoadGuard ..|> CacheLoadGuard
+NoopCacheMetricsRecorder ..|> CacheMetricsRecorder
+
+MapCacheSpecResolver ..|> CacheSpecResolver
+PropertiesCacheSpecResolver ..|> CacheSpecResolver
+
+CaffeineCacheProvider ..|> CacheProvider
+RedisCacheProvider ..|> CacheProvider
+CompositeCacheProvider ..|> CacheProvider
+
+CompositeCacheProvider --> CaffeineCacheProvider : L1
+CompositeCacheProvider --> RedisCacheProvider : L2
+
+CaffeineCacheProvider --> CaffeineCacheManager
+CaffeineCacheManager --> LocalCacheEntry
+
+RedisCacheProvider --> RedisBinaryClient
+RedisCacheProvider --> RedisCacheSerializer
+SpringDataRedisBinaryClient ..|> RedisBinaryClient
+JacksonRedisCacheSerializer ..|> RedisCacheSerializer
+
+MicrometerCacheMetricsRecorder ..|> CacheMetricsRecorder
+
+XjtuIronCacheAutoConfiguration --> DefaultCacheClient
+XjtuIronCacheAutoConfiguration --> CompositeCacheProvider
+XjtuIronCacheAutoConfiguration --> CaffeineCacheProvider
+XjtuIronCacheAutoConfiguration --> RedisCacheProvider
+XjtuIronCacheAutoConfiguration --> PropertiesCacheSpecResolver
+
+CacheClient --> CacheKey
+CacheClient --> CacheLoader
+CacheClient --> CacheResult
+CacheResult --> CacheLevel
+CacheValue --> CacheLevel
+CacheSpec --> CacheNullPolicy
+CacheSpec --> CacheDegradePolicy
+
+@enduml
