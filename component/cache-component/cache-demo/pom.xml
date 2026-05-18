@@ -5,21 +5,15 @@
         <groupId>com.xjtu.iron</groupId>
         <artifactId>component</artifactId>
         <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>cache-component</artifactId>
-    <packaging>pom</packaging>
+    <groupId>com.xjtu.iron.cache.demo</groupId>
+    <artifactId>cache-demo</artifactId>
+    <packaging>jar</packaging>
 
-    <name>cache-component</name>
+    <name>cache-demo</name>
     <url>http://maven.apache.org</url>
-    <modules>
-        <module>cache-api</module>
-        <module>cache-provider</module>
-        <module>cache-core</module>
-        <module>cache-spring-boot-starter</module>
-        <module>cache-config</module>
-        <module>cache-integrations</module>
-    </modules>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
