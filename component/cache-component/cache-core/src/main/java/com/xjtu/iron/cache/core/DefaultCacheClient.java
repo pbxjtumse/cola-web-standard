@@ -175,32 +175,27 @@ public class DefaultCacheClient implements CacheClient {
     @Override
     public void put(CacheKey key, Object value) {
         CacheSpec spec = specResolver.resolve(key);
+
         Duration ttl = value == null
                 ? ttlResolver.resolveNullValueTtl(spec)
                 : ttlResolver.resolveNormalTtl(spec);
 
-        put(key, value, ttl);
+        putInternal(key, value, ttl, spec);
     }
 
     @Override
     public void put(CacheKey key, Object value, Duration ttl) {
         CacheSpec spec = specResolver.resolve(key);
-
-        try {
-            if (value == null) {
-                cacheProvider.putNullValue(key, ttl, spec);
-            } else {
-                cacheProvider.put(key, value, ttl, spec);
-            }
-        } catch (Exception ex) {
-            metricsRecorder.recordError(key, CacheOperation.PUT, ex);
-            throw new CacheException("Cache put failed, key=" + key.fullKey(), ex);
-        }
+        putInternal(key, value, ttl, spec);
     }
 
     @Override
     public void put(CacheKey key, Object value, CacheSpec spec) {
+        Duration ttl = value == null
+                ? ttlResolver.resolveNullValueTtl(spec)
+                : ttlResolver.resolveNormalTtl(spec);
 
+        putInternal(key, value, ttl, spec);
     }
 
     @Override
@@ -221,9 +216,29 @@ public class DefaultCacheClient implements CacheClient {
             Object value = loader.load();
             put(key, value);
             metricsRecorder.recordLoad(key, System.currentTimeMillis() - start);
+
         } catch (Exception ex) {
             metricsRecorder.recordError(key, CacheOperation.REFRESH, ex);
             throw new CacheLoadException("Cache refresh failed, key=" + key.fullKey(), ex);
+        }
+    }
+
+    private void putInternal(CacheKey key, Object value, Duration ttl, CacheSpec spec) {
+        try {
+            if (value == null) {
+                if (spec.getNullPolicy() == CacheNullPolicy.SKIP_NULL) {
+                    return;
+                }
+
+                cacheProvider.putNullValue(key, ttl, spec);
+                return;
+            }
+
+            cacheProvider.put(key, value, ttl, spec);
+
+        } catch (Exception ex) {
+            metricsRecorder.recordError(key, CacheOperation.PUT, ex);
+            throw new CacheException("Cache put failed, key=" + key.fullKey(), ex);
         }
     }
 }

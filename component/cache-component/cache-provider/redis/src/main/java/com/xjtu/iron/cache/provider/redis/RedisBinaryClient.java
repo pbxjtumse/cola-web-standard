@@ -10,4 +10,8 @@ public interface RedisBinaryClient {
     void set(String key, byte[] value, Duration ttl);
 
     void del(String key);
+
+    default void put(String key, byte[] value, Duration ttl) {
+        set(key, value, ttl);
+    }
 }

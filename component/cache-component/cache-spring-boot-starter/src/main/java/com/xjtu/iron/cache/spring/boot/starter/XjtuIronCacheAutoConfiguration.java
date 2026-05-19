@@ -31,7 +31,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.ByteArrayRedisSerializer;
+import org.springframework.data.redis.serializer.RedisSerializer;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 @AutoConfiguration(after = RedisAutoConfiguration.class)
@@ -95,10 +96,13 @@ public class XjtuIronCacheAutoConfiguration {
     public RedisTemplate<String, byte[]> ironCacheRedisTemplate(RedisConnectionFactory redisConnectionFactory) {
         RedisTemplate<String, byte[]> redisTemplate = new RedisTemplate<>();
         redisTemplate.setConnectionFactory(redisConnectionFactory);
+
         redisTemplate.setKeySerializer(new StringRedisSerializer());
-        redisTemplate.setValueSerializer(new ByteArrayRedisSerializer());
+        redisTemplate.setValueSerializer(RedisSerializer.byteArray());
+
         redisTemplate.setHashKeySerializer(new StringRedisSerializer());
-        redisTemplate.setHashValueSerializer(new ByteArrayRedisSerializer());
+        redisTemplate.setHashValueSerializer(RedisSerializer.byteArray());
+
         redisTemplate.afterPropertiesSet();
         return redisTemplate;
     }
