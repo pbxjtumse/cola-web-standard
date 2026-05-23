@@ -191,7 +191,11 @@ public class DefaultCacheClient implements CacheClient {
 
     @Override
     public void put(CacheKey key, Object value, CacheSpec spec) {
+        Duration ttl = value == null
+                ? ttlResolver.resolveNullValueTtl(spec)
+                : ttlResolver.resolveNormalTtl(spec);
 
+        putInternal(key, value, ttl, spec);
     }
 
     @Override
@@ -203,7 +207,6 @@ public class DefaultCacheClient implements CacheClient {
             throw new CacheException("Cache evict failed, key=" + key.fullKey(), ex);
         }
     }
-
 
     @Override
     public void refresh(CacheKey key, Class<?> valueType, CacheLoader<?> loader) {

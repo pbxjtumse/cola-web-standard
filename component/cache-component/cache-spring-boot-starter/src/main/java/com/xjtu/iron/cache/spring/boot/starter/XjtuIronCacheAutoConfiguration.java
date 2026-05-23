@@ -84,7 +84,9 @@ public class XjtuIronCacheAutoConfiguration {
 
     @Bean("ironCaffeineCacheProvider")
     @ConditionalOnBean(name = "ironCaffeineCacheManager")
-    public CacheProvider caffeineCacheProvider(@Qualifier("ironCaffeineCacheManager") CaffeineCacheManager caffeineCacheManager) {
+    public CacheProvider caffeineCacheProvider(
+            @Qualifier("ironCaffeineCacheManager") CaffeineCacheManager caffeineCacheManager
+    ) {
         return new CaffeineCacheProvider(caffeineCacheManager);
     }
 
@@ -94,10 +96,13 @@ public class XjtuIronCacheAutoConfiguration {
     public RedisTemplate<String, byte[]> ironCacheRedisTemplate(RedisConnectionFactory redisConnectionFactory) {
         RedisTemplate<String, byte[]> redisTemplate = new RedisTemplate<>();
         redisTemplate.setConnectionFactory(redisConnectionFactory);
+
         redisTemplate.setKeySerializer(new StringRedisSerializer());
         redisTemplate.setValueSerializer(RedisSerializer.byteArray());
+
         redisTemplate.setHashKeySerializer(new StringRedisSerializer());
         redisTemplate.setHashValueSerializer(RedisSerializer.byteArray());
+
         redisTemplate.afterPropertiesSet();
         return redisTemplate;
     }
@@ -111,7 +116,9 @@ public class XjtuIronCacheAutoConfiguration {
     @Bean
     @ConditionalOnBean(name = "ironCacheRedisTemplate")
     @ConditionalOnMissingBean
-    public RedisBinaryClient redisBinaryClient(@Qualifier("ironCacheRedisTemplate") RedisTemplate<String, byte[]> redisTemplate) {
+    public RedisBinaryClient redisBinaryClient(
+            @Qualifier("ironCacheRedisTemplate") RedisTemplate<String, byte[]> redisTemplate
+    ) {
         return new SpringDataRedisBinaryClient(redisTemplate);
     }
 

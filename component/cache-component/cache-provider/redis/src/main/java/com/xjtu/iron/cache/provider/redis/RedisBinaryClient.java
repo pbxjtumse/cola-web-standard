@@ -11,5 +11,7 @@ public interface RedisBinaryClient {
 
     void del(String key);
 
-
+    default void put(String key, byte[] value, Duration ttl) {
+        set(key, value, ttl);
+    }
 }
