@@ -2,12 +2,11 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>com.xjtu.iron.cache.integrations</groupId>
+        <groupId>com.xjtu.iron</groupId>
         <artifactId>cache-integrations</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <groupId>com.xjtu.iron.cache.integrations.observability</groupId>
     <artifactId>observability</artifactId>
     <packaging>jar</packaging>
 

@@ -7,7 +7,7 @@
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <groupId>com.xjtu.iron.cache.integrations</groupId>
+    <groupId>com.xjtu.iron</groupId>
     <artifactId>cache-integrations</artifactId>
     <packaging>pom</packaging>
 

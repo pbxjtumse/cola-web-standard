@@ -6,7 +6,39 @@ import com.xjtu.iron.cache.api.CacheValue;
 import com.xjtu.iron.cache.core.CacheProvider;
 
 import java.time.Duration;
-
+/**
+ * 多级缓存组合 Provider。
+ *
+ * <p>一期默认组合：</p>
+ *
+ * <pre>
+ * L1 = Caffeine 本地缓存
+ * L2 = Redis 分布式缓存
+ * </pre>
+ *
+ * <p>读取顺序：</p>
+ *
+ * <pre>
+ * 1. 查 L1
+ * 2. L1 miss 查 L2
+ * 3. L2 hit 回填 L1
+ * 4. L1、L2 都 miss 返回 miss
+ * </pre>
+ *
+ * <p>写入顺序：</p>
+ *
+ * <pre>
+ * 1. 写 L2 Redis
+ * 2. 写 L1 Caffeine
+ * </pre>
+ *
+ * <p>删除顺序：</p>
+ *
+ * <pre>
+ * 1. 删除 L1
+ * 2. 删除 L2
+ * </pre>
+ */
 public class CompositeCacheProvider implements CacheProvider {
 
     private final CacheProvider l1Provider;
@@ -24,6 +56,7 @@ public class CompositeCacheProvider implements CacheProvider {
 
     @Override
     public <T> CacheValue<T> get(CacheKey key, Class<T> valueType, CacheSpec spec) {
+        // 1. 如果开启 L1，本地缓存优先
         if (spec.isEnableL1()) {
             CacheValue<T> l1Value = l1Provider.get(key, valueType, spec);
 
@@ -31,11 +64,13 @@ public class CompositeCacheProvider implements CacheProvider {
                 return l1Value;
             }
         }
-
+        // 2. L1 未命中，再查 L2 Redis
         if (spec.isEnableL2()) {
             CacheValue<T> l2Value = l2Provider.get(key, valueType, spec);
 
             if (l2Value.isPresent()) {
+                // 3. Redis 命中后，回填本地缓存
+                //    下次同一个实例再查，就可以直接命中 Caffeine
                 backfillL1(key, l2Value, spec);
                 return l2Value;
             }

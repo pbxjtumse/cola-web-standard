@@ -1,4 +1,9 @@
 target/
+.idea/
+*.iml
+.DS_Store
+__MACOSX/
+._*
 
 ### eclipse ###
 .apt_generated

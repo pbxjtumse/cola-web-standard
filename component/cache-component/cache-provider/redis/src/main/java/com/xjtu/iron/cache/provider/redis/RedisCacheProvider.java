@@ -10,7 +10,25 @@ import com.xjtu.iron.cache.core.CacheProvider;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
-
+/**
+ * Redis 分布式缓存 Provider。
+ *
+ * <p>作为 L2 缓存使用。</p>
+ *
+ * <p>职责：</p>
+ *
+ * <pre>
+ * 1. 将 CacheKey 转成 Redis key
+ * 2. 将对象序列化成 byte[]
+ * 3. 从 Redis 读取 byte[] 并反序列化成对象
+ * 4. 写入正常值
+ * 5. 写入空值占位符
+ * 6. 删除 Redis key
+ * </pre>
+ *
+ * <p>RedisCacheProvider 不负责缓存流程编排。
+ * 流程编排由 DefaultCacheClient 和 CompositeCacheProvider 负责。</p>
+ */
 public class RedisCacheProvider implements CacheProvider {
 
     private static final byte[] NULL_VALUE_BYTES =

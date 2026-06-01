@@ -2,14 +2,45 @@ package com.xjtu.iron.cache.api;
 
 import com.xjtu.iron.cache.api.enums.CacheLevel;
 import com.xjtu.iron.cache.api.enums.CacheResultStatus;
-
+/**
+ * CacheClient 对业务返回的缓存访问结果。
+ *
+ *  相比直接返回 value，CacheResult 能表达更多诊断信息：
+ *
+ * <pre>
+ * 是否命中
+ * 命中层级，L1 / L2 / SOURCE
+ * 是否为空值缓存
+ * 本次访问耗时
+ * 访问状态
+ * </pre>
+ */
 public class CacheResult<T> {
 
+    /**
+     * 缓存值
+     */
     private final T value;
+
+    /**
+     * 访问状态
+     */
     private final CacheResultStatus status;
+    /**
+     * 命中层级，L1 / L2 / SOURCE
+     */
     private final CacheLevel level;
+    /**
+     * 是否命中
+     */
     private final boolean hit;
+    /**
+     * 是否空值
+     */
     private final boolean nullValue;
+    /**
+     * 超时时间？？？
+     */
     private final long costMillis;
 
     private CacheResult(

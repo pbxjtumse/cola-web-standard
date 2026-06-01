@@ -8,7 +8,6 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <groupId>com.xjtu.iron.cache.demo</groupId>
     <artifactId>cache-demo</artifactId>
     <packaging>jar</packaging>
 

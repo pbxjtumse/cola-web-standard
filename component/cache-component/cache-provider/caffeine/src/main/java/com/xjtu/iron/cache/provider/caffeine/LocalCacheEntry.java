@@ -1,5 +1,10 @@
 package com.xjtu.iron.cache.provider.caffeine;
 
+/**
+ * 每个 key 自己控制过期时间
+ * 每个 key 支持 TTL 抖动
+ * 空值和正常值可以用不同 TTL
+ */
 class LocalCacheEntry {
 
     private final Object value;

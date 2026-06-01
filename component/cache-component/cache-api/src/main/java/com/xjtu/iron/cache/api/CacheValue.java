@@ -1,7 +1,18 @@
 package com.xjtu.iron.cache.api;
 
 import com.xjtu.iron.cache.api.enums.CacheLevel;
+import lombok.Getter;
 
+/**
+ * Provider 层返回的缓存值。
+ *  不能简单使用 Optional 表示缓存结果，因为缓存有三种状态
+ * 1. 命中正常值
+ * 2. 命中空值占位
+ * 3. 未命中
+ *
+ * <p>Optional 只能表达有值和无值，无法区分“未命中”和“命中空值”。</p>
+ */
+@Getter
 public class CacheValue<T> {
 
     private final boolean present;
@@ -28,19 +39,4 @@ public class CacheValue<T> {
         return new CacheValue<>(true, true, null, level);
     }
 
-    public boolean isPresent() {
-        return present;
-    }
-
-    public boolean isNullValue() {
-        return nullValue;
-    }
-
-    public T getValue() {
-        return value;
-    }
-
-    public CacheLevel getLevel() {
-        return level;
-    }
 }

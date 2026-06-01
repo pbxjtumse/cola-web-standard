@@ -6,7 +6,22 @@ import com.xjtu.iron.cache.api.enums.CacheDegradePolicy;
 import com.xjtu.iron.cache.api.enums.CacheNullPolicy;
 
 import java.time.Duration;
-
+/**
+ * 缓存策略模型。
+ *
+ * CacheSpec 描述一个 cacheName 的完整缓存行为。
+ *   例如 campaignRule 可以配置：
+ *
+ * enableL1 = true
+ * enableL2 = true
+ * ttl = 5m
+ * nullValueTtl = 30s
+ * ttlJitter = 60s
+ * mutexLoad = true
+ * nullPolicy = CACHE_NULL
+ * degradePolicy = LOAD_SOURCE
+ * 后续接入配置中心时，也是动态刷新 CacheSpec。
+ */
 public class CacheSpec {
 
     private String cacheName;

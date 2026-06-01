@@ -7,7 +7,6 @@
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <groupId>com.xjtu.iron.cache.spring.boot.starter</groupId>
     <artifactId>cache-spring-boot-starter</artifactId>
     <packaging>jar</packaging>
 
@@ -26,19 +25,19 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.xjtu.iron.cache.api</groupId>
+            <groupId>com.xjtu.iron</groupId>
             <artifactId>cache-api</artifactId>
             <version>1.0.0-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
-            <groupId>com.xjtu.iron.cache.core</groupId>
+            <groupId>com.xjtu.iron</groupId>
             <artifactId>cache-core</artifactId>
             <version>1.0.0-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
-            <groupId>com.xjtu.iron.cache.integrations.observability</groupId>
+            <groupId>com.xjtu.iron</groupId>
             <artifactId>observability</artifactId>
             <version>1.0.0-SNAPSHOT</version>
             <scope>compile</scope>
@@ -48,19 +47,19 @@
             <artifactId>spring-data-redis</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.xjtu.iron.cache.provider.redis</groupId>
+            <groupId>com.xjtu.iron</groupId>
             <artifactId>redis</artifactId>
             <version>1.0.0-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
-            <groupId>com.xjtu.iron.cache.provider.caffeine</groupId>
+            <groupId>com.xjtu.iron</groupId>
             <artifactId>caffeine</artifactId>
             <version>1.0.0-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
-            <groupId>com.xjtu.iron.cache.provider.composite</groupId>
+            <groupId>com.xjtu.iron</groupId>
             <artifactId>composite</artifactId>
             <version>1.0.0-SNAPSHOT</version>
             <scope>compile</scope>

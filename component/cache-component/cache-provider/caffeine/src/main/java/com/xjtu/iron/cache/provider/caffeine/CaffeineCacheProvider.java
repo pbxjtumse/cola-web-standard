@@ -9,7 +9,41 @@ import com.xjtu.iron.cache.api.enums.CacheLevel;
 import com.xjtu.iron.cache.core.CacheProvider;
 
 import java.time.Duration;
-
+/**
+ * Caffeine 本地缓存 Provider。
+ *
+ * <p>作为 L1 缓存使用。</p>
+ *
+ * <p>适合场景：</p>
+ *
+ * <pre>
+ * 字典
+ * 配置
+ * 规则
+ * 热点读多写少数据
+ * </pre>
+ *
+ * <p>不适合场景：</p>
+ *
+ * <pre>
+ * 余额
+ * 库存扣减
+ * 支付状态强一致判断
+ * 高频变化数据
+ * </pre>
+ *
+ * <p>当前实现没有直接使用 Caffeine 的 expireAfterWrite，
+ * 而是在 LocalCacheEntry 中保存 expireAtMillis。</p>
+ *
+ * <p>这样做是为了支持：</p>
+ *
+ * <pre>
+ * 每个 key 独立 TTL
+ * TTL 抖动
+ * 空值 TTL
+ * Redis 回填 L1 时使用不同 TTL
+ * </pre>
+ */
 public class CaffeineCacheProvider implements CacheProvider {
 
     private final CaffeineCacheManager cacheManager;

@@ -2,12 +2,32 @@ package com.xjtu.iron.cache.api;
 
 
 import java.util.Objects;
-
+/**
+ * 缓存 key 模型。
+ * 1.不要在业务代码里直接拼接 Redis key。推荐 key 结构：
+ *   namespace:cacheName:bizKey:version
+ *   例如：
+ *   marketing:campaignRule:campaignId:10001:v1
+ * 2. 如果 Redis 配置了 key-prefix，例如 cache:，最终 Redis key 为：
+ * cache:marketing:campaignRule:campaignId:10001:v1
+ */
 public final class CacheKey {
 
+    /**
+     * cacheName 缓存名称
+     */
     private final String cacheName;
+    /**
+     * cacheName 命名空间
+     */
     private final String namespace;
+    /**
+     * cacheName 业务键
+     */
     private final String bizKey;
+    /**
+     * cacheName 版本号
+     */
     private final String version;
 
     private CacheKey(String cacheName, String namespace, String bizKey, String version) {

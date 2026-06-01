@@ -2,24 +2,11 @@ package com.xjtu.iron.cache.spring.boot.starter;
 
 
 import com.xjtu.iron.cache.api.CacheClient;
-import com.xjtu.iron.cache.core.CacheLoadGuard;
-import com.xjtu.iron.cache.core.CacheMetricsRecorder;
-import com.xjtu.iron.cache.core.CacheProvider;
-import com.xjtu.iron.cache.core.CacheSpecResolver;
-import com.xjtu.iron.cache.core.CacheTtlResolver;
-import com.xjtu.iron.cache.core.DefaultCacheClient;
-import com.xjtu.iron.cache.core.LocalMutexCacheLoadGuard;
-import com.xjtu.iron.cache.core.NoopCacheMetricsRecorder;
-import com.xjtu.iron.cache.integrations.observability.MicrometerCacheMetricsRecorder;
+import com.xjtu.iron.cache.core.*;
 import com.xjtu.iron.cache.provider.caffeine.CaffeineCacheManager;
 import com.xjtu.iron.cache.provider.caffeine.CaffeineCacheProvider;
 import com.xjtu.iron.cache.provider.composite.CompositeCacheProvider;
-import com.xjtu.iron.cache.provider.redis.JacksonRedisCacheSerializer;
-import com.xjtu.iron.cache.provider.redis.RedisBinaryClient;
-import com.xjtu.iron.cache.provider.redis.RedisCacheProvider;
-import com.xjtu.iron.cache.provider.redis.RedisCacheSerializer;
-import com.xjtu.iron.cache.provider.redis.SpringDataRedisBinaryClient;
-//import io.micrometer.core.instrument.MeterRegistry;
+import com.xjtu.iron.cache.provider.redis.*;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -33,8 +20,36 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
-import org.springframework.data.redis.serializer.StringRedisSerializer;
 
+//import io.micrometer.core.instrument.MeterRegistry;
+/**
+ * XJTU Iron Cache 自动装配类。
+ *
+ * <p>业务系统只需要引入 cache-spring-boot-starter，
+ * 并配置 xjtu.iron.cache.enabled=true，
+ * 即可自动注入 CacheClient。</p>
+ *
+ * <p>一期自动装配的核心对象：</p>
+ *
+ * <pre>
+ * CacheSpecResolver
+ * CacheTtlResolver
+ * CacheLoadGuard
+ * CacheMetricsRecorder
+ * CaffeineCacheProvider
+ * RedisCacheProvider
+ * CompositeCacheProvider
+ * CacheClient
+ * </pre>
+ *
+ * <p>注意：</p>
+ *
+ * <pre>
+ * 1. 如果存在 MeterRegistry，则使用 MicrometerCacheMetricsRecorder
+ * 2. 如果不存在 MeterRegistry，则使用 NoopCacheMetricsRecorder
+ * 3. 如果 RedisConnectionFactory 存在，则创建 RedisBinaryClient
+ * </pre>
+ */
 @AutoConfiguration(after = RedisAutoConfiguration.class)
 @EnableConfigurationProperties(XjtuIronCacheProperties.class)
 @ConditionalOnProperty(prefix = "xjtu.iron.cache", name = "enabled", havingValue = "true", matchIfMissing = true)
