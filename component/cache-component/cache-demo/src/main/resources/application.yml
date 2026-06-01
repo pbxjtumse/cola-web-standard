@@ -46,33 +46,3 @@ xjtu:
           mutex-load: true
           null-policy: CACHE_NULL
           degrade-policy: LOAD_SOURCE
-
-        merchantConfig:
-          enable-l1: true
-          enable-l2: true
-          ttl: 30m
-          null-value-ttl: 30s
-          ttl-jitter: 120s
-          mutex-load: true
-          null-policy: CACHE_NULL
-          degrade-policy: LOAD_SOURCE
-
-        userProfile:
-          enable-l1: false
-          enable-l2: true
-          ttl: 10m
-          null-value-ttl: 30s
-          ttl-jitter: 60s
-          mutex-load: true
-          null-policy: CACHE_NULL
-          degrade-policy: LOAD_SOURCE
-
-        paymentStatus:
-          enable-l1: false
-          enable-l2: true
-          ttl: 30s
-          null-value-ttl: 5s
-          ttl-jitter: 5s
-          mutex-load: false
-          null-policy: SKIP_NULL
-          degrade-policy: FAIL_FAST

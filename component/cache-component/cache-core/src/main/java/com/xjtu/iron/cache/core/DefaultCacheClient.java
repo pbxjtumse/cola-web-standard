@@ -1,6 +1,5 @@
 package com.xjtu.iron.cache.core;
 
-
 import com.xjtu.iron.cache.api.CacheClient;
 import com.xjtu.iron.cache.api.CacheKey;
 import com.xjtu.iron.cache.api.CacheLoader;
@@ -17,71 +16,31 @@ import java.time.Duration;
 import java.util.Optional;
 
 /**
- * 职责：默认缓存客户端实现。
- * 1. 根据 CacheKey 解析 CacheSpec
- * 2. 调用 CacheProvider 读取缓存
- * 3. 处理缓存 miss 后的 loader 加载
- * 4. 处理空值缓存
- * 5. 处理 TTL 和 TTL 抖动
- * 6. 处理本地互斥加载，防止单机缓存击穿
- * 7. 记录缓存指标
- * 8. 处理缓存读取异常后的降级策略
+ * 默认缓存客户端实现。
  *
- * 注意：
- * 1.DefaultCacheClient 不直接依赖 Caffeine 或 Redis 或者相关的工具类
- * 2.底层缓存实现通过 CacheProvider SPI 接入。
- * 3.一期默认 CacheProvider 是 CompositeCacheProvider。
+ * <p>它是一期缓存组件的流程编排核心，但它不直接依赖 Caffeine 或 Redis。
+ * 具体缓存能力通过 CacheProvider SPI 注入。</p>
  */
 public class DefaultCacheClient implements CacheClient {
-    /**
-     * 真正执行缓存读写的 Provider。
-     *
-     * 一期默认是 CompositeCacheProvider：
-     * L1 = Caffeine
-     * L2 = Redis
-     */
+
+    /** 真正执行缓存读写的 Provider。一期默认是 CompositeCacheProvider。 */
     private final CacheProvider cacheProvider;
 
-    /**
-     * 根据 cacheName 解析缓存策略。 根据 cacheName 解析对应的 CacheSpec
-     *
-     * 比如：
-     * campaignRule -> TTL 5m，开启 L1/L2，开启空值缓存
-     * userProfile  -> 只开启 Redis，不开启本地缓存
-     */
+    /** 根据 cacheName 解析缓存策略。 */
     private final CacheSpecResolver specResolver;
 
-    /**
-     * 负责计算 TTL。
-     *
-     * 它会处理：
-     * 1. 正常值 TTL
-     * 2. 空值 TTL
-     * 3. TTL 随机抖动，防止雪崩
-     */
+    /** 负责计算正常值 TTL、空值 TTL 和 TTL 抖动。 */
     private final CacheTtlResolver ttlResolver;
-    /**
-     * 防缓存击穿。
-     *
-     * 一期是本地锁，只能防单 JVM 内并发击穿。 防止同一个 JVM 内同一个 key 被并发加载
-     * 二期可以换成 Redis 分布式锁。
-     */
+
+    /** 防缓存击穿的加载保护器。一期默认是本地互斥锁。 */
     private final CacheLoadGuard loadGuard;
-    /**
-     * 指标记录器。
-     *
-     * 默认 Noop。
-     * 如果项目里有 Micrometer，就使用 MicrometerCacheMetricsRecorder。
-     */
+
+    /** 指标记录器。可由 Noop 或 Micrometer 实现。 */
     private final CacheMetricsRecorder metricsRecorder;
 
-    public DefaultCacheClient(
-            CacheProvider cacheProvider,
-            CacheSpecResolver specResolver,
-            CacheTtlResolver ttlResolver,
-            CacheLoadGuard loadGuard,
-            CacheMetricsRecorder metricsRecorder
-    ) {
+    /** 创建默认缓存客户端。 */
+    public DefaultCacheClient(CacheProvider cacheProvider, CacheSpecResolver specResolver, CacheTtlResolver ttlResolver,
+                              CacheLoadGuard loadGuard, CacheMetricsRecorder metricsRecorder) {
         this.cacheProvider = cacheProvider;
         this.specResolver = specResolver;
         this.ttlResolver = ttlResolver;
@@ -89,89 +48,67 @@ public class DefaultCacheClient implements CacheClient {
         this.metricsRecorder = metricsRecorder;
     }
 
+    /** 根据 cacheName 默认策略读取缓存。 */
     @Override
     public <T> CacheResult<T> get(CacheKey key, Class<T> valueType, CacheLoader<T> loader) {
-        // 1. 根据 key.cacheName() 找缓存策略
         CacheSpec spec = specResolver.resolve(key);
-        // 2. 用找到的策略执行真正 get
         return get(key, valueType, spec, loader);
     }
 
+    /** 使用指定策略读取缓存。 */
     @Override
     public <T> CacheResult<T> get(CacheKey key, Class<T> valueType, CacheSpec spec, CacheLoader<T> loader) {
         long start = System.currentTimeMillis();
-
         CacheValue<T> cacheValue;
 
         try {
-            // 1. 先查缓存。
-            // 如果是 CompositeCacheProvider：
-            // 先查 Caffeine，再查 Redis。
             cacheValue = cacheProvider.get(key, valueType, spec);
         } catch (Exception ex) {
-            // 2. 如果缓存读取异常，比如 Redis 抖动，则记录异常指标
             metricsRecorder.recordError(key, CacheOperation.GET, ex);
-            // 3. 根据降级策略处理：
-            //    LOAD_SOURCE：直接查数据源
-            //    RETURN_NULL：返回 null
-            //    FAIL_FAST：直接抛异常
             return handleCacheReadException(key, spec, loader, start, ex);
         }
 
         if (cacheValue.isPresent()) {
-            // 4. 缓存命中，直接返回
             long cost = System.currentTimeMillis() - start;
             metricsRecorder.recordHit(key, cacheValue.getLevel(), cost);
             return CacheResult.hit(cacheValue, cost);
         }
 
-        // 5. 缓存未命中，记录 miss
         metricsRecorder.recordMiss(key, System.currentTimeMillis() - start);
 
         try {
             if (spec.isMutexLoad()) {
-                // 6. 开启互斥加载，防止大量线程同时查数据库
                 return loadWithMutex(key, valueType, spec, loader, start);
             }
-            // 7. 不开启互斥加载，直接查数据源并写缓存
             return loadAndWrite(key, spec, loader, start);
         } catch (Exception ex) {
             if (ex instanceof CacheException cacheException) {
                 throw cacheException;
             }
-
             throw new CacheLoadException("Cache load failed, key=" + key.fullKey(), ex);
         }
     }
 
-    private <T> CacheResult<T> loadWithMutex(
-            CacheKey key,
-            Class<T> valueType,
-            CacheSpec spec,
-            CacheLoader<T> loader,
-            long start
-    ) throws Exception {
+    /**
+     * 互斥加载源数据。
+     *
+     * <p>拿到锁后会二次查询缓存，避免其他线程已经完成加载并回填缓存后，本线程仍重复查源。</p>
+     */
+    private <T> CacheResult<T> loadWithMutex(CacheKey key, Class<T> valueType, CacheSpec spec, CacheLoader<T> loader, long start) throws Exception {
         return loadGuard.execute(key.fullKey(), () -> {
             CacheValue<T> recheckValue = cacheProvider.get(key, valueType, spec);
-
             if (recheckValue.isPresent()) {
                 long cost = System.currentTimeMillis() - start;
                 metricsRecorder.recordHit(key, recheckValue.getLevel(), cost);
                 return CacheResult.hit(recheckValue, cost);
             }
-
             return loadAndWrite(key, spec, loader, start);
         });
     }
 
-    private <T> CacheResult<T> loadAndWrite(
-            CacheKey key,
-            CacheSpec spec,
-            CacheLoader<T> loader,
-            long start
-    ) {
+    /** 执行 loader，并根据返回值写入缓存。 */
+    private <T> CacheResult<T> loadAndWrite(CacheKey key, CacheSpec spec, CacheLoader<T> loader, long start) {
         T loadedValue;
-
         try {
             loadedValue = loader.load();
         } catch (Exception ex) {
@@ -195,17 +132,11 @@ public class DefaultCacheClient implements CacheClient {
 
         long cost = System.currentTimeMillis() - start;
         metricsRecorder.recordLoad(key, cost);
-
         return CacheResult.loaded(loadedValue, cost);
     }
 
-    private <T> CacheResult<T> handleCacheReadException(
-            CacheKey key,
-            CacheSpec spec,
-            CacheLoader<T> loader,
-            long start,
-            Exception ex
-    ) {
+    /** 处理缓存读取异常后的降级策略。 */
+    private <T> CacheResult<T> handleCacheReadException(CacheKey key, CacheSpec spec, CacheLoader<T> loader, long start, Exception ex) {
         CacheDegradePolicy degradePolicy = spec.getDegradePolicy();
 
         if (degradePolicy == CacheDegradePolicy.RETURN_NULL) {
@@ -224,44 +155,57 @@ public class DefaultCacheClient implements CacheClient {
         throw new CacheException("Cache get failed, key=" + key.fullKey(), ex);
     }
 
+    /** 只查缓存，不触发 loader。 */
     @Override
     public <T> Optional<T> getIfPresent(CacheKey key, Class<T> valueType) {
         CacheSpec spec = specResolver.resolve(key);
         CacheValue<T> value = cacheProvider.get(key, valueType, spec);
-
         if (!value.isPresent() || value.isNullValue()) {
             return Optional.empty();
         }
-
         return Optional.ofNullable(value.getValue());
     }
 
+    /** 使用默认策略写入缓存。 */
     @Override
     public void put(CacheKey key, Object value) {
         CacheSpec spec = specResolver.resolve(key);
-
-        Duration ttl = value == null
-                ? ttlResolver.resolveNullValueTtl(spec)
-                : ttlResolver.resolveNormalTtl(spec);
-
+        Duration ttl = value == null ? ttlResolver.resolveNullValueTtl(spec) : ttlResolver.resolveNormalTtl(spec);
         putInternal(key, value, ttl, spec);
     }
 
+    /** 使用显式 TTL 写入缓存。 */
     @Override
     public void put(CacheKey key, Object value, Duration ttl) {
         CacheSpec spec = specResolver.resolve(key);
         putInternal(key, value, ttl, spec);
     }
 
+    /** 使用显式策略写入缓存。 */
     @Override
     public void put(CacheKey key, Object value, CacheSpec spec) {
-        Duration ttl = value == null
-                ? ttlResolver.resolveNullValueTtl(spec)
-                : ttlResolver.resolveNormalTtl(spec);
-
+        Duration ttl = value == null ? ttlResolver.resolveNullValueTtl(spec) : ttlResolver.resolveNormalTtl(spec);
         putInternal(key, value, ttl, spec);
     }
 
+    /** put 系列方法的统一内部实现。 */
+    private void putInternal(CacheKey key, Object value, Duration ttl, CacheSpec spec) {
+        try {
+            if (value == null) {
+                if (spec.getNullPolicy() == CacheNullPolicy.SKIP_NULL) {
+                    return;
+                }
+                cacheProvider.putNullValue(key, ttl, spec);
+                return;
+            }
+            cacheProvider.put(key, value, ttl, spec);
+        } catch (Exception ex) {
+            metricsRecorder.recordError(key, CacheOperation.PUT, ex);
+            throw new CacheException("Cache put failed, key=" + key.fullKey(), ex);
+        }
+    }
+
+    /** 删除缓存。 */
     @Override
     public void evict(CacheKey key) {
         try {
@@ -272,37 +216,17 @@ public class DefaultCacheClient implements CacheClient {
         }
     }
 
+    /** 主动刷新缓存。 */
     @Override
     public void refresh(CacheKey key, Class<?> valueType, CacheLoader<?> loader) {
         long start = System.currentTimeMillis();
-
         try {
             Object value = loader.load();
             put(key, value);
             metricsRecorder.recordLoad(key, System.currentTimeMillis() - start);
-
         } catch (Exception ex) {
             metricsRecorder.recordError(key, CacheOperation.REFRESH, ex);
             throw new CacheLoadException("Cache refresh failed, key=" + key.fullKey(), ex);
-        }
-    }
-
-    private void putInternal(CacheKey key, Object value, Duration ttl, CacheSpec spec) {
-        try {
-            if (value == null) {
-                if (spec.getNullPolicy() == CacheNullPolicy.SKIP_NULL) {
-                    return;
-                }
-
-                cacheProvider.putNullValue(key, ttl, spec);
-                return;
-            }
-
-            cacheProvider.put(key, value, ttl, spec);
-
-        } catch (Exception ex) {
-            metricsRecorder.recordError(key, CacheOperation.PUT, ex);
-            throw new CacheException("Cache put failed, key=" + key.fullKey(), ex);
         }
     }
 }
