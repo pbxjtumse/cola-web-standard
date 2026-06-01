@@ -47,26 +47,11 @@ import java.util.UUID;
 @ConditionalOnProperty(prefix = "xjtu.iron.cache", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class XjtuIronCacheAutoConfiguration {
 
-    /** 创建基于配置文件的缓存策略解析器。 */
-    @Bean
-    @ConditionalOnMissingBean
-    public CacheSpecResolver cacheSpecResolver(XjtuIronCacheProperties properties) {
-        return new PropertiesCacheSpecResolver(properties);
-    }
 
-    /** 创建 TTL 解析器。 */
-    @Bean
-    @ConditionalOnMissingBean
-    public CacheTtlResolver cacheTtlResolver() {
-        return new CacheTtlResolver();
-    }
 
-    /** 创建本地互斥加载保护器。 */
-    @Bean
-    @ConditionalOnMissingBean
-    public CacheLoadGuard cacheLoadGuard() {
-        return new LocalMutexCacheLoadGuard();
-    }
+
+
+
 
     /** 如果存在 MeterRegistry，则使用 Micrometer 指标记录器。 */
     @Bean
@@ -83,21 +68,7 @@ public class XjtuIronCacheAutoConfiguration {
         return new NoopCacheMetricsRecorder();
     }
 
-    /** 创建 Caffeine Cache 管理器。 */
-    @Bean("ironCaffeineCacheManager")
-    @ConditionalOnProperty(prefix = "xjtu.iron.cache.caffeine", name = "enabled", havingValue = "true", matchIfMissing = true)
-    public CaffeineCacheManager caffeineCacheManager(XjtuIronCacheProperties properties) {
-        return new CaffeineCacheManager(properties.getCaffeine().getDefaultMaximumSize());
-    }
 
-    /** 创建 Caffeine Provider。 */
-    @Bean("ironCaffeineCacheProvider")
-    @ConditionalOnBean(name = "ironCaffeineCacheManager")
-    public CaffeineCacheProvider caffeineCacheProvider(
-            @Qualifier("ironCaffeineCacheManager") CaffeineCacheManager caffeineCacheManager
-    ) {
-        return new CaffeineCacheProvider(caffeineCacheManager);
-    }
 
     /** 创建缓存组件专用 RedisTemplate。 */
     @Bean("ironCacheRedisTemplate")
@@ -114,29 +85,7 @@ public class XjtuIronCacheAutoConfiguration {
         return redisTemplate;
     }
 
-    /** 创建 Redis value 序列化器。 */
-    @Bean
-    @ConditionalOnMissingBean
-    public RedisCacheSerializer redisCacheSerializer() {
-        return new JacksonRedisCacheSerializer();
-    }
 
-    /** 创建 Redis 二进制客户端。 */
-    @Bean
-    @ConditionalOnBean(name = "ironCacheRedisTemplate")
-    @ConditionalOnMissingBean
-    public RedisBinaryClient redisBinaryClient(@Qualifier("ironCacheRedisTemplate") RedisTemplate<String, byte[]> redisTemplate) {
-        return new SpringDataRedisBinaryClient(redisTemplate);
-    }
-
-    /** 创建 Redis Provider。 */
-    @Bean("ironRedisCacheProvider")
-    @ConditionalOnBean(RedisBinaryClient.class)
-    @ConditionalOnProperty(prefix = "xjtu.iron.cache.redis", name = "enabled", havingValue = "true", matchIfMissing = true)
-    public CacheProvider redisCacheProvider(RedisBinaryClient redisBinaryClient, RedisCacheSerializer redisCacheSerializer,
-                                            XjtuIronCacheProperties properties) {
-        return new RedisCacheProvider(redisBinaryClient, redisCacheSerializer, properties.getRedis().getKeyPrefix());
-    }
 
     /** 创建 L1 + L2 组合 Provider。 */
     @Bean("ironCompositeCacheProvider")
@@ -154,34 +103,9 @@ public class XjtuIronCacheAutoConfiguration {
         );
     }
 
-    /** 创建业务最终注入的 CacheClient。 */
-    @Bean
-    @ConditionalOnBean(name = "ironCompositeCacheProvider")
-    @ConditionalOnMissingBean
-    public CacheClient cacheClient(@Qualifier("ironCompositeCacheProvider") CacheProvider cacheProvider,
-                                   CacheSpecResolver cacheSpecResolver,
-                                   CacheTtlResolver cacheTtlResolver,
-                                   CacheLoadGuard cacheLoadGuard,
-                                   CacheMetricsRecorder cacheMetricsRecorder) {
-        return new DefaultCacheClient(cacheProvider, cacheSpecResolver, cacheTtlResolver, cacheLoadGuard, cacheMetricsRecorder);
-    }
 
-    @Bean("ironCacheInstanceId")
-    @ConditionalOnMissingBean(name = "ironCacheInstanceId")
-    public String ironCacheInstanceId(
-            XjtuIronCacheProperties properties,
-            Environment environment
-    ) {
-        String configuredInstanceId = properties.getInvalidation().getInstanceId();
 
-        if (configuredInstanceId != null && !configuredInstanceId.isBlank()) {
-            return configuredInstanceId;
-        }
 
-        String appName = environment.getProperty("spring.application.name", "unknown-app");
-
-        return appName + "-" + UUID.randomUUID();
-    }
 
     @Bean("ironCacheStringRedisTemplate")
     @ConditionalOnBean(RedisConnectionFactory.class)
@@ -204,27 +128,7 @@ public class XjtuIronCacheAutoConfiguration {
         return new ObjectMapper();
     }
 
-    @Bean
-    @ConditionalOnProperty(
-            prefix = "xjtu.iron.cache.invalidation",
-            name = "enabled",
-            havingValue = "true",
-            matchIfMissing = true
-    )
-    @ConditionalOnBean(name = "ironCacheStringRedisTemplate")
-    public CacheInvalidationPublisher redisCacheInvalidationPublisher(
-            @Qualifier("ironCacheStringRedisTemplate") StringRedisTemplate stringRedisTemplate,
-            @Qualifier("ironCacheObjectMapper") ObjectMapper objectMapper,
-            @Qualifier("ironCacheInstanceId") String instanceId,
-            XjtuIronCacheProperties properties
-    ) {
-        return new RedisCacheInvalidationPublisher(
-                stringRedisTemplate,
-                objectMapper,
-                properties.getInvalidation().getChannel(),
-                instanceId
-        );
-    }
+
 
     @Bean
     @ConditionalOnMissingBean(CacheInvalidationPublisher.class)
@@ -233,47 +137,9 @@ public class XjtuIronCacheAutoConfiguration {
     }
 
 
-    @Bean
-    @ConditionalOnProperty(
-            prefix = "xjtu.iron.cache.invalidation",
-            name = "enabled",
-            havingValue = "true",
-            matchIfMissing = true
-    )
-    @ConditionalOnBean(LocalCacheInvalidator.class)
-    public RedisCacheInvalidationSubscriber redisCacheInvalidationSubscriber(
-            @Qualifier("ironCacheObjectMapper") ObjectMapper objectMapper,
-            LocalCacheInvalidator localCacheInvalidator,
-            @Qualifier("ironCacheInstanceId") String instanceId
-    ) {
-        return new RedisCacheInvalidationSubscriber(
-                objectMapper,
-                localCacheInvalidator,
-                instanceId
-        );
-    }
 
-    @Bean
-    @ConditionalOnProperty(
-            prefix = "xjtu.iron.cache.invalidation",
-            name = "enabled",
-            havingValue = "true",
-            matchIfMissing = true
-    )
-    @ConditionalOnBean(RedisCacheInvalidationSubscriber.class)
-    public RedisMessageListenerContainer ironCacheRedisMessageListenerContainer(
-            RedisConnectionFactory redisConnectionFactory,
-            RedisCacheInvalidationSubscriber subscriber,
-            XjtuIronCacheProperties properties
-    ) {
-        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
-        container.setConnectionFactory(redisConnectionFactory);
-        container.addMessageListener(
-                subscriber,
-                new ChannelTopic(properties.getInvalidation().getChannel())
-        );
-        return container;
-    }
+
+
 
 
 }

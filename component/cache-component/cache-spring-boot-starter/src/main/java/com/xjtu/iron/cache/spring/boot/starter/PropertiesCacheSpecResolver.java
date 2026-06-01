@@ -5,32 +5,66 @@ import com.xjtu.iron.cache.api.CacheSpec;
 import com.xjtu.iron.cache.core.CacheSpecResolver;
 
 /**
- * 基于 Spring Boot 配置属性的缓存策略解析器。
+ * 基于 Spring Boot 配置文件的缓存策略解析器。
+ *
+ * <p>它负责把 {@link XjtuIronCacheProperties} 中的配置转换成运行时使用的
+ * {@link CacheSpec}。</p>
+ *
+ * <p>例如配置项：</p>
+ *
+ * <pre>
+ * xjtu.iron.cache.specs.campaignRule.ttl=5m
+ * xjtu.iron.cache.specs.campaignRule.enable-l1=true
+ * </pre>
+ *
+ * <p>会被解析成 cacheName 为 campaignRule 的 CacheSpec。</p>
  */
 public class PropertiesCacheSpecResolver implements CacheSpecResolver {
 
-    /** starter 绑定的 xjtu.iron.cache 配置属性。 */
+    /**
+     * Spring Boot 绑定后的缓存组件配置属性。
+     */
     private final XjtuIronCacheProperties properties;
 
-    /** 创建解析器。 */
+    /**
+     * 创建缓存策略解析器。
+     *
+     * @param properties 缓存组件配置属性
+     */
     public PropertiesCacheSpecResolver(XjtuIronCacheProperties properties) {
         this.properties = properties;
     }
 
-    /** 根据 CacheKey 解析策略。 */
+    /**
+     * 根据 CacheKey 解析缓存策略。
+     *
+     * <p>实际使用的是 key 中的 cacheName。</p>
+     *
+     * @param key 缓存 key
+     * @return 缓存策略
+     */
     @Override
     public CacheSpec resolve(CacheKey key) {
         return resolve(key.cacheName());
     }
 
-    /** 根据 cacheName 从配置中解析策略；没有配置时返回默认策略。 */
+    /**
+     * 根据 cacheName 解析缓存策略。
+     *
+     * <p>如果配置文件中没有该 cacheName 的配置，则返回默认策略。</p>
+     *
+     * @param cacheName 缓存名称
+     * @return 缓存策略
+     */
     @Override
     public CacheSpec resolve(String cacheName) {
         XjtuIronCacheProperties.CacheSpecProperties prop = properties.getSpecs().get(cacheName);
         CacheSpec spec = CacheSpec.defaults(cacheName);
+
         if (prop == null) {
             return spec;
         }
+
         spec.setEnableL1(prop.isEnableL1());
         spec.setEnableL2(prop.isEnableL2());
         spec.setTtl(prop.getTtl());
