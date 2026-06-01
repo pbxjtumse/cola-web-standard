@@ -7,8 +7,10 @@ spring:
 
   data:
     redis:
-      host: 127.0.0.1
-      port: 6379
+      host: www.xjtu-iron.online
+      port: 30379
+      password: 765YSa77TA
+      database: 0
       timeout: 2s
       lettuce:
         pool:
@@ -27,6 +29,9 @@ xjtu:
   iron:
     cache:
       enabled: true
+      invalidation:
+        enabled: true
+        channel: "xjtu:iron:cache:invalidate"
 
       caffeine:
         enabled: true
@@ -34,7 +39,7 @@ xjtu:
 
       redis:
         enabled: true
-        key-prefix: "cache:"
+        key-prefix: "cache-demo:"
 
       specs:
         campaignRule:

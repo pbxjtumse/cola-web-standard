@@ -1,14 +1,9 @@
 package com.xjtu.iron.cache.spring.boot.starter;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xjtu.iron.cache.api.CacheClient;
-import com.xjtu.iron.cache.core.CacheLoadGuard;
-import com.xjtu.iron.cache.core.CacheMetricsRecorder;
-import com.xjtu.iron.cache.core.CacheProvider;
-import com.xjtu.iron.cache.core.CacheSpecResolver;
-import com.xjtu.iron.cache.core.CacheTtlResolver;
-import com.xjtu.iron.cache.core.DefaultCacheClient;
-import com.xjtu.iron.cache.core.LocalMutexCacheLoadGuard;
-import com.xjtu.iron.cache.core.NoopCacheMetricsRecorder;
+import com.xjtu.iron.cache.core.*;
+import com.xjtu.iron.cache.core.impl.*;
 import com.xjtu.iron.cache.integrations.observability.MicrometerCacheMetricsRecorder;
 import com.xjtu.iron.cache.provider.caffeine.CaffeineCacheManager;
 import com.xjtu.iron.cache.provider.caffeine.CaffeineCacheProvider;
@@ -18,7 +13,9 @@ import com.xjtu.iron.cache.provider.redis.RedisBinaryClient;
 import com.xjtu.iron.cache.provider.redis.RedisCacheProvider;
 import com.xjtu.iron.cache.provider.redis.RedisCacheSerializer;
 import com.xjtu.iron.cache.provider.redis.SpringDataRedisBinaryClient;
+import com.xjtu.iron.cache.provider.redis.invalidation.RedisCacheInvalidationSubscriber;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -28,10 +25,16 @@ import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.env.Environment;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.listener.ChannelTopic;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+
+import java.util.UUID;
 
 /**
  * 缓存组件 Spring Boot 自动装配类。
@@ -90,7 +93,9 @@ public class XjtuIronCacheAutoConfiguration {
     /** 创建 Caffeine Provider。 */
     @Bean("ironCaffeineCacheProvider")
     @ConditionalOnBean(name = "ironCaffeineCacheManager")
-    public CacheProvider caffeineCacheProvider(@Qualifier("ironCaffeineCacheManager") CaffeineCacheManager caffeineCacheManager) {
+    public CaffeineCacheProvider caffeineCacheProvider(
+            @Qualifier("ironCaffeineCacheManager") CaffeineCacheManager caffeineCacheManager
+    ) {
         return new CaffeineCacheProvider(caffeineCacheManager);
     }
 
@@ -137,9 +142,16 @@ public class XjtuIronCacheAutoConfiguration {
     @Bean("ironCompositeCacheProvider")
     @Primary
     @ConditionalOnBean(name = {"ironCaffeineCacheProvider", "ironRedisCacheProvider"})
-    public CacheProvider compositeCacheProvider(@Qualifier("ironCaffeineCacheProvider") CacheProvider caffeineProvider,
-                                                @Qualifier("ironRedisCacheProvider") CacheProvider redisProvider) {
-        return new CompositeCacheProvider(caffeineProvider, redisProvider);
+    public CacheProvider compositeCacheProvider(
+            @Qualifier("ironCaffeineCacheProvider") CacheProvider caffeineProvider,
+            @Qualifier("ironRedisCacheProvider") CacheProvider redisProvider,
+            CacheInvalidationPublisher invalidationPublisher
+    ) {
+        return new CompositeCacheProvider(
+                caffeineProvider,
+                redisProvider,
+                invalidationPublisher
+        );
     }
 
     /** 创建业务最终注入的 CacheClient。 */
@@ -153,4 +165,115 @@ public class XjtuIronCacheAutoConfiguration {
                                    CacheMetricsRecorder cacheMetricsRecorder) {
         return new DefaultCacheClient(cacheProvider, cacheSpecResolver, cacheTtlResolver, cacheLoadGuard, cacheMetricsRecorder);
     }
+
+    @Bean("ironCacheInstanceId")
+    @ConditionalOnMissingBean(name = "ironCacheInstanceId")
+    public String ironCacheInstanceId(
+            XjtuIronCacheProperties properties,
+            Environment environment
+    ) {
+        String configuredInstanceId = properties.getInvalidation().getInstanceId();
+
+        if (configuredInstanceId != null && !configuredInstanceId.isBlank()) {
+            return configuredInstanceId;
+        }
+
+        String appName = environment.getProperty("spring.application.name", "unknown-app");
+
+        return appName + "-" + UUID.randomUUID();
+    }
+
+    @Bean("ironCacheStringRedisTemplate")
+    @ConditionalOnBean(RedisConnectionFactory.class)
+    @ConditionalOnMissingBean(name = "ironCacheStringRedisTemplate")
+    public StringRedisTemplate ironCacheStringRedisTemplate(
+            RedisConnectionFactory redisConnectionFactory
+    ) {
+        return new StringRedisTemplate(redisConnectionFactory);
+    }
+
+    @Bean("ironCacheObjectMapper")
+    @ConditionalOnMissingBean(name = "ironCacheObjectMapper")
+    public ObjectMapper ironCacheObjectMapper(ObjectProvider<ObjectMapper> objectMapperProvider) {
+        ObjectMapper objectMapper = objectMapperProvider.getIfAvailable();
+
+        if (objectMapper != null) {
+            return objectMapper;
+        }
+
+        return new ObjectMapper();
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "xjtu.iron.cache.invalidation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true
+    )
+    @ConditionalOnBean(name = "ironCacheStringRedisTemplate")
+    public CacheInvalidationPublisher redisCacheInvalidationPublisher(
+            @Qualifier("ironCacheStringRedisTemplate") StringRedisTemplate stringRedisTemplate,
+            @Qualifier("ironCacheObjectMapper") ObjectMapper objectMapper,
+            @Qualifier("ironCacheInstanceId") String instanceId,
+            XjtuIronCacheProperties properties
+    ) {
+        return new RedisCacheInvalidationPublisher(
+                stringRedisTemplate,
+                objectMapper,
+                properties.getInvalidation().getChannel(),
+                instanceId
+        );
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(CacheInvalidationPublisher.class)
+    public CacheInvalidationPublisher noopCacheInvalidationPublisher() {
+        return new NoopCacheInvalidationPublisher();
+    }
+
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "xjtu.iron.cache.invalidation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true
+    )
+    @ConditionalOnBean(LocalCacheInvalidator.class)
+    public RedisCacheInvalidationSubscriber redisCacheInvalidationSubscriber(
+            @Qualifier("ironCacheObjectMapper") ObjectMapper objectMapper,
+            LocalCacheInvalidator localCacheInvalidator,
+            @Qualifier("ironCacheInstanceId") String instanceId
+    ) {
+        return new RedisCacheInvalidationSubscriber(
+                objectMapper,
+                localCacheInvalidator,
+                instanceId
+        );
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "xjtu.iron.cache.invalidation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true
+    )
+    @ConditionalOnBean(RedisCacheInvalidationSubscriber.class)
+    public RedisMessageListenerContainer ironCacheRedisMessageListenerContainer(
+            RedisConnectionFactory redisConnectionFactory,
+            RedisCacheInvalidationSubscriber subscriber,
+            XjtuIronCacheProperties properties
+    ) {
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(redisConnectionFactory);
+        container.addMessageListener(
+                subscriber,
+                new ChannelTopic(properties.getInvalidation().getChannel())
+        );
+        return container;
+    }
+
+
 }

@@ -27,6 +27,7 @@ public class CampaignRuleRepository {
      * <p>如果缓存生效，第一次请求会打印日志并增加计数；第二次请求应该直接命中 Caffeine，不再进入这里。</p>
      */
     public CampaignRuleDTO queryByCampaignId(Long campaignId) {
+        System.out.println("[SOURCE] query campaign rule, campaignId=" + campaignId);
         int count = sourceLoadCount.incrementAndGet();
         log.info("[SOURCE] query campaign rule from fake database, campaignId={}, sourceLoadCount={}", campaignId, count);
 

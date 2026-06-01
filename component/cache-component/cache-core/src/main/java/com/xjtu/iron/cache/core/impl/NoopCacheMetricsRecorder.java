@@ -1,8 +1,9 @@
-package com.xjtu.iron.cache.core;
+package com.xjtu.iron.cache.core.impl;
 
 import com.xjtu.iron.cache.api.CacheKey;
 import com.xjtu.iron.cache.api.enums.CacheLevel;
 import com.xjtu.iron.cache.api.enums.CacheOperation;
+import com.xjtu.iron.cache.core.CacheMetricsRecorder;
 
 /**
  * 空指标记录器。

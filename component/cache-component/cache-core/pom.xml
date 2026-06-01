@@ -13,5 +13,13 @@
     <name>cache-core</name>
     <dependencies>
         <dependency><groupId>com.xjtu.iron</groupId><artifactId>cache-api</artifactId></dependency>
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-redis</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
     </dependencies>
 </project>

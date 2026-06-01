@@ -2,6 +2,7 @@ package com.xjtu.iron.cache.demo;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 
 /**
  * 缓存组件 Demo 启动类。
@@ -9,7 +10,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * <p>main 方法只负责启动 Spring Boot，不应该在 main 方法里写缓存调用逻辑。
  * 缓存调用应该放在 Controller -> Service -> CacheClient 这条链路里。</p>
  */
-@SpringBootApplication
+@SpringBootApplication(exclude = DataSourceAutoConfiguration.class)
 public class CacheDemoApplication {
 
     /** Spring Boot 应用入口。 */

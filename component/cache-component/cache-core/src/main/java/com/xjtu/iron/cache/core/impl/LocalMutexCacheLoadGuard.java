@@ -1,4 +1,6 @@
-package com.xjtu.iron.cache.core;
+package com.xjtu.iron.cache.core.impl;
+
+import com.xjtu.iron.cache.core.CacheLoadGuard;
 
 import java.util.Map;
 import java.util.concurrent.Callable;
