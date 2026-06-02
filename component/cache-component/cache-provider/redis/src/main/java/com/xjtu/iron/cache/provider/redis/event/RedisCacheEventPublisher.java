@@ -3,6 +3,8 @@ package com.xjtu.iron.cache.provider.redis.event;
 
 import com.xjtu.iron.cache.core.event.CacheEvent;
 import com.xjtu.iron.cache.core.event.CacheEventPublisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
@@ -11,6 +13,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
  * <p>二期第一版用于广播本地缓存失效事件。</p>
  */
 public class RedisCacheEventPublisher implements CacheEventPublisher {
+    private static final Logger log = LoggerFactory.getLogger(RedisCacheEventPublisher.class);
 
     private final StringRedisTemplate stringRedisTemplate;
 
@@ -31,6 +34,11 @@ public class RedisCacheEventPublisher implements CacheEventPublisher {
     @Override
     public void publish(CacheEvent event) {
         String message = serializer.serialize(event);
+        log.info("[CACHE-EVENT-PUBLISH] channel={}, eventType={}, fullKey={}, sourceInstanceId={}",
+                channel,
+                event.getEventType(),
+                event.getFullKey(),
+                event.getSourceInstanceId());
         stringRedisTemplate.convertAndSend(channel, message);
     }
 }

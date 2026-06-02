@@ -3,6 +3,8 @@ package com.xjtu.iron.cache.provider.redis.event;
 
 import com.xjtu.iron.cache.core.event.CacheEvent;
 import com.xjtu.iron.cache.core.event.CacheEventHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.connection.MessageListener;
 
@@ -14,6 +16,7 @@ import java.nio.charset.StandardCharsets;
  * <p>监听 Redis Pub/Sub 消息，并交给 CacheEventHandler 处理。</p>
  */
 public class RedisCacheEventSubscriber implements MessageListener {
+    private static final Logger log = LoggerFactory.getLogger(RedisCacheEventSubscriber.class);
 
     private final RedisCacheEventSerializer serializer;
 
@@ -30,6 +33,7 @@ public class RedisCacheEventSubscriber implements MessageListener {
     @Override
     public void onMessage(Message message, byte[] pattern) {
         String body = new String(message.getBody(), StandardCharsets.UTF_8);
+        log.info("[CACHE-EVENT-SUBSCRIBE] body={}", body);
         CacheEvent event = serializer.deserialize(body);
         eventHandler.handle(event);
     }

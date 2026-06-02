@@ -3,163 +3,61 @@ skinparam classAttributeIconSize 0
 skinparam linetype ortho
 skinparam shadowing false
 
-interface CacheClient {
-    +get(CacheKey, Class<T>, CacheLoader<T>) : CacheResult<T>
-    +get(CacheKey, Class<T>, CacheSpec, CacheLoader<T>) : CacheResult<T>
-    +getIfPresent(CacheKey, Class<T>) : Optional<T>
-    +put(CacheKey, Object)
-    +put(CacheKey, Object, Duration)
-    +evict(CacheKey)
-    +refresh(CacheKey, Class<?>, CacheLoader<?>)
-}
+interface CacheClient
+interface CacheProvider
+interface CacheSpecResolver
+interface CacheTtlResolver
+interface CacheLoadGuard
+interface CacheMetricsRecorder
+interface CacheEventPublisher
+interface CacheEventHandler
+interface LocalCacheInvalidator
 
-interface CacheLoader<T> {
-    +load() : T
-}
-
-class CacheKey {
-    -cacheName : String
-    -namespace : String
-    -bizKey : String
-    -version : String
-    +fullKey() : String
-}
-
-class CacheSpec {
-    -enableL1 : boolean
-    -enableL2 : boolean
-    -ttl : Duration
-    -nullValueTtl : Duration
-    -ttlJitter : Duration
-    -mutexLoad : boolean
-    -nullPolicy : CacheNullPolicy
-    -degradePolicy : CacheDegradePolicy
-}
-
-class CacheValue<T> {
-    -present : boolean
-    -nullValue : boolean
-    -value : T
-    -level : CacheLevel
-}
-
-class CacheResult<T> {
-    -value : T
-    -status : CacheResultStatus
-    -level : CacheLevel
-    -hit : boolean
-    -nullValue : boolean
-    -costMillis : long
-}
-
-class DefaultCacheClient {
-    -cacheProvider : CacheProvider
-    -specResolver : CacheSpecResolver
-    -ttlResolver : CacheTtlResolver
-    -loadGuard : CacheLoadGuard
-    -metricsRecorder : CacheMetricsRecorder
-}
-
-interface CacheProvider {
-    +name() : String
-    +get(CacheKey, Class<T>, CacheSpec) : CacheValue<T>
-    +put(CacheKey, Object, Duration, CacheSpec)
-    +putNullValue(CacheKey, Duration, CacheSpec)
-    +evict(CacheKey)
-}
-
-interface CacheSpecResolver {
-    +resolve(CacheKey) : CacheSpec
-    +resolve(String) : CacheSpec
-}
-
-class PropertiesCacheSpecResolver
-class MapCacheSpecResolver
-
-class CacheTtlResolver {
-    +resolveNormalTtl(CacheSpec) : Duration
-    +resolveNullValueTtl(CacheSpec) : Duration
-}
-
-interface CacheLoadGuard {
-    +execute(String, Callable<T>) : T
-}
-
+class DefaultCacheClient
+class DefaultCacheTtlResolver
 class LocalMutexCacheLoadGuard
-
-interface CacheMetricsRecorder {
-    +recordHit(CacheKey, CacheLevel, long)
-    +recordMiss(CacheKey, long)
-    +recordLoad(CacheKey, long)
-    +recordError(CacheKey, CacheOperation, Throwable)
-}
-
 class NoopCacheMetricsRecorder
-class MicrometerCacheMetricsRecorder
-
+class CacheKey
+class CacheSpec
+class CacheValue
+class CacheResult
+class CompositeCacheProvider
 class CaffeineCacheProvider
-class CaffeineCacheManager
+class CaffeineLocalCacheManager
+class CaffeineLocalCacheInvalidator
 class LocalCacheEntry
-
 class RedisCacheProvider
 interface RedisBinaryClient
 class SpringDataRedisBinaryClient
 interface RedisCacheSerializer
 class JacksonRedisCacheSerializer
-
-class CompositeCacheProvider
-
-class XjtuIronCacheAutoConfiguration
+class CacheEvent
+class DefaultCacheEventHandler
+class NoopCacheEventPublisher
+class RedisCacheEventPublisher
+class RedisCacheEventSubscriber
+interface RedisCacheEventSerializer
+class JacksonRedisCacheEventSerializer
 class XjtuIronCacheProperties
-
-enum CacheLevel {
-    L1
-    L2
-    SOURCE
-    NONE
-}
-
-enum CacheResultStatus {
-    HIT
-    MISS_LOADED
-    EMPTY
-    ERROR
-    DEGRADED
-}
-
-enum CacheNullPolicy {
-    CACHE_NULL
-    SKIP_NULL
-}
-
-enum CacheDegradePolicy {
-    LOAD_SOURCE
-    RETURN_NULL
-    FAIL_FAST
-}
-
-enum CacheOperation {
-    GET
-    PUT
-    EVICT
-    REFRESH
-}
+class XjtuIronCacheAutoConfiguration
+class XjtuIronCacheCaffeineAutoConfiguration
+class XjtuIronCacheRedisAutoConfiguration
+class XjtuIronCacheEventAutoConfiguration
+class XjtuIronCacheCoreAutoConfiguration
+class XjtuIronCacheObservabilityAutoConfiguration
 
 DefaultCacheClient ..|> CacheClient
-
 DefaultCacheClient --> CacheProvider
 DefaultCacheClient --> CacheSpecResolver
 DefaultCacheClient --> CacheTtlResolver
 DefaultCacheClient --> CacheLoadGuard
 DefaultCacheClient --> CacheMetricsRecorder
+DefaultCacheClient --> CacheEventPublisher
 
-PropertiesCacheSpecResolver ..|> CacheSpecResolver
-MapCacheSpecResolver ..|> CacheSpecResolver
-
+DefaultCacheTtlResolver ..|> CacheTtlResolver
 LocalMutexCacheLoadGuard ..|> CacheLoadGuard
-
 NoopCacheMetricsRecorder ..|> CacheMetricsRecorder
-MicrometerCacheMetricsRecorder ..|> CacheMetricsRecorder
+NoopCacheEventPublisher ..|> CacheEventPublisher
 
 CompositeCacheProvider ..|> CacheProvider
 CaffeineCacheProvider ..|> CacheProvider
@@ -168,29 +66,33 @@ RedisCacheProvider ..|> CacheProvider
 CompositeCacheProvider --> CaffeineCacheProvider : L1
 CompositeCacheProvider --> RedisCacheProvider : L2
 
-CaffeineCacheProvider --> CaffeineCacheManager
-CaffeineCacheManager --> LocalCacheEntry
+CaffeineCacheProvider --> CaffeineLocalCacheManager
+CaffeineLocalCacheManager --> LocalCacheEntry
+CaffeineLocalCacheInvalidator ..|> LocalCacheInvalidator
+CaffeineLocalCacheInvalidator --> CaffeineLocalCacheManager
 
 RedisCacheProvider --> RedisBinaryClient
 RedisCacheProvider --> RedisCacheSerializer
 SpringDataRedisBinaryClient ..|> RedisBinaryClient
 JacksonRedisCacheSerializer ..|> RedisCacheSerializer
 
+DefaultCacheEventHandler ..|> CacheEventHandler
+DefaultCacheEventHandler --> LocalCacheInvalidator
+RedisCacheEventPublisher ..|> CacheEventPublisher
+RedisCacheEventSubscriber --> CacheEventHandler
+RedisCacheEventSubscriber --> RedisCacheEventSerializer
+JacksonRedisCacheEventSerializer ..|> RedisCacheEventSerializer
+
 CacheClient --> CacheKey
-CacheClient --> CacheLoader
+CacheClient --> CacheSpec
 CacheClient --> CacheResult
+CacheResult --> CacheValue
 
-CacheResult --> CacheLevel
-CacheResult --> CacheResultStatus
-CacheValue --> CacheLevel
-CacheSpec --> CacheNullPolicy
-CacheSpec --> CacheDegradePolicy
-
-XjtuIronCacheAutoConfiguration --> DefaultCacheClient
-XjtuIronCacheAutoConfiguration --> CompositeCacheProvider
-XjtuIronCacheAutoConfiguration --> CaffeineCacheProvider
-XjtuIronCacheAutoConfiguration --> RedisCacheProvider
-XjtuIronCacheAutoConfiguration --> PropertiesCacheSpecResolver
 XjtuIronCacheAutoConfiguration --> XjtuIronCacheProperties
+XjtuIronCacheCaffeineAutoConfiguration --> CaffeineCacheProvider
+XjtuIronCacheRedisAutoConfiguration --> RedisCacheProvider
+XjtuIronCacheEventAutoConfiguration --> CacheEventPublisher
+XjtuIronCacheCoreAutoConfiguration --> DefaultCacheClient
+XjtuIronCacheObservabilityAutoConfiguration --> CacheMetricsRecorder
 
 @enduml
