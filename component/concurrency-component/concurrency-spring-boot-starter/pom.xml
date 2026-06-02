@@ -5,16 +5,14 @@
         <groupId>com.xjtu.iron</groupId>
         <artifactId>component</artifactId>
         <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>concurrency-component</artifactId>
-    <packaging>pom</packaging>
+    <artifactId>concurrency-spring-boot-starter</artifactId>
+    <packaging>jar</packaging>
 
-    <name>concurrency-component</name>
+    <name>concurrency-spring-boot-starter</name>
     <url>http://maven.apache.org</url>
-    <modules>
-        <module>concurrency-api</module>
-    </modules>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

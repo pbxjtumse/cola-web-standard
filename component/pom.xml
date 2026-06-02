@@ -14,12 +14,22 @@
     <name>component</name>
     <url>http://maven.apache.org</url>
     <modules>
-        <module>concurrency-component</module>
         <module>message-component</module>
         <module>observability-parent</module>
         <module>transaction-component</module>
         <module>governance-component</module>
         <module>cache-component</module>
+        <module>concurrency-component</module>
+        <module>concurrency-component/concurrency-core</module>
+        <module>concurrency-component/concurrency-config</module>
+        <module>concurrency-component/concurrency-provider</module>
+        <module>concurrency-component/concurrency-provider/concurrency-provider-local</module>
+        <module>concurrency-component/concurrency-provider/concurrency-provider-redis</module>
+        <module>concurrency-component/concurrency-integrations</module>
+        <module>concurrency-component/concurrency-integrations/concurrency-integration-observability</module>
+        <module>concurrency-component/concurrency-integrations/concurrency-integration-governance</module>
+        <module>concurrency-component/concurrency-spring-boot-starter</module>
+        <module>concurrency-component/concurrency-demo</module>
     </modules>
 
     <properties>

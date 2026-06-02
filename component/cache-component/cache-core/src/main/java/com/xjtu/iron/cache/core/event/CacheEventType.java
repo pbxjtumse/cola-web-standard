@@ -1,7 +1,7 @@
 package com.xjtu.iron.cache.core.event;
 
 
-import com.fasterxml.jackson.annotation.JsonEnumDefaultValue;
+
 
 /**
  * 缓存事件类型。
@@ -26,7 +26,6 @@ public enum CacheEventType {
      * <p>当旧版本应用收到新版本应用发布的未知事件类型时，
      * 可以反序列化成 UNKNOWN，并选择忽略。</p>
      */
-    @JsonEnumDefaultValue
     UNKNOWN,
 
     /**

@@ -16,5 +16,9 @@
             <groupId>com.xjtu.iron</groupId>
             <artifactId>cache-api</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+        </dependency>
     </dependencies>
 </project>

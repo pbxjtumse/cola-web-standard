@@ -1,6 +1,5 @@
 package com.xjtu.iron.config.properties;
 
-import com.xjtu.iron.enums.RejectedPolicyEnum;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -29,33 +28,10 @@ public class ExecutorProperties {
         private int maxSize;
         private long keepAliveSeconds;
         private int queueSize;
-        private RejectedPolicyEnum rejectedPolicy;
         private Set<String> tags;
 
         // 构造方法
         public ExecutorItem() {}
-
-        public ExecutorItem(String name, int coreSize, int maxSize,
-                            int queueSize, RejectedPolicyEnum rejectedPolicy, Set<String> tags) {
-            this.name = name;
-            this.coreSize = coreSize;
-            this.maxSize = maxSize;
-            this.queueSize = queueSize;
-            this.rejectedPolicy = rejectedPolicy;
-            this.tags = tags;
-        }
-
-        // Additional convenience constructor wit hout keepAliveSeconds
-        public ExecutorItem(String name, int coreSize, int maxSize,
-                            int queueSize, RejectedPolicyEnum rejectedPolicy, Set<String> tags, long keepAliveSeconds) {
-            this.name = name;
-            this.coreSize = coreSize;
-            this.maxSize = maxSize;
-            this.queueSize = queueSize;
-            this.rejectedPolicy = rejectedPolicy;
-            this.tags = tags;
-            this.keepAliveSeconds = keepAliveSeconds;
-        }
     }
 }
 
