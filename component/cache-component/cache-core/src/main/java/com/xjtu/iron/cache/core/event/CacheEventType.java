@@ -1,6 +1,8 @@
 package com.xjtu.iron.cache.core.event;
 
 
+import com.fasterxml.jackson.annotation.JsonEnumDefaultValue;
+
 /**
  * 缓存事件类型。
  *
@@ -15,6 +17,17 @@ package com.xjtu.iron.cache.core.event;
  * </pre>
  */
 public enum CacheEventType {
+
+    /**
+     * 未知事件类型。
+     *
+     * <p>用于兼容未来新增的事件类型。</p>
+     *
+     * <p>当旧版本应用收到新版本应用发布的未知事件类型时，
+     * 可以反序列化成 UNKNOWN，并选择忽略。</p>
+     */
+    @JsonEnumDefaultValue
+    UNKNOWN,
 
     /**
      * 删除单个缓存 key。

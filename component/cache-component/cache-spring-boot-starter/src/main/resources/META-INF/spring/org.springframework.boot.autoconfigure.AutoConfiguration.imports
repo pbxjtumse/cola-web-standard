@@ -4,4 +4,6 @@ com.xjtu.iron.cache.spring.boot.starter.configuration.XjtuIronCacheCaffeineAutoC
 com.xjtu.iron.cache.spring.boot.starter.configuration.XjtuIronCacheRedisAutoConfiguration
 com.xjtu.iron.cache.spring.boot.starter.configuration.XjtuIronCacheCoreAutoConfiguration
 com.xjtu.iron.cache.spring.boot.starter.configuration.XjtuIronCacheEventAutoConfiguration
+com.xjtu.iron.cache.spring.boot.starter.configuration.check.XjtuIronCacheDiagnosticsAutoConfiguration
+
 

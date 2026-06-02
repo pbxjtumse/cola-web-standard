@@ -33,8 +33,15 @@ public class RedisCacheEventSubscriber implements MessageListener {
     @Override
     public void onMessage(Message message, byte[] pattern) {
         String body = new String(message.getBody(), StandardCharsets.UTF_8);
-        log.info("[CACHE-EVENT-SUBSCRIBE] body={}", body);
-        CacheEvent event = serializer.deserialize(body);
-        eventHandler.handle(event);
+        try {
+            log.info("[CACHE-EVENT-SUBSCRIBE] body={}", body);
+            CacheEvent event = serializer.deserialize(body);
+            eventHandler.handle(event);
+        } catch (Exception ex) {
+            //反序列化失败：记录 error
+            //handle 失败：记录 error
+            //handle 失败：记录 error
+            log.error("[CACHE-EVENT-SUBSCRIBE-ERROR] body={}", body, ex);
+        }
     }
 }

@@ -2,6 +2,7 @@ package com.xjtu.iron.cache.spring.boot.starter.properties;
 
 import com.xjtu.iron.cache.api.enums.CacheDegradePolicy;
 import com.xjtu.iron.cache.api.enums.CacheNullPolicy;
+import com.xjtu.iron.cache.core.event.CacheEventPublishFailurePolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
@@ -144,6 +145,8 @@ public class XjtuIronCacheProperties {
     public void setEvent(EventProperties event) {
         this.event = event;
     }
+
+
 
     /**
      * Caffeine L1 本地缓存配置项。
@@ -410,6 +413,8 @@ public class XjtuIronCacheProperties {
          */
         private String channel = "xjtu:iron:cache:event";
 
+        private CacheEventPublishFailurePolicy publishFailurePolicy = CacheEventPublishFailurePolicy.IGNORE;
+
         public boolean isEnabled() {
             return enabled;
         }
@@ -424,6 +429,14 @@ public class XjtuIronCacheProperties {
 
         public void setChannel(String channel) {
             this.channel = channel;
+        }
+
+        public CacheEventPublishFailurePolicy getPublishFailurePolicy() {
+            return publishFailurePolicy;
+        }
+
+        public void setPublishFailurePolicy(CacheEventPublishFailurePolicy publishFailurePolicy) {
+            this.publishFailurePolicy = publishFailurePolicy;
         }
     }
 }

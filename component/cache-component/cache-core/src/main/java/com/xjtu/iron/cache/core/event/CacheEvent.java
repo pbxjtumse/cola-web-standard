@@ -1,6 +1,5 @@
 package com.xjtu.iron.cache.core.event;
 
-
 import com.xjtu.iron.cache.api.key.CacheKey;
 
 import java.time.Instant;
@@ -9,27 +8,23 @@ import java.util.UUID;
 /**
  * 缓存事件。
  *
- * <p>用于描述缓存组件内部发生的关键事件。</p>
+ * <p>用于缓存组件内部的事件通知。</p>
  *
- * <p>二期第一版主要用于：</p>
- *
- * <pre>
- * Redis Pub/Sub 广播本地缓存失效事件。
- * </pre>
- *
- * <p>注意：</p>
- *
- * <pre>
- * 这个事件不是业务事件；
- * 它只用于缓存组件内部治理。
- * </pre>
+ * <p>二期主要用于 Redis Pub/Sub 广播本地缓存失效事件。</p>
  */
 public class CacheEvent {
 
     /**
-     * 事件唯一 ID。
+     * 当前事件结构版本。
      *
-     * <p>用于日志追踪和排查重复事件。</p>
+     * <p>用于未来事件结构升级。</p>
+     *
+     * <p>注意使用 Integer 而不是 int，是为了兼容老版本事件没有 eventVersion 字段的情况。</p>
+     */
+    private Integer eventVersion = 1;
+
+    /**
+     * 事件唯一 ID。
      */
     private String eventId;
 
@@ -40,50 +35,36 @@ public class CacheEvent {
 
     /**
      * 缓存名称。
-     *
-     * <p>例如 campaignRule、merchantConfig。</p>
      */
     private String cacheName;
 
     /**
      * 命名空间。
-     *
-     * <p>例如 marketing、merchant。</p>
      */
     private String namespace;
 
     /**
      * 业务 key。
-     *
-     * <p>例如 campaignId:10001。</p>
      */
     private String bizKey;
 
     /**
      * key 版本。
-     *
-     * <p>例如 v1。</p>
      */
     private String version;
 
     /**
      * 完整逻辑 key。
-     *
-     * <p>不包含 Redis keyPrefix。</p>
      */
     private String fullKey;
 
     /**
      * 事件来源应用。
-     *
-     * <p>例如 cache-demo。</p>
      */
     private String sourceApp;
 
     /**
      * 事件来源实例 ID。
-     *
-     * <p>用于消费者判断是否是自己发布的事件。</p>
      */
     private String sourceInstanceId;
 
@@ -94,10 +75,22 @@ public class CacheEvent {
 
     /**
      * 事件原因。
-     *
-     * <p>例如 manual_evict、data_updated。</p>
      */
     private String reason;
+
+    /**
+     * 链路追踪 traceId。
+     *
+     * <p>如果当前请求上下文没有 traceId，可以为空。</p>
+     */
+    private String traceId;
+
+    /**
+     * 链路追踪 spanId。
+     *
+     * <p>如果当前请求上下文没有 spanId，可以为空。</p>
+     */
+    private String spanId;
 
     public static CacheEvent evictKey(
             CacheKey key,
@@ -105,7 +98,19 @@ public class CacheEvent {
             String sourceInstanceId,
             String reason
     ) {
+        return evictKey(key, sourceApp, sourceInstanceId, reason, null, null);
+    }
+
+    public static CacheEvent evictKey(
+            CacheKey key,
+            String sourceApp,
+            String sourceInstanceId,
+            String reason,
+            String traceId,
+            String spanId
+    ) {
         CacheEvent event = new CacheEvent();
+        event.setEventVersion(1);
         event.setEventId(UUID.randomUUID().toString());
         event.setEventType(CacheEventType.EVICT_KEY);
         event.setCacheName(key.cacheName());
@@ -117,11 +122,21 @@ public class CacheEvent {
         event.setSourceInstanceId(sourceInstanceId);
         event.setTimestamp(Instant.now().toEpochMilli());
         event.setReason(reason);
+        event.setTraceId(traceId);
+        event.setSpanId(spanId);
         return event;
     }
 
     public CacheKey toCacheKey() {
         return CacheKey.of(cacheName, namespace, bizKey, version);
+    }
+
+    public Integer getEventVersion() {
+        return eventVersion == null ? 1 : eventVersion;
+    }
+
+    public void setEventVersion(Integer eventVersion) {
+        this.eventVersion = eventVersion;
     }
 
     public String getEventId() {
@@ -210,5 +225,21 @@ public class CacheEvent {
 
     public void setReason(String reason) {
         this.reason = reason;
+    }
+
+    public String getTraceId() {
+        return traceId;
+    }
+
+    public void setTraceId(String traceId) {
+        this.traceId = traceId;
+    }
+
+    public String getSpanId() {
+        return spanId;
+    }
+
+    public void setSpanId(String spanId) {
+        this.spanId = spanId;
     }
 }

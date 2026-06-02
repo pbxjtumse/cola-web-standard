@@ -1,6 +1,7 @@
 package com.xjtu.iron.cache.spring.boot.starter.configuration;
 
 import com.xjtu.iron.cache.api.CacheClient;
+import com.xjtu.iron.cache.api.enums.CacheOperation;
 import com.xjtu.iron.cache.core.CacheLoadGuard;
 import com.xjtu.iron.cache.core.CacheMetricsRecorder;
 import com.xjtu.iron.cache.core.CacheProvider;
@@ -10,6 +11,8 @@ import com.xjtu.iron.cache.core.event.CacheEventPublisher;
 import com.xjtu.iron.cache.core.impl.DefaultCacheClient;
 import com.xjtu.iron.cache.core.impl.DefaultCacheTtlResolver;
 import com.xjtu.iron.cache.core.impl.LocalMutexCacheLoadGuard;
+import com.xjtu.iron.cache.core.trace.CacheTraceContext;
+import com.xjtu.iron.cache.core.trace.NoopCacheTraceContext;
 import com.xjtu.iron.cache.provider.composite.CompositeCacheProvider;
 import com.xjtu.iron.cache.spring.boot.starter.resolver.PropertiesCacheSpecResolver;
 import com.xjtu.iron.cache.spring.boot.starter.properties.XjtuIronCacheProperties;
@@ -126,6 +129,7 @@ public class XjtuIronCacheCoreAutoConfiguration {
             CacheLoadGuard cacheLoadGuard,
             CacheMetricsRecorder cacheMetricsRecorder,
             CacheEventPublisher cacheEventPublisher,
+            CacheTraceContext cacheTraceContext,
             XjtuIronCacheProperties properties
     ) {
         return new DefaultCacheClient(
@@ -136,7 +140,15 @@ public class XjtuIronCacheCoreAutoConfiguration {
                 cacheMetricsRecorder,
                 cacheEventPublisher,
                 properties.getApplication().getName(),
-                properties.getApplication().getInstanceId()
+                properties.getApplication().getInstanceId(),
+                properties.getEvent().getPublishFailurePolicy(),
+                cacheTraceContext
         );
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CacheTraceContext cacheTraceContext() {
+        return new NoopCacheTraceContext();
     }
 }

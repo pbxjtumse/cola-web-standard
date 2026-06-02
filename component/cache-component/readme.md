@@ -197,3 +197,22 @@ service-A-3 收到事件
 重试查 Redis
 Redis 仍 miss：
 根据策略继续等待 / 降级 / 自己加载
+
+
+xjtu.iron.cache.event.enabled=true
+↓
+创建 RedisCacheEventSerializer
+↓
+创建 CacheEventHandler
+↓
+创建 RedisCacheEventSubscriber
+↓
+创建 RedisMessageListenerContainer
+↓
+订阅 xjtu:iron:cache:event
+↓
+收到消息后调用 RedisCacheEventSubscriber.onMessage()
+↓
+调用 CacheEventHandler.handle()
+↓
+调用 CaffeineLocalCacheInvalidator.invalidateLocal()

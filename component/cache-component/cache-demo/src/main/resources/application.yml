@@ -35,6 +35,7 @@ xjtu:
       event:
         enabled: false
         channel: xjtu:iron:cache:event
+        publish-failure-policy: IGNORE
       caffeine:
         enabled: true
         default-maximum-size: 10000

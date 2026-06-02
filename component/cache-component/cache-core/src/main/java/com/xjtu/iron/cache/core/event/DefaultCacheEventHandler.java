@@ -34,24 +34,31 @@ public class DefaultCacheEventHandler implements CacheEventHandler {
             return;
         }
 
-        log.info("[CACHE-EVENT-HANDLE] eventType={}, fullKey={}, sourceInstanceId={}, currentInstanceId={}",
+        log.info("[CACHE-EVENT-HANDLE] eventVersion={}, eventType={}, fullKey={}, sourceInstanceId={}, currentInstanceId={}, traceId={}, spanId={}",
+                event.getEventVersion(),
                 event.getEventType(),
                 event.getFullKey(),
                 event.getSourceInstanceId(),
-                currentInstanceId);
+                currentInstanceId,
+                event.getTraceId(),
+                event.getSpanId());
 
-        /*
-         * 如果事件是当前实例自己发布的，可以忽略。
-         *
-         * 当前实例在 cacheClient.evict 时已经删除过本地缓存。
-         */
-        if (currentInstanceId != null && currentInstanceId.equals(event.getSourceInstanceId())) {
+        if (currentInstanceId != null
+                && currentInstanceId.equals(event.getSourceInstanceId())) {
             log.info("[CACHE-EVENT-HANDLE] ignore self event, fullKey={}", event.getFullKey());
+            return;
+        }
+
+        if (event.getEventType() == CacheEventType.UNKNOWN) {
+            log.warn("[CACHE-EVENT-HANDLE] ignore unknown eventType, fullKey={}, eventId={}",
+                    event.getFullKey(),
+                    event.getEventId());
             return;
         }
 
         if (event.getEventType() == CacheEventType.EVICT_KEY) {
             localCacheInvalidator.invalidateLocal(event.toCacheKey());
+            return;
         }
 
         if (event.getEventType() == CacheEventType.CLEAR_CACHE_NAME) {

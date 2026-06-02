@@ -13,7 +13,9 @@ import com.xjtu.iron.cache.api.exception.CacheException;
 import com.xjtu.iron.cache.api.exception.CacheLoadException;
 import com.xjtu.iron.cache.core.*;
 import com.xjtu.iron.cache.core.event.CacheEvent;
+import com.xjtu.iron.cache.core.event.CacheEventPublishFailurePolicy;
 import com.xjtu.iron.cache.core.event.CacheEventPublisher;
+import com.xjtu.iron.cache.core.trace.CacheTraceContext;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -91,6 +93,24 @@ public class DefaultCacheClient implements CacheClient {
      */
     private final String instanceId;
 
+    /**
+     * 事件发布失败策略。
+     *
+     * <p>用于控制 evict 后发布事件失败时是否影响主流程。</p>
+     */
+    private final CacheEventPublishFailurePolicy eventPublishFailurePolicy;
+
+    /**
+     * trace 上下文。
+     *
+     * <p>用于在缓存事件中携带 traceId / spanId。</p>
+     */
+    private final CacheTraceContext traceContext;
+
+    /**
+     * 事件发布失败策略。
+     */
+
     /** 创建默认缓存客户端。 */
     public DefaultCacheClient(
             CacheProvider cacheProvider,
@@ -100,7 +120,9 @@ public class DefaultCacheClient implements CacheClient {
             CacheMetricsRecorder metricsRecorder,
             CacheEventPublisher cacheEventPublisher,
             String applicationName,
-            String instanceId
+            String instanceId,
+            CacheEventPublishFailurePolicy eventPublishFailurePolicy,
+            CacheTraceContext traceContext
     ) {
         this.cacheProvider = cacheProvider;
         this.specResolver = specResolver;
@@ -110,6 +132,8 @@ public class DefaultCacheClient implements CacheClient {
         this.cacheEventPublisher = cacheEventPublisher;
         this.applicationName = applicationName;
         this.instanceId = instanceId;
+        this.eventPublishFailurePolicy = eventPublishFailurePolicy;
+        this.traceContext = traceContext;
     }
 
     @Override
@@ -306,24 +330,24 @@ public class DefaultCacheClient implements CacheClient {
 
             /*
              * 二期新增能力：
-             * 发布 EVICT_KEY 事件。
-             *
-             * 其他实例收到事件后，只删除自己的 L1。
+             * 发布 EVICT_KEY 事件。 其他实例收到事件后，只删除自己的 L1。
              */
-            cacheEventPublisher.publish(
-                    CacheEvent.evictKey(
-                            key,
-                            applicationName,
-                            instanceId,
-                            "manual_evict"
-                    )
-            );
+            cacheEventPublisher.publish(CacheEvent.evictKey(key, applicationName, instanceId, "manual_evict"));
 
         } catch (Exception ex) {
             metricsRecorder.recordError(key, CacheOperation.EVICT, ex);
             throw new CacheException("Cache evict failed, key=" + key.fullKey(), ex);
         }
+
+        /*
+         * 增强流程：
+         * 发布缓存失效事件，通知其他实例删除自己的 L1。
+         *
+         * 事件发布失败默认不影响主流程。
+         */
+        publishEvictEventSafely(key);
     }
+
 
     @Override
     public void refresh(CacheKey key, Class<?> valueType, CacheLoader<?> loader) {
@@ -350,6 +374,44 @@ public class DefaultCacheClient implements CacheClient {
         } catch (Exception ex) {
             metricsRecorder.recordError(key, CacheOperation.REFRESH, ex);
             throw new CacheLoadException("Cache refresh failed, key=" + key.fullKey(), ex);
+        }
+    }
+
+    /**
+     * 安全发布缓存失效事件。
+     *
+     * <p>这个方法的设计重点是：</p>
+     *
+     * <pre>
+     * cacheProvider.evict 是主流程；
+     * cacheEventPublisher.publish 是增强流程；
+     * 增强流程失败时，默认不反向影响主流程。
+     * </pre>
+     */
+    private void publishEvictEventSafely(CacheKey key) {
+        try {
+            CacheEvent event = CacheEvent.evictKey(
+                    key,
+                    applicationName,
+                    instanceId,
+                    "manual_evict",
+                    traceContext.currentTraceId(),
+                    traceContext.currentSpanId()
+            );
+
+            cacheEventPublisher.publish(event);
+
+        } catch (Exception ex) {
+            metricsRecorder.recordError(key, CacheOperation.PUBLISH_EVENT, ex);
+
+            if (this.eventPublishFailurePolicy == CacheEventPublishFailurePolicy.THROW) {
+                throw new CacheException("Cache evict event publish failed, key=" + key.fullKey(), ex);
+            }
+
+            /*
+             * IGNORE 策略：
+             * 只记录错误，不影响 cacheClient.evict 调用结果。
+             */
         }
     }
 

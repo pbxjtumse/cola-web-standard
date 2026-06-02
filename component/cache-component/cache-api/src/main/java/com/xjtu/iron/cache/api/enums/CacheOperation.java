@@ -9,5 +9,9 @@ public enum CacheOperation {
     GET,
     PUT,
     EVICT,
-    REFRESH
+    REFRESH,
+    /**
+     * 发布缓存事件。
+     */
+    PUBLISH_EVENT
 }

@@ -1,19 +1,50 @@
 package com.xjtu.iron.cache.provider.redis.event;
 
-
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xjtu.iron.cache.api.exception.CacheSerializeException;
 import com.xjtu.iron.cache.core.event.CacheEvent;
 
 /**
  * 基于 Jackson 的 Redis 缓存事件序列化器。
+ *
+ * <p>这里不要直接修改全局 ObjectMapper，而是 copy 一份。</p>
+ *
+ * <p>这样不会影响业务系统自己的 JSON 配置。</p>
  */
 public class JacksonRedisCacheEventSerializer implements RedisCacheEventSerializer {
 
+    /**
+     * 事件专用 ObjectMapper。
+     */
     private final ObjectMapper objectMapper;
 
     public JacksonRedisCacheEventSerializer(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+        this.objectMapper = objectMapper.copy();
+
+        /*
+         * 兼容未来新增字段：
+         * 老版本应用收到新版本事件时，忽略未知字段。
+         */
+        this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+        /*
+         * 兼容未知枚举：
+         * 需要配合 @JsonEnumDefaultValue 使用。
+         */
+        this.objectMapper.configure(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE, true);
+
+        /*
+         * 枚举大小写宽松匹配。
+         */
+        this.objectMapper.configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS, true);
+
+        /*
+         * JSON 里不输出 null 字段，降低消息体积。
+         */
+        this.objectMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
     }
 
     @Override
