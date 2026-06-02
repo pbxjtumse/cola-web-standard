@@ -10,7 +10,6 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.context.annotation.Bean;
 
 /**
@@ -66,10 +65,10 @@ public class XjtuIronCacheCaffeineAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(name = "ironCaffeineCacheManager")
+    @ConditionalOnBean(name = "ironCaffeineLocalCacheManager")
     @ConditionalOnMissingBean
     public LocalCacheInvalidator localCacheInvalidator(
-            @Qualifier("ironCaffeineCacheManager") CaffeineLocalCacheManager caffeineCacheManager
+            @Qualifier("ironCaffeineLocalCacheManager") CaffeineLocalCacheManager caffeineCacheManager
     ) {
         return new CaffeineLocalCacheInvalidator(caffeineCacheManager);
     }

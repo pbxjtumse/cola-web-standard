@@ -174,15 +174,8 @@ public interface CacheClient {
      */
     void refresh(CacheKey key, Class<?> valueType, CacheLoader<?> loader);
 
-    /**
-     * 使用指定 CacheSpec 刷新缓存。
-     *
-     * <p>这个方法不是必须的，但为了和 get / put 的指定策略能力保持一致，可以保留。</p>
-     *
-     * <p>如果你希望 API 更克制，也可以先不加。</p>
-     */
-    default void refresh(CacheKey key, Class<?> valueType, CacheSpec spec, CacheLoader<?> loader) {
-        throw new UnsupportedOperationException("refresh with CacheSpec is not implemented");
-    }
+    void refresh(CacheKey key, Class<?> valueType, CacheSpec spec, CacheLoader<?> loader);
+
+
 
 }

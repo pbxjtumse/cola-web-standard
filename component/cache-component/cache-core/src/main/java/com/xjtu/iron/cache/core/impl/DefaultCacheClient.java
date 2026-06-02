@@ -339,4 +339,20 @@ public class DefaultCacheClient implements CacheClient {
         }
     }
 
+    @Override
+    public void refresh(CacheKey key, Class<?> valueType, CacheSpec spec, CacheLoader<?> loader) {
+        long start = System.currentTimeMillis();
+
+        try {
+            Object value = loader.load();
+            put(key, value, spec);
+            metricsRecorder.recordLoad(key, System.currentTimeMillis() - start);
+        } catch (Exception ex) {
+            metricsRecorder.recordError(key, CacheOperation.REFRESH, ex);
+            throw new CacheLoadException("Cache refresh failed, key=" + key.fullKey(), ex);
+        }
+    }
+
+
+
 }

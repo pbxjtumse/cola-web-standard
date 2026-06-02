@@ -17,6 +17,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
@@ -52,6 +53,7 @@ public class XjtuIronCacheEventAutoConfiguration {
     }
 
     @Bean
+    @Primary
     @ConditionalOnProperty(
             prefix = "xjtu.iron.cache.event",
             name = "enabled",

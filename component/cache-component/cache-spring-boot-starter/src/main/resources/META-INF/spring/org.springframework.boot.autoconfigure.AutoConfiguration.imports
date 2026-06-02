@@ -3,3 +3,5 @@ com.xjtu.iron.cache.spring.boot.starter.configuration.XjtuIronCacheObservability
 com.xjtu.iron.cache.spring.boot.starter.configuration.XjtuIronCacheCaffeineAutoConfiguration
 com.xjtu.iron.cache.spring.boot.starter.configuration.XjtuIronCacheRedisAutoConfiguration
 com.xjtu.iron.cache.spring.boot.starter.configuration.XjtuIronCacheCoreAutoConfiguration
+com.xjtu.iron.cache.spring.boot.starter.configuration.XjtuIronCacheEventAutoConfiguration
+

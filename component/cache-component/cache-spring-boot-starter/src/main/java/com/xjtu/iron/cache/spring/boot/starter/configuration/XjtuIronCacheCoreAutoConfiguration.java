@@ -40,7 +40,8 @@ import org.springframework.context.annotation.Primary;
 @AutoConfiguration(after = {
         XjtuIronCacheObservabilityAutoConfiguration.class,
         XjtuIronCacheCaffeineAutoConfiguration.class,
-        XjtuIronCacheRedisAutoConfiguration.class
+        XjtuIronCacheRedisAutoConfiguration.class,
+        XjtuIronCacheEventAutoConfiguration.class
 })
 @ConditionalOnProperty(
         prefix = "xjtu.iron.cache",

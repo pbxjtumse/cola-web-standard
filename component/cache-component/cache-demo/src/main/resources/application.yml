@@ -29,15 +29,18 @@ xjtu:
   iron:
     cache:
       enabled: true
-
+      application:
+        name: cache-demo
+        instance-id: cache-demo-18081
+      event:
+        enabled: false
+        channel: xjtu:iron:cache:event
       caffeine:
         enabled: true
         default-maximum-size: 10000
-
       redis:
         enabled: true
         key-prefix: "cache-demo:"
-
       specs:
         campaignRule:
           enable-l1: true
