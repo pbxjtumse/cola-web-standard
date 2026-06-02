@@ -1,4 +1,4 @@
-package com.xjtu.iron.cache.spring.boot.starter;
+package com.xjtu.iron.cache.spring.boot.starter.properties;
 
 import com.xjtu.iron.cache.api.enums.CacheDegradePolicy;
 import com.xjtu.iron.cache.api.enums.CacheNullPolicy;
@@ -38,10 +38,6 @@ public class XjtuIronCacheProperties {
      */
     private RedisProperties redis = new RedisProperties();
 
-    /**
-     * 本地缓存失效通知配置。
-     */
-    private InvalidationProperties invalidation = new InvalidationProperties();
 
     /**
      * cacheName 到缓存策略配置的映射。
@@ -109,24 +105,6 @@ public class XjtuIronCacheProperties {
      */
     public void setRedis(RedisProperties redis) {
         this.redis = redis;
-    }
-
-    /**
-     * 获取本地缓存失效通知配置。
-     *
-     * @return 本地缓存失效通知配置
-     */
-    public InvalidationProperties getInvalidation() {
-        return invalidation;
-    }
-
-    /**
-     * 设置本地缓存失效通知配置。
-     *
-     * @param invalidation 本地缓存失效通知配置
-     */
-    public void setInvalidation(InvalidationProperties invalidation) {
-        this.invalidation = invalidation;
     }
 
     /**
@@ -250,85 +228,6 @@ public class XjtuIronCacheProperties {
          */
         public void setKeyPrefix(String keyPrefix) {
             this.keyPrefix = keyPrefix;
-        }
-    }
-
-    /**
-     * 本地缓存失效通知配置项。
-     *
-     * <p>二期使用 Redis Pub/Sub 实现多实例 L1 本地缓存失效通知。</p>
-     */
-    public static class InvalidationProperties {
-
-        /**
-         * 是否启用本地缓存失效通知。
-         */
-        private boolean enabled = true;
-
-        /**
-         * Redis Pub/Sub channel。
-         */
-        private String channel = "xjtu:iron:cache:invalidate";
-
-        /**
-         * 当前应用实例 ID。
-         *
-         * <p>不配置时，自动装配会用 spring.application.name + UUID 生成。</p>
-         */
-        private String instanceId;
-
-        /**
-         * 获取是否启用本地缓存失效通知。
-         *
-         * @return true 表示启用
-         */
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        /**
-         * 设置是否启用本地缓存失效通知。
-         *
-         * @param enabled true 表示启用
-         */
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        /**
-         * 获取 Redis Pub/Sub channel。
-         *
-         * @return channel 名称
-         */
-        public String getChannel() {
-            return channel;
-        }
-
-        /**
-         * 设置 Redis Pub/Sub channel。
-         *
-         * @param channel channel 名称
-         */
-        public void setChannel(String channel) {
-            this.channel = channel;
-        }
-
-        /**
-         * 获取当前应用实例 ID。
-         *
-         * @return 当前应用实例 ID
-         */
-        public String getInstanceId() {
-            return instanceId;
-        }
-
-        /**
-         * 设置当前应用实例 ID。
-         *
-         * @param instanceId 当前应用实例 ID
-         */
-        public void setInstanceId(String instanceId) {
-            this.instanceId = instanceId;
         }
     }
 

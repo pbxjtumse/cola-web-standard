@@ -1,6 +1,6 @@
 package com.xjtu.iron.cache.spring.boot.starter.configuration;
 
-import com.xjtu.iron.cache.spring.boot.starter.XjtuIronCacheProperties;
+import com.xjtu.iron.cache.spring.boot.starter.properties.XjtuIronCacheProperties;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -16,7 +16,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
  * XjtuIronCacheObservabilityAutoConfiguration
  * XjtuIronCacheCaffeineAutoConfiguration
  * XjtuIronCacheRedisAutoConfiguration
- * XjtuIronCacheInvalidationAutoConfiguration
  * XjtuIronCacheCoreAutoConfiguration
  * </pre>
  *

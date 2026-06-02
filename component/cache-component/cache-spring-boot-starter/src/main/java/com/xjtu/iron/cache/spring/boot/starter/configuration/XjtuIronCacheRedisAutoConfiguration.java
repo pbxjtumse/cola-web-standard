@@ -6,7 +6,7 @@ import com.xjtu.iron.cache.provider.redis.RedisBinaryClient;
 import com.xjtu.iron.cache.provider.redis.RedisCacheProvider;
 import com.xjtu.iron.cache.provider.redis.RedisCacheSerializer;
 import com.xjtu.iron.cache.provider.redis.SpringDataRedisBinaryClient;
-import com.xjtu.iron.cache.spring.boot.starter.XjtuIronCacheProperties;
+import com.xjtu.iron.cache.spring.boot.starter.properties.XjtuIronCacheProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -16,7 +16,6 @@ import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
@@ -27,7 +26,6 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
  *
  * <pre>
  * RedisTemplate<String, byte[]>
- * StringRedisTemplate
  * RedisCacheSerializer
  * RedisBinaryClient
  * RedisCacheProvider
@@ -64,23 +62,6 @@ public class XjtuIronCacheRedisAutoConfiguration {
         redisTemplate.setHashValueSerializer(RedisSerializer.byteArray());
         redisTemplate.afterPropertiesSet();
         return redisTemplate;
-    }
-
-    /**
-     * 创建缓存组件专用 StringRedisTemplate。
-     *
-     * <p>该模板用于 Redis Pub/Sub 发布字符串消息。</p>
-     *
-     * @param redisConnectionFactory Redis 连接工厂
-     * @return StringRedisTemplate
-     */
-    @Bean("ironCacheStringRedisTemplate")
-    @ConditionalOnBean(RedisConnectionFactory.class)
-    @ConditionalOnMissingBean(name = "ironCacheStringRedisTemplate")
-    public StringRedisTemplate ironCacheStringRedisTemplate(
-            RedisConnectionFactory redisConnectionFactory
-    ) {
-        return new StringRedisTemplate(redisConnectionFactory);
     }
 
     /**

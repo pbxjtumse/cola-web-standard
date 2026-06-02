@@ -2,7 +2,7 @@ package com.xjtu.iron.cache.spring.boot.starter.configuration;
 
 import com.xjtu.iron.cache.provider.caffeine.CaffeineCacheManager;
 import com.xjtu.iron.cache.provider.caffeine.CaffeineCacheProvider;
-import com.xjtu.iron.cache.spring.boot.starter.XjtuIronCacheProperties;
+import com.xjtu.iron.cache.spring.boot.starter.properties.XjtuIronCacheProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -19,7 +19,7 @@ import org.springframework.context.annotation.Bean;
  * CaffeineCacheProvider
  * </pre>
  *
- * <p>CaffeineCacheProvider 同时是 L1 CacheProvider，也可以实现本地缓存失效能力。</p>
+ * <p>CaffeineCacheProvider 是一期 L1 本地缓存实现。</p>
  */
 @AutoConfiguration(after = XjtuIronCacheAutoConfiguration.class)
 @ConditionalOnProperty(
@@ -49,9 +49,6 @@ public class XjtuIronCacheCaffeineAutoConfiguration {
 
     /**
      * 创建 Caffeine Provider。
-     *
-     * <p>这里返回具体类型 CaffeineCacheProvider，而不是 CacheProvider，
-     * 是为了让 Spring 可以识别它实现的其他接口，例如 LocalCacheInvalidator。</p>
      *
      * @param caffeineCacheManager Caffeine 缓存管理器
      * @return Caffeine Provider

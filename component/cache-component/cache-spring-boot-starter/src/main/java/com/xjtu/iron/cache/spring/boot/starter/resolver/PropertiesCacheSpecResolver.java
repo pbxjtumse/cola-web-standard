@@ -1,8 +1,9 @@
-package com.xjtu.iron.cache.spring.boot.starter;
+package com.xjtu.iron.cache.spring.boot.starter.resolver;
 
 import com.xjtu.iron.cache.api.CacheKey;
 import com.xjtu.iron.cache.api.CacheSpec;
 import com.xjtu.iron.cache.core.CacheSpecResolver;
+import com.xjtu.iron.cache.spring.boot.starter.properties.XjtuIronCacheProperties;
 
 /**
  * 基于 Spring Boot 配置文件的缓存策略解析器。

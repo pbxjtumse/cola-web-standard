@@ -10,7 +10,7 @@ import java.util.Optional;
  * 不建议直接注入 RedisTemplate、StringRedisTemplate、Caffeine Cache 或 RedissonClient。
  * 否则 key 规范、TTL、空值缓存、二级缓存回填、指标、降级等治理能力都会被绕开。</p>
  *
- * <p>一期默认实现是 {@code com.xjtu.iron.cache.core.DefaultCacheClient}，
+ * <p>一期默认实现是 {@code com.xjtu.iron.cache.core.impl.DefaultCacheClient}，
  * 默认底层链路是 L1 Caffeine + L2 Redis。</p>
  */
 public interface CacheClient {

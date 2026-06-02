@@ -29,9 +29,6 @@ xjtu:
   iron:
     cache:
       enabled: true
-      invalidation:
-        enabled: true
-        channel: "xjtu:iron:cache:invalidate"
 
       caffeine:
         enabled: true

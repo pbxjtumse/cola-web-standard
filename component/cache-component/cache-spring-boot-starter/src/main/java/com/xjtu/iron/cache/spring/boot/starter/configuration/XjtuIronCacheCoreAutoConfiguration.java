@@ -1,7 +1,6 @@
 package com.xjtu.iron.cache.spring.boot.starter.configuration;
 
 import com.xjtu.iron.cache.api.CacheClient;
-import com.xjtu.iron.cache.core.CacheInvalidationPublisher;
 import com.xjtu.iron.cache.core.CacheLoadGuard;
 import com.xjtu.iron.cache.core.CacheMetricsRecorder;
 import com.xjtu.iron.cache.core.CacheProvider;
@@ -10,8 +9,8 @@ import com.xjtu.iron.cache.core.CacheTtlResolver;
 import com.xjtu.iron.cache.core.impl.DefaultCacheClient;
 import com.xjtu.iron.cache.core.impl.LocalMutexCacheLoadGuard;
 import com.xjtu.iron.cache.provider.composite.CompositeCacheProvider;
-import com.xjtu.iron.cache.spring.boot.starter.PropertiesCacheSpecResolver;
-import com.xjtu.iron.cache.spring.boot.starter.XjtuIronCacheProperties;
+import com.xjtu.iron.cache.spring.boot.starter.resolver.PropertiesCacheSpecResolver;
+import com.xjtu.iron.cache.spring.boot.starter.properties.XjtuIronCacheProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -34,13 +33,12 @@ import org.springframework.context.annotation.Primary;
  * </pre>
  *
  * <p>这个类放在最后装配，因为它依赖 Caffeine Provider、Redis Provider、
- * CacheInvalidationPublisher 和 CacheMetricsRecorder。</p>
+ * CacheMetricsRecorder。</p>
  */
 @AutoConfiguration(after = {
         XjtuIronCacheObservabilityAutoConfiguration.class,
         XjtuIronCacheCaffeineAutoConfiguration.class,
-        XjtuIronCacheRedisAutoConfiguration.class,
-        XjtuIronCacheInvalidationAutoConfiguration.class
+        XjtuIronCacheRedisAutoConfiguration.class
 })
 @ConditionalOnProperty(
         prefix = "xjtu.iron.cache",
@@ -93,7 +91,6 @@ public class XjtuIronCacheCoreAutoConfiguration {
      *
      * @param caffeineProvider L1 Caffeine Provider
      * @param redisProvider L2 Redis Provider
-     * @param invalidationPublisher 缓存失效事件发布器
      * @return 组合 Provider
      */
     @Bean("ironCompositeCacheProvider")
@@ -101,14 +98,9 @@ public class XjtuIronCacheCoreAutoConfiguration {
     @ConditionalOnBean(name = {"ironCaffeineCacheProvider", "ironRedisCacheProvider"})
     public CacheProvider compositeCacheProvider(
             @Qualifier("ironCaffeineCacheProvider") CacheProvider caffeineProvider,
-            @Qualifier("ironRedisCacheProvider") CacheProvider redisProvider,
-            CacheInvalidationPublisher invalidationPublisher
+            @Qualifier("ironRedisCacheProvider") CacheProvider redisProvider
     ) {
-        return new CompositeCacheProvider(
-                caffeineProvider,
-                redisProvider,
-                invalidationPublisher
-        );
+        return new CompositeCacheProvider(caffeineProvider, redisProvider);
     }
 
     /**
