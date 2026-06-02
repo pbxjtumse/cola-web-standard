@@ -1,4 +1,4 @@
-package com.xjtu.iron.cache.api;
+package com.xjtu.iron.cache.api.model;
 
 import com.xjtu.iron.cache.api.enums.CacheConsistencyPolicy;
 import com.xjtu.iron.cache.api.enums.CacheDegradePolicy;

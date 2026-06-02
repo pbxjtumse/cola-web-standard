@@ -1,12 +1,16 @@
 package com.xjtu.iron.cache.spring.boot.starter.configuration;
 
-import com.xjtu.iron.cache.provider.caffeine.CaffeineCacheManager;
+import com.xjtu.iron.cache.core.invalidate.LocalCacheInvalidator;
+import com.xjtu.iron.cache.provider.caffeine.CaffeineLocalCacheInvalidator;
+import com.xjtu.iron.cache.provider.caffeine.CaffeineLocalCacheManager;
 import com.xjtu.iron.cache.provider.caffeine.CaffeineCacheProvider;
 import com.xjtu.iron.cache.spring.boot.starter.properties.XjtuIronCacheProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.context.annotation.Bean;
 
 /**
@@ -15,7 +19,7 @@ import org.springframework.context.annotation.Bean;
  * <p>负责创建：</p>
  *
  * <pre>
- * CaffeineCacheManager
+ * CaffeineLocalCacheManager
  * CaffeineCacheProvider
  * </pre>
  *
@@ -36,28 +40,37 @@ public class XjtuIronCacheCaffeineAutoConfiguration {
      * @param properties 缓存组件配置属性
      * @return Caffeine 缓存管理器
      */
-    @Bean("ironCaffeineCacheManager")
+    @Bean("ironCaffeineLocalCacheManager")
     @ConditionalOnProperty(
             prefix = "xjtu.iron.cache.caffeine",
             name = "enabled",
             havingValue = "true",
             matchIfMissing = true
     )
-    public CaffeineCacheManager caffeineCacheManager(XjtuIronCacheProperties properties) {
-        return new CaffeineCacheManager(properties.getCaffeine().getDefaultMaximumSize());
+    public CaffeineLocalCacheManager caffeineCacheManager(XjtuIronCacheProperties properties) {
+        return new CaffeineLocalCacheManager(properties.getCaffeine().getDefaultMaximumSize());
     }
 
     /**
      * 创建 Caffeine Provider。
      *
-     * @param caffeineCacheManager Caffeine 缓存管理器
+     * @param caffeineLocalCacheManager Caffeine 缓存管理器
      * @return Caffeine Provider
      */
     @Bean("ironCaffeineCacheProvider")
-    @ConditionalOnBean(name = "ironCaffeineCacheManager")
+    @ConditionalOnBean(name = "ironCaffeineLocalCacheManager")
     public CaffeineCacheProvider caffeineCacheProvider(
-            @Qualifier("ironCaffeineCacheManager") CaffeineCacheManager caffeineCacheManager
+            @Qualifier("ironCaffeineLocalCacheManager") CaffeineLocalCacheManager caffeineLocalCacheManager
     ) {
-        return new CaffeineCacheProvider(caffeineCacheManager);
+        return new CaffeineCacheProvider(caffeineLocalCacheManager);
+    }
+
+    @Bean
+    @ConditionalOnBean(name = "ironCaffeineCacheManager")
+    @ConditionalOnMissingBean
+    public LocalCacheInvalidator localCacheInvalidator(
+            @Qualifier("ironCaffeineCacheManager") CaffeineLocalCacheManager caffeineCacheManager
+    ) {
+        return new CaffeineLocalCacheInvalidator(caffeineCacheManager);
     }
 }

@@ -53,6 +53,10 @@ public class XjtuIronCacheProperties {
      */
     private Map<String, CacheSpecProperties> specs = new HashMap<>();
 
+    private ApplicationProperties application = new ApplicationProperties();
+
+    private EventProperties event = new EventProperties();
+
     /**
      * 获取是否启用缓存组件。
      *
@@ -123,6 +127,22 @@ public class XjtuIronCacheProperties {
      */
     public void setSpecs(Map<String, CacheSpecProperties> specs) {
         this.specs = specs;
+    }
+
+    public ApplicationProperties getApplication() {
+        return application;
+    }
+
+    public void setApplication(ApplicationProperties application) {
+        this.application = application;
+    }
+
+    public EventProperties getEvent() {
+        return event;
+    }
+
+    public void setEvent(EventProperties event) {
+        this.event = event;
     }
 
     /**
@@ -338,6 +358,72 @@ public class XjtuIronCacheProperties {
 
         public void setDegradePolicy(CacheDegradePolicy degradePolicy) {
             this.degradePolicy = degradePolicy;
+        }
+    }
+
+    public static class ApplicationProperties {
+
+        /**
+         * 应用名。
+         *
+         * <p>默认可以从 spring.application.name 注入，starter 里也可以兜底。</p>
+         */
+        private String name = "unknown-application";
+
+        /**
+         * 实例 ID。
+         *
+         * <p>用于 Redis Pub/Sub 事件去重。</p>
+         *
+         * <p>如果不配置，starter 可以自动生成 UUID。</p>
+         */
+        private String instanceId;
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getInstanceId() {
+            return instanceId;
+        }
+
+        public void setInstanceId(String instanceId) {
+            this.instanceId = instanceId;
+        }
+    }
+
+    public static class EventProperties {
+
+        /**
+         * 是否启用缓存事件。
+         *
+         * <p>二期第一版主要控制 Redis Pub/Sub 本地缓存失效通知。</p>
+         */
+        private boolean enabled = false;
+
+        /**
+         * Redis Pub/Sub channel。
+         */
+        private String channel = "xjtu:iron:cache:event";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getChannel() {
+            return channel;
+        }
+
+        public void setChannel(String channel) {
+            this.channel = channel;
         }
     }
 }

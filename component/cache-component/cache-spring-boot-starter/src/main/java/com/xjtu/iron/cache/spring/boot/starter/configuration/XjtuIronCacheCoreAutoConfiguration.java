@@ -6,7 +6,9 @@ import com.xjtu.iron.cache.core.CacheMetricsRecorder;
 import com.xjtu.iron.cache.core.CacheProvider;
 import com.xjtu.iron.cache.core.CacheSpecResolver;
 import com.xjtu.iron.cache.core.CacheTtlResolver;
+import com.xjtu.iron.cache.core.event.CacheEventPublisher;
 import com.xjtu.iron.cache.core.impl.DefaultCacheClient;
+import com.xjtu.iron.cache.core.impl.DefaultCacheTtlResolver;
 import com.xjtu.iron.cache.core.impl.LocalMutexCacheLoadGuard;
 import com.xjtu.iron.cache.provider.composite.CompositeCacheProvider;
 import com.xjtu.iron.cache.spring.boot.starter.resolver.PropertiesCacheSpecResolver;
@@ -68,7 +70,7 @@ public class XjtuIronCacheCoreAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public CacheTtlResolver cacheTtlResolver() {
-        return new CacheTtlResolver();
+        return new DefaultCacheTtlResolver();
     }
 
     /**
@@ -121,14 +123,19 @@ public class XjtuIronCacheCoreAutoConfiguration {
             CacheSpecResolver cacheSpecResolver,
             CacheTtlResolver cacheTtlResolver,
             CacheLoadGuard cacheLoadGuard,
-            CacheMetricsRecorder cacheMetricsRecorder
+            CacheMetricsRecorder cacheMetricsRecorder,
+            CacheEventPublisher cacheEventPublisher,
+            XjtuIronCacheProperties properties
     ) {
         return new DefaultCacheClient(
                 cacheProvider,
                 cacheSpecResolver,
                 cacheTtlResolver,
                 cacheLoadGuard,
-                cacheMetricsRecorder
+                cacheMetricsRecorder,
+                cacheEventPublisher,
+                properties.getApplication().getName(),
+                properties.getApplication().getInstanceId()
         );
     }
 }

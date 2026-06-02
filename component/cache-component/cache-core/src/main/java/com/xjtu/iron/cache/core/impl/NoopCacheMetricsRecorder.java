@@ -1,6 +1,6 @@
 package com.xjtu.iron.cache.core.impl;
 
-import com.xjtu.iron.cache.api.CacheKey;
+import com.xjtu.iron.cache.api.key.CacheKey;
 import com.xjtu.iron.cache.api.enums.CacheLevel;
 import com.xjtu.iron.cache.api.enums.CacheOperation;
 import com.xjtu.iron.cache.core.CacheMetricsRecorder;
@@ -12,8 +12,19 @@ import com.xjtu.iron.cache.core.CacheMetricsRecorder;
  */
 public class NoopCacheMetricsRecorder implements CacheMetricsRecorder {
 
-    @Override public void recordHit(CacheKey key, CacheLevel level, long costMillis) { }
-    @Override public void recordMiss(CacheKey key, long costMillis) { }
-    @Override public void recordLoad(CacheKey key, long costMillis) { }
-    @Override public void recordError(CacheKey key, CacheOperation operation, Throwable throwable) { }
+    @Override
+    public void recordHit(CacheKey key, CacheLevel level, long costMillis) {
+    }
+
+    @Override
+    public void recordMiss(CacheKey key, long costMillis) {
+    }
+
+    @Override
+    public void recordLoad(CacheKey key, long costMillis) {
+    }
+
+    @Override
+    public void recordError(CacheKey key, CacheOperation operation, Throwable throwable) {
+    }
 }

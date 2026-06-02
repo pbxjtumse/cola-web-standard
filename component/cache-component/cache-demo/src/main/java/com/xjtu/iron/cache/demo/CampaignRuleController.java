@@ -1,6 +1,6 @@
 package com.xjtu.iron.cache.demo;
 
-import com.xjtu.iron.cache.api.CacheResult;
+import com.xjtu.iron.cache.api.model.CacheResult;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

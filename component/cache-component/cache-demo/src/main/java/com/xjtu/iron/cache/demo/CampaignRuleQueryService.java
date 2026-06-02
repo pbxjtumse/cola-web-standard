@@ -1,8 +1,8 @@
 package com.xjtu.iron.cache.demo;
 
 import com.xjtu.iron.cache.api.CacheClient;
-import com.xjtu.iron.cache.api.CacheKey;
-import com.xjtu.iron.cache.api.CacheResult;
+import com.xjtu.iron.cache.api.key.CacheKey;
+import com.xjtu.iron.cache.api.model.CacheResult;
 import org.springframework.stereotype.Service;
 
 /**

@@ -1,6 +1,6 @@
 package com.xjtu.iron.cache.integrations.observability;
 
-import com.xjtu.iron.cache.api.CacheKey;
+import com.xjtu.iron.cache.api.key.CacheKey;
 import com.xjtu.iron.cache.api.enums.CacheLevel;
 import com.xjtu.iron.cache.api.enums.CacheOperation;
 import com.xjtu.iron.cache.core.CacheMetricsRecorder;

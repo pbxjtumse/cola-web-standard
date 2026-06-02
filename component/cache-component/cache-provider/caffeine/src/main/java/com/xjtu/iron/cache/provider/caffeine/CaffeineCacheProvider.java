@@ -1,9 +1,9 @@
 package com.xjtu.iron.cache.provider.caffeine;
 
 import com.github.benmanes.caffeine.cache.Cache;
-import com.xjtu.iron.cache.api.CacheKey;
-import com.xjtu.iron.cache.api.CacheSpec;
-import com.xjtu.iron.cache.api.CacheValue;
+import com.xjtu.iron.cache.api.key.CacheKey;
+import com.xjtu.iron.cache.api.model.CacheSpec;
+import com.xjtu.iron.cache.api.model.CacheValue;
 import com.xjtu.iron.cache.api.enums.CacheLevel;
 import com.xjtu.iron.cache.core.CacheProvider;
 
@@ -40,14 +40,14 @@ public class CaffeineCacheProvider implements CacheProvider {
      *
      * <p>它负责按 cacheName 维护多个 Caffeine Cache 实例。</p>
      */
-    private final CaffeineCacheManager cacheManager;
+    private final CaffeineLocalCacheManager cacheManager;
 
     /**
      * 创建 Caffeine Provider。
      *
      * @param cacheManager Caffeine Cache 管理器
      */
-    public CaffeineCacheProvider(CaffeineCacheManager cacheManager) {
+    public CaffeineCacheProvider(CaffeineLocalCacheManager cacheManager) {
         this.cacheManager = cacheManager;
     }
 

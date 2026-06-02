@@ -1,4 +1,4 @@
-package com.xjtu.iron.cache.api;
+package com.xjtu.iron.cache.api.key;
 
 import java.util.Objects;
 

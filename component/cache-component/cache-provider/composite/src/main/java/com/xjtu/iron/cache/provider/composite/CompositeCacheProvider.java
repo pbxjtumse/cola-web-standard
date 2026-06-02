@@ -1,8 +1,8 @@
 package com.xjtu.iron.cache.provider.composite;
 
-import com.xjtu.iron.cache.api.CacheKey;
-import com.xjtu.iron.cache.api.CacheSpec;
-import com.xjtu.iron.cache.api.CacheValue;
+import com.xjtu.iron.cache.api.key.CacheKey;
+import com.xjtu.iron.cache.api.model.CacheSpec;
+import com.xjtu.iron.cache.api.model.CacheValue;
 import com.xjtu.iron.cache.core.CacheProvider;
 
 import java.time.Duration;

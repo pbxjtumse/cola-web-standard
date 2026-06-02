@@ -1,6 +1,6 @@
 package com.xjtu.iron.cache.config;
 
-import com.xjtu.iron.cache.api.CacheSpec;
+import com.xjtu.iron.cache.api.model.CacheSpec;
 
 import java.util.Map;
 

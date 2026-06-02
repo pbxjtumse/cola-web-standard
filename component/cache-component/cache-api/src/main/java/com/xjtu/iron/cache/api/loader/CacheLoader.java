@@ -1,4 +1,4 @@
-package com.xjtu.iron.cache.api;
+package com.xjtu.iron.cache.api.loader;
 
 /**
  * 缓存未命中时的数据加载函数。
