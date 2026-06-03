@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * 默认线程池注册中心。
@@ -20,8 +21,8 @@ public class DefaultThreadPoolRegistry implements ThreadPoolRegistry {
     private final Map<String, ExecutorService> executors = new ConcurrentHashMap<>();
 
     @Override
-    public ExecutorService getExecutor(String executorName) {
-        ExecutorService executor = executors.get(executorName);
+    public ThreadPoolExecutor getExecutor(String executorName) {
+        ThreadPoolExecutor executor = executors.get(executorName);
 
         if (executor == null) {
             throw new ThreadPoolNotFoundException(executorName);
@@ -36,7 +37,7 @@ public class DefaultThreadPoolRegistry implements ThreadPoolRegistry {
     }
 
     @Override
-    public Map<String, ExecutorService> snapshot() {
+    public Map<String, ThreadPoolExecutor> snapshot() {
         return Collections.unmodifiableMap(executors);
     }
 }

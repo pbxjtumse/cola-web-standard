@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.function.Supplier;
 
 public class DefaultAsyncExecutor implements AsyncExecutor {
@@ -39,7 +40,7 @@ public class DefaultAsyncExecutor implements AsyncExecutor {
     @Override
     public void execute(String executorName, String taskName, Runnable runnable) {
         Objects.requireNonNull(runnable, "runnable must not be null");
-        ExecutorService executor = threadPoolRegistry.getExecutor(executorName);
+        ThreadPoolExecutor executor = threadPoolRegistry.getExecutor(executorName);
         Runnable command = () -> {
             long start = System.currentTimeMillis();
 

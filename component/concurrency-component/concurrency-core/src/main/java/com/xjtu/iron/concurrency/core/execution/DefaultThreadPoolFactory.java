@@ -13,7 +13,7 @@ import java.util.concurrent.*;
 public class DefaultThreadPoolFactory implements ThreadPoolFactory {
 
     @Override
-    public ExecutorService create(ThreadPoolSpec spec) {
+    public ThreadPoolExecutor create(ThreadPoolSpec spec) {
         try {
             spec.validate();
 

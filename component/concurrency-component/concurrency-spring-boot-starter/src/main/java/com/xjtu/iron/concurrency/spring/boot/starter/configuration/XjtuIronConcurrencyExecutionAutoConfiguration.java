@@ -21,6 +21,7 @@ import org.springframework.context.annotation.Bean;
 
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 @AutoConfiguration(after = XjtuIronConcurrencyContextAutoConfiguration.class)
@@ -99,7 +100,7 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
         return () -> {
             Map<String, ThreadPoolSpec> specs = threadPoolSpecResolver.resolveAll();
 
-            for (Map.Entry<String, ExecutorService> entry : threadPoolRegistry.snapshot().entrySet()) {
+            for (Map.Entry<String, ThreadPoolExecutor> entry : threadPoolRegistry.snapshot().entrySet()) {
                 String poolName = entry.getKey();
                 ExecutorService executorService = entry.getValue();
                 ThreadPoolSpec spec = specs.get(poolName);

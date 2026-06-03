@@ -8,6 +8,11 @@ import java.util.function.Supplier;
 /**
  * 异步执行器 负责提交单个任务
  *
+ * 所以对于 run / supply / submit，推荐策略是：
+ * ABORT
+ * CALLER_RUNS
+ * BLOCKING_WAIT
+ *
  * <p>业务系统提交异步任务的统一入口。</p>
  */
 public interface AsyncExecutor {
