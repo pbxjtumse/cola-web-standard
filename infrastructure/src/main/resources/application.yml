@@ -8,7 +8,6 @@ executors:
       maxSize: 100
       queueSize: 2000
       keepAliveSeconds: 1000
-      rejectedPolicy: CALLER_RUNS
       tags: [order, api]
 
 bulkheads:
