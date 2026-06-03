@@ -1,0 +1,28 @@
+server:
+  port: 18091
+
+xjtu:
+  iron:
+    concurrency:
+      enabled: true
+      default-executor: default
+      context:
+        enabled: true
+        mdc-enabled: true
+      thread-pools:
+        default:
+          core-pool-size: 4
+          max-pool-size: 16
+          queue-capacity: 1000
+          keep-alive-time: 60s
+          thread-name-prefix: xjtu-default-
+          queue-type: BOUNDED_LINKED_BLOCKING_QUEUE
+          rejection-policy: ABORT
+        biz-query-pool:
+          core-pool-size: 8
+          max-pool-size: 32
+          queue-capacity: 2000
+          keep-alive-time: 60s
+          thread-name-prefix: biz-query-
+          queue-type: BOUNDED_LINKED_BLOCKING_QUEUE
+          rejection-policy: ABORT

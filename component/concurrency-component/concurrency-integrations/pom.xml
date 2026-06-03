@@ -9,10 +9,13 @@
     </parent>
 
     <artifactId>concurrency-integrations</artifactId>
-    <packaging>jar</packaging>
+    <packaging>pom</packaging>
 
     <name>concurrency-integrations</name>
     <url>http://maven.apache.org</url>
+    <modules>
+        <module>ttl</module>
+    </modules>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

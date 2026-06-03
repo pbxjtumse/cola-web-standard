@@ -14,6 +14,12 @@
     <url>http://maven.apache.org</url>
     <modules>
         <module>concurrency-api</module>
+        <module>concurrency-config</module>
+        <module>concurrency-core</module>
+        <module>concurrency-integrations</module>
+        <module>concurrency-provider</module>
+        <module>concurrency-spring-boot-starter</module>
+        <module>concurrency-demo</module>
     </modules>
 
     <properties>
