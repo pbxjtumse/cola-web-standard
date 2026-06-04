@@ -3,12 +3,18 @@ package com.xjtu.iron.concurrency.spring.boot.starter.configuration;
 import com.xjtu.iron.concurrency.api.context.ContextAwareTaskDecorator;
 import com.xjtu.iron.concurrency.api.execution.AsyncExecutor;
 import com.xjtu.iron.concurrency.api.execution.AsyncTemplate;
+import com.xjtu.iron.concurrency.api.execution.ThreadPoolManager;
 import com.xjtu.iron.concurrency.api.execution.ThreadPoolSpec;
 import com.xjtu.iron.concurrency.config.ThreadPoolSpecResolver;
 import com.xjtu.iron.concurrency.core.execution.DefaultAsyncExecutor;
 import com.xjtu.iron.concurrency.core.execution.DefaultAsyncTemplate;
+import com.xjtu.iron.concurrency.core.execution.DefaultRejectedExecutionHandlerFactory;
+import com.xjtu.iron.concurrency.core.execution.DefaultTaskExecutionTemplate;
 import com.xjtu.iron.concurrency.core.execution.DefaultThreadPoolFactory;
+import com.xjtu.iron.concurrency.core.execution.DefaultThreadPoolManager;
 import com.xjtu.iron.concurrency.core.execution.DefaultThreadPoolRegistry;
+import com.xjtu.iron.concurrency.core.execution.RejectedExecutionHandlerFactory;
+import com.xjtu.iron.concurrency.core.execution.TaskExecutionTemplate;
 import com.xjtu.iron.concurrency.core.execution.ThreadPoolFactory;
 import com.xjtu.iron.concurrency.core.execution.ThreadPoolRegistry;
 import com.xjtu.iron.concurrency.core.metrics.ConcurrencyMetricsRecorder;
@@ -20,7 +26,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean;
 
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -37,8 +42,16 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ThreadPoolFactory threadPoolFactory() {
-        return new DefaultThreadPoolFactory();
+    public RejectedExecutionHandlerFactory rejectedExecutionHandlerFactory() {
+        return new DefaultRejectedExecutionHandlerFactory();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ThreadPoolFactory threadPoolFactory(
+            RejectedExecutionHandlerFactory rejectedExecutionHandlerFactory
+    ) {
+        return new DefaultThreadPoolFactory(rejectedExecutionHandlerFactory);
     }
 
     @Bean
@@ -63,11 +76,20 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
         DefaultThreadPoolRegistry registry = new DefaultThreadPoolRegistry();
 
         specs.forEach((poolName, spec) -> {
-            ExecutorService executorService = threadPoolFactory.create(spec);
-            registry.register(poolName, executorService);
+            ThreadPoolExecutor executor = threadPoolFactory.create(spec);
+            registry.register(poolName, executor);
         });
 
         return registry;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ThreadPoolManager threadPoolManager(
+            ThreadPoolRegistry threadPoolRegistry,
+            RejectedExecutionHandlerFactory rejectedExecutionHandlerFactory
+    ) {
+        return new DefaultThreadPoolManager(threadPoolRegistry, rejectedExecutionHandlerFactory);
     }
 
     @Bean
@@ -78,18 +100,24 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AsyncExecutor asyncExecutor(
+    public TaskExecutionTemplate taskExecutionTemplate(
             ThreadPoolRegistry threadPoolRegistry,
             ContextAwareTaskDecorator contextAwareTaskDecorator,
             AsyncTemplate asyncTemplate,
             ConcurrencyMetricsRecorder concurrencyMetricsRecorder
     ) {
-        return new DefaultAsyncExecutor(
+        return new DefaultTaskExecutionTemplate(
                 threadPoolRegistry,
                 contextAwareTaskDecorator,
                 asyncTemplate,
                 concurrencyMetricsRecorder
         );
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AsyncExecutor asyncExecutor(TaskExecutionTemplate taskExecutionTemplate) {
+        return new DefaultAsyncExecutor(taskExecutionTemplate);
     }
 
     @Bean
@@ -102,33 +130,33 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
 
             for (Map.Entry<String, ThreadPoolExecutor> entry : threadPoolRegistry.snapshot().entrySet()) {
                 String poolName = entry.getKey();
-                ExecutorService executorService = entry.getValue();
+                ThreadPoolExecutor executor = entry.getValue();
                 ThreadPoolSpec spec = specs.get(poolName);
 
                 if (spec == null) {
-                    executorService.shutdownNow();
+                    executor.shutdownNow();
                     continue;
                 }
 
                 if (!spec.isWaitForTasksToCompleteOnShutdown()) {
-                    executorService.shutdownNow();
+                    executor.shutdownNow();
                     continue;
                 }
 
-                executorService.shutdown();
+                executor.shutdown();
 
                 try {
-                    boolean terminated = executorService.awaitTermination(
+                    boolean terminated = executor.awaitTermination(
                             spec.getAwaitTermination().toMillis(),
                             TimeUnit.MILLISECONDS
                     );
 
                     if (!terminated) {
-                        executorService.shutdownNow();
+                        executor.shutdownNow();
                     }
                 } catch (InterruptedException ex) {
                     Thread.currentThread().interrupt();
-                    executorService.shutdownNow();
+                    executor.shutdownNow();
                 }
             }
         };

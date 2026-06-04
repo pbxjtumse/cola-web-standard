@@ -5,7 +5,6 @@ import com.xjtu.iron.concurrency.api.exception.ThreadPoolNotFoundException;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
@@ -13,12 +12,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  */
 public class DefaultThreadPoolRegistry implements ThreadPoolRegistry {
 
-    /**
-     * 线程池集合。
-     *
-     * <p>key 是线程池名称。</p>
-     */
-    private final Map<String, ExecutorService> executors = new ConcurrentHashMap<>();
+    private final Map<String, ThreadPoolExecutor> executors = new ConcurrentHashMap<>();
 
     @Override
     public ThreadPoolExecutor getExecutor(String executorName) {
@@ -32,8 +26,8 @@ public class DefaultThreadPoolRegistry implements ThreadPoolRegistry {
     }
 
     @Override
-    public void register(String executorName, ExecutorService executorService) {
-        executors.put(executorName, executorService);
+    public void register(String executorName, ThreadPoolExecutor executor) {
+        executors.put(executorName, executor);
     }
 
     @Override
