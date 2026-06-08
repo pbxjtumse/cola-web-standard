@@ -1,4 +1,4 @@
-package com.xjtu.iron.concurrency.core.execution;
+package com.xjtu.iron.concurrency.core.spi;
 
 import com.xjtu.iron.concurrency.api.execution.AsyncTask;
 
@@ -8,8 +8,9 @@ import java.util.function.Supplier;
 /**
  * 任务投递模板。
  *
- * <p>这个接口是并行组件的一期核心：负责把任务安全地提交到 ThreadPoolExecutor。</p>
- * <p>AsyncTemplate 负责 CompletableFuture 编排；本模板负责任务提交链路。</p>
+ * <p>这个接口是 core 内部 SPI，负责把任务安全地提交到 ThreadPoolExecutor。</p>
+ *
+ * <p>AsyncExecutor 是业务入口，AsyncTemplate 是编排模板，而本接口是任务进入线程池前后的标准化执行链路。</p>
  */
 public interface TaskExecutionTemplate {
 

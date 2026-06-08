@@ -15,16 +15,13 @@ public class MdcContextPropagator implements ContextPropagator {
     @Override
     public ContextSnapshot capture() {
         Map<String, String> captured = MDC.getCopyOfContextMap();
-
         return () -> {
             Map<String, String> previous = MDC.getCopyOfContextMap();
-
             if (captured == null || captured.isEmpty()) {
                 MDC.clear();
             } else {
                 MDC.setContextMap(captured);
             }
-
             return new ContextScope() {
                 @Override
                 public void close() {

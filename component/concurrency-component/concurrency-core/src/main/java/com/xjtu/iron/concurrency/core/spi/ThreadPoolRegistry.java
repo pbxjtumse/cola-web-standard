@@ -1,20 +1,20 @@
-package com.xjtu.iron.concurrency.core.execution;
+package com.xjtu.iron.concurrency.core.spi;
 
 import java.util.Map;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
- * 线程池注册中心。
+ * 线程池注册中心 SPI。
  *
- * <p>负责保存所有由并行组件创建和管理的 ThreadPoolExecutor。</p>
+ * <p>负责保存组件创建的所有 ThreadPoolExecutor，并给投递、监控、诊断模块查询使用。</p>
  */
 public interface ThreadPoolRegistry {
 
     /**
-     * 按名称获取线程池。
+     * 根据名称获取线程池。
      *
      * @param executorName 线程池名称
-     * @return 线程池
+     * @return ThreadPoolExecutor
      */
     ThreadPoolExecutor getExecutor(String executorName);
 
@@ -27,10 +27,9 @@ public interface ThreadPoolRegistry {
     void register(String executorName, ThreadPoolExecutor executor);
 
     /**
-     * 返回线程池注册表快照。
+     * 获取注册表快照。
      *
-     * <p>注意：这里返回的是当前注册表的只读 Map 视图，value 仍然是真实 ThreadPoolExecutor。</p>
-     * <p>监控 Gauge 需要引用真实 executor 才能实时读取数据；对外诊断接口应优先使用 ThreadPoolManager#snapshots。</p>
+     * <p>返回的是不可变 Map，但 value 仍然是运行中的 ThreadPoolExecutor 实例。这个方法主要用于监控 Gauge 绑定和运行时诊断。</p>
      *
      * @return 线程池注册表快照
      */

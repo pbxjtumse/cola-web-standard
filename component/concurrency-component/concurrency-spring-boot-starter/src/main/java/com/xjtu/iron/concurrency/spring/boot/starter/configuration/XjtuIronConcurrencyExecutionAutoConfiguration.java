@@ -13,18 +13,23 @@ import com.xjtu.iron.concurrency.core.execution.DefaultTaskExecutionTemplate;
 import com.xjtu.iron.concurrency.core.execution.DefaultThreadPoolFactory;
 import com.xjtu.iron.concurrency.core.execution.DefaultThreadPoolManager;
 import com.xjtu.iron.concurrency.core.execution.DefaultThreadPoolRegistry;
-import com.xjtu.iron.concurrency.core.execution.RejectedExecutionHandlerFactory;
-import com.xjtu.iron.concurrency.core.execution.TaskExecutionTemplate;
-import com.xjtu.iron.concurrency.core.execution.ThreadPoolFactory;
-import com.xjtu.iron.concurrency.core.execution.ThreadPoolRegistry;
+import com.xjtu.iron.concurrency.core.spi.RejectedExecutionHandlerFactory;
+import com.xjtu.iron.concurrency.core.spi.TaskExecutionTemplate;
+import com.xjtu.iron.concurrency.core.spi.ThreadPoolFactory;
+import com.xjtu.iron.concurrency.core.spi.ThreadPoolRegistry;
 import com.xjtu.iron.concurrency.core.metrics.ConcurrencyMetricsRecorder;
+import com.xjtu.iron.concurrency.api.listener.AsyncUncaughtExceptionHandler;
+import com.xjtu.iron.concurrency.api.listener.TaskExecutionListener;
+import com.xjtu.iron.concurrency.core.listener.NoopAsyncUncaughtExceptionHandler;
 import com.xjtu.iron.concurrency.spring.boot.starter.properties.XjtuIronConcurrencyProperties;
 import com.xjtu.iron.concurrency.spring.boot.starter.resolver.PropertiesThreadPoolSpecResolver;
 import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -100,17 +105,28 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public AsyncUncaughtExceptionHandler asyncUncaughtExceptionHandler() {
+        return new NoopAsyncUncaughtExceptionHandler();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public TaskExecutionTemplate taskExecutionTemplate(
             ThreadPoolRegistry threadPoolRegistry,
             ContextAwareTaskDecorator contextAwareTaskDecorator,
             AsyncTemplate asyncTemplate,
-            ConcurrencyMetricsRecorder concurrencyMetricsRecorder
+            ConcurrencyMetricsRecorder concurrencyMetricsRecorder,
+            ObjectProvider<TaskExecutionListener> taskExecutionListeners,
+            AsyncUncaughtExceptionHandler asyncUncaughtExceptionHandler
     ) {
+        List<TaskExecutionListener> listeners = taskExecutionListeners.orderedStream().toList();
         return new DefaultTaskExecutionTemplate(
                 threadPoolRegistry,
                 contextAwareTaskDecorator,
                 asyncTemplate,
-                concurrencyMetricsRecorder
+                concurrencyMetricsRecorder,
+                listeners,
+                asyncUncaughtExceptionHandler
         );
     }
 

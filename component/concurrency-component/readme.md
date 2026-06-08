@@ -62,3 +62,42 @@ P2 / P3 再吸收的
 | Structured Concurrency      | Java 17 不适合直接依赖               |
 | `Exchanger`                 | 场景太窄                          |
 | `SynchronousQueue`          | 可以作为队列类型，但不作为默认               |
+
+
+
+业务代码
+↓
+AsyncExecutor
+↓
+TaskExecutionTemplate
+↓
+ThreadPoolRegistry
+↓
+ThreadPoolExecutor
+↓
+ThreadPoolExecutor.execute(command)
+↓
+RejectedExecutionHandler
+↓
+工作线程执行任务
+↓
+CompletableFuture complete / completeExceptionally
+↓
+AsyncTemplate 做 allOf / anyOf / failFast / outcome
+
+
+二期 
+定时采集 ThreadPoolSnapshot
+↓
+判断 queueUsageRatio / activeUsageRatio
+↓
+自动扩容 core/max
+↓
+压力下降后自动缩容
+
+冷却时间
+最大调整次数
+上限保护
+下限保护
+人工开关
+配置中心回滚

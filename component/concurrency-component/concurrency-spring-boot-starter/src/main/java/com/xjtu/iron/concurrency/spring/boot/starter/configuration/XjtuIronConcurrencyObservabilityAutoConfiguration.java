@@ -1,6 +1,6 @@
 package com.xjtu.iron.concurrency.spring.boot.starter.configuration;
 
-import com.xjtu.iron.concurrency.core.execution.ThreadPoolRegistry;
+import com.xjtu.iron.concurrency.core.spi.ThreadPoolRegistry;
 import com.xjtu.iron.concurrency.core.metrics.ConcurrencyMetricsRecorder;
 import com.xjtu.iron.concurrency.core.metrics.NoopConcurrencyMetricsRecorder;
 import com.xjtu.iron.concurrency.core.metrics.ThreadPoolMetricName;
