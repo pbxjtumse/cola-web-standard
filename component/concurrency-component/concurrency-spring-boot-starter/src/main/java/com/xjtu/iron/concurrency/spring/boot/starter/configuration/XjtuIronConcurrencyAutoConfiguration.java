@@ -18,7 +18,8 @@ import org.springframework.context.annotation.Import;
         XjtuIronConcurrencyContextAutoConfiguration.class,
         XjtuIronConcurrencyExecutionAutoConfiguration.class,
         XjtuIronConcurrencyObservabilityAutoConfiguration.class,
-        XjtuIronConcurrencyDiagnosticsAutoConfiguration.class
+        XjtuIronConcurrencyDiagnosticsAutoConfiguration.class,
+        XjtuIronConcurrencyManagementAutoConfiguration.class
 })
 public class XjtuIronConcurrencyAutoConfiguration {
 }

@@ -1,7 +1,7 @@
 package com.xjtu.iron.concurrency.core.execution;
 
-import com.xjtu.iron.concurrency.core.spi.ThreadPoolRegistry;
 import com.xjtu.iron.concurrency.api.exception.ThreadPoolNotFoundException;
+import com.xjtu.iron.concurrency.core.spi.ThreadPoolRegistry;
 
 import java.util.Collections;
 import java.util.Map;
@@ -18,11 +18,9 @@ public class DefaultThreadPoolRegistry implements ThreadPoolRegistry {
     @Override
     public ThreadPoolExecutor getExecutor(String executorName) {
         ThreadPoolExecutor executor = executors.get(executorName);
-
         if (executor == null) {
             throw new ThreadPoolNotFoundException(executorName);
         }
-
         return executor;
     }
 

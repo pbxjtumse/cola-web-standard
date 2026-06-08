@@ -1,10 +1,10 @@
 package com.xjtu.iron.concurrency.core.execution;
 
-import com.xjtu.iron.concurrency.core.spi.ThreadPoolFactory;
-import com.xjtu.iron.concurrency.core.spi.RejectedExecutionHandlerFactory;
 import com.xjtu.iron.concurrency.api.enums.QueueType;
 import com.xjtu.iron.concurrency.api.exception.ThreadPoolCreateException;
 import com.xjtu.iron.concurrency.api.execution.ThreadPoolSpec;
+import com.xjtu.iron.concurrency.core.spi.RejectedExecutionHandlerFactory;
+import com.xjtu.iron.concurrency.core.spi.ThreadPoolFactory;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -18,15 +18,11 @@ import java.util.concurrent.TimeUnit;
 /**
  * 默认线程池工厂。
  *
- * <p>并行组件最底层明确使用 JDK ThreadPoolExecutor。</p>
+ * <p>并行组件底层明确使用 JDK {@link ThreadPoolExecutor}，便于运行时诊断、指标采集和动态调整。</p>
  */
 public class DefaultThreadPoolFactory implements ThreadPoolFactory {
 
     private final RejectedExecutionHandlerFactory rejectedExecutionHandlerFactory;
-
-    public DefaultThreadPoolFactory() {
-        this(new DefaultRejectedExecutionHandlerFactory());
-    }
 
     public DefaultThreadPoolFactory(RejectedExecutionHandlerFactory rejectedExecutionHandlerFactory) {
         this.rejectedExecutionHandlerFactory = rejectedExecutionHandlerFactory;
@@ -38,7 +34,7 @@ public class DefaultThreadPoolFactory implements ThreadPoolFactory {
             spec.validate();
 
             BlockingQueue<Runnable> queue = createQueue(spec);
-            ThreadFactory threadFactory = createThreadFactory(spec);
+            ThreadFactory threadFactory = new NamedThreadFactory(spec.getThreadNamePrefix());
             RejectedExecutionHandler rejectedExecutionHandler = rejectedExecutionHandlerFactory.create(spec);
 
             ThreadPoolExecutor executor = new ThreadPoolExecutor(
@@ -52,7 +48,6 @@ public class DefaultThreadPoolFactory implements ThreadPoolFactory {
             );
 
             executor.allowCoreThreadTimeOut(spec.isAllowCoreThreadTimeout());
-
             return executor;
         } catch (Exception ex) {
             throw new ThreadPoolCreateException(spec == null ? "unknown" : spec.getName(), ex);
@@ -61,19 +56,12 @@ public class DefaultThreadPoolFactory implements ThreadPoolFactory {
 
     private BlockingQueue<Runnable> createQueue(ThreadPoolSpec spec) {
         QueueType queueType = spec.getQueueType();
-
         if (queueType == QueueType.BOUNDED_ARRAY_BLOCKING_QUEUE) {
             return new ArrayBlockingQueue<>(spec.getQueueCapacity());
         }
-
         if (queueType == QueueType.DIRECT_HANDOFF) {
             return new SynchronousQueue<>();
         }
-
         return new LinkedBlockingQueue<>(spec.getQueueCapacity());
-    }
-
-    private ThreadFactory createThreadFactory(ThreadPoolSpec spec) {
-        return new NamedThreadFactory(spec.getThreadNamePrefix());
     }
 }

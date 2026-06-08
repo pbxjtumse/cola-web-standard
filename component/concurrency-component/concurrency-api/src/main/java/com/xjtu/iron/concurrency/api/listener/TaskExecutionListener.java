@@ -1,77 +1,41 @@
 package com.xjtu.iron.concurrency.api.listener;
 
-import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
-
 /**
  * 任务执行监听器。
  *
- * <p>业务系统可以实现这个接口，把任务生命周期事件接入日志、审计、指标、链路追踪或治理系统。</p>
- *
- * <p>所有方法都有默认空实现，业务只需要覆盖自己关心的阶段。</p>
+ * <p>用于扩展日志、审计、指标、任务状态中心、治理组件联动等能力。</p>
  */
 public interface TaskExecutionListener {
 
-    /**
-     * 任务已提交。
-     *
-     * @param event 任务事件
-     */
+    /** 任务提交到线程池之前触发。 */
     default void onSubmitted(TaskExecutionEvent event) {
     }
 
-    /**
-     * 任务开始执行。
-     *
-     * @param event 任务事件
-     */
+    /** 任务真正开始执行时触发。 */
     default void onStarted(TaskExecutionEvent event) {
     }
 
-    /**
-     * 任务执行成功。
-     *
-     * @param event 任务事件
-     */
+    /** 任务成功完成时触发。 */
     default void onSuccess(TaskExecutionEvent event) {
     }
 
-    /**
-     * 任务执行失败。
-     *
-     * @param event 任务事件
-     */
+    /** 任务执行失败时触发。 */
     default void onFailure(TaskExecutionEvent event) {
     }
 
-    /**
-     * 任务被拒绝。
-     *
-     * @param event 任务事件
-     */
+    /** 任务被线程池拒绝时触发。 */
     default void onRejected(TaskExecutionEvent event) {
     }
 
-    /**
-     * 任务超时。
-     *
-     * @param event 任务事件
-     */
+    /** 任务排队超时或结果层超时时触发。 */
     default void onTimeout(TaskExecutionEvent event) {
     }
 
-    /**
-     * 任务执行 fallback。
-     *
-     * @param event 任务事件
-     */
+    /** fallback 被触发时触发。 */
     default void onFallback(TaskExecutionEvent event) {
     }
 
-    /**
-     * 任务生命周期结束。
-     *
-     * @param event 任务事件
-     */
+    /** 任务进入最终状态时触发。 */
     default void onCompleted(TaskExecutionEvent event) {
     }
 }

@@ -1,9 +1,18 @@
 package com.xjtu.iron.concurrency.core.metrics;
 
+import com.xjtu.iron.concurrency.api.listener.TaskExecutionEvent;
+
 /**
  * 空指标记录器。
- *
- * <p>用于业务没有接入 Micrometer 或其他指标系统时保证组件仍然可以独立运行。</p>
  */
 public class NoopConcurrencyMetricsRecorder implements ConcurrencyMetricsRecorder {
+
+    @Override public void recordSubmitted(TaskExecutionEvent event) { }
+    @Override public void recordStarted(TaskExecutionEvent event) { }
+    @Override public void recordSuccess(TaskExecutionEvent event) { }
+    @Override public void recordFailure(TaskExecutionEvent event) { }
+    @Override public void recordRejected(TaskExecutionEvent event) { }
+    @Override public void recordTimeout(TaskExecutionEvent event) { }
+    @Override public void recordFallback(TaskExecutionEvent event) { }
+    @Override public void recordCompleted(TaskExecutionEvent event) { }
 }

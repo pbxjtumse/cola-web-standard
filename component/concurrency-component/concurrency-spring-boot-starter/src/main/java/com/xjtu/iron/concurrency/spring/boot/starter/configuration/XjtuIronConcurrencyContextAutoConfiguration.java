@@ -5,7 +5,7 @@ import com.xjtu.iron.concurrency.api.context.ContextPropagator;
 import com.xjtu.iron.concurrency.core.context.CompositeContextPropagator;
 import com.xjtu.iron.concurrency.core.context.DefaultContextAwareTaskDecorator;
 import com.xjtu.iron.concurrency.core.context.NoopContextPropagator;
-import com.xjtu.iron.concurrency.integration.observability.MdcContextPropagator;
+import com.xjtu.iron.concurrency.spring.boot.starter.context.MdcContextPropagator;
 import com.xjtu.iron.concurrency.spring.boot.starter.properties.XjtuIronConcurrencyProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -16,19 +16,17 @@ import org.springframework.context.annotation.Bean;
 
 import java.util.List;
 
+/**
+ * 并发组件上下文传播自动装配。
+ */
 @AutoConfiguration
 public class XjtuIronConcurrencyContextAutoConfiguration {
 
     @Bean(name = "ironMdcContextPropagator")
     @ConditionalOnClass(name = "org.slf4j.MDC")
-    @ConditionalOnProperty(
-            prefix = "xjtu.iron.concurrency.context",
-            name = "mdc-enabled",
-            havingValue = "true",
-            matchIfMissing = true
-    )
+    @ConditionalOnProperty(prefix = "xjtu.iron.concurrency.context", name = "mdc-enabled", havingValue = "true", matchIfMissing = true)
     @ConditionalOnMissingBean(name = "ironMdcContextPropagator")
-    public ContextPropagator mdcContextPropagator() {
+    public ContextPropagator ironMdcContextPropagator() {
         return new MdcContextPropagator();
     }
 
@@ -41,17 +39,10 @@ public class XjtuIronConcurrencyContextAutoConfiguration {
         if (!properties.getContext().isEnabled()) {
             return new DefaultContextAwareTaskDecorator(new NoopContextPropagator());
         }
-
-        List<ContextPropagator> propagatorList = contextPropagators
-                .orderedStream()
-                .toList();
-
-        if (propagatorList.isEmpty()) {
+        List<ContextPropagator> propagators = contextPropagators.orderedStream().toList();
+        if (propagators.isEmpty()) {
             return new DefaultContextAwareTaskDecorator(new NoopContextPropagator());
         }
-
-        return new DefaultContextAwareTaskDecorator(
-                new CompositeContextPropagator(propagatorList)
-        );
+        return new DefaultContextAwareTaskDecorator(new CompositeContextPropagator(propagators));
     }
 }

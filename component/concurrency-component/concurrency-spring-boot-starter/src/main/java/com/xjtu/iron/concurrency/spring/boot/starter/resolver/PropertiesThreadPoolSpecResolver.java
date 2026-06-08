@@ -31,14 +31,11 @@ public class PropertiesThreadPoolSpecResolver implements ThreadPoolSpecResolver 
             ThreadPoolSpec defaultSpec = new ThreadPoolSpec();
             defaultSpec.setName(properties.getDefaultExecutor());
             defaultSpec.validate();
-
             result.put(defaultSpec.getName(), defaultSpec);
             return result;
         }
 
-        for (Map.Entry<String, XjtuIronConcurrencyProperties.ThreadPoolProperties> entry
-                : properties.getThreadPools().entrySet()) {
-
+        for (Map.Entry<String, XjtuIronConcurrencyProperties.ThreadPoolProperties> entry : properties.getThreadPools().entrySet()) {
             String poolName = entry.getKey();
             XjtuIronConcurrencyProperties.ThreadPoolProperties poolProperties = entry.getValue();
 
@@ -52,16 +49,9 @@ public class PropertiesThreadPoolSpecResolver implements ThreadPoolSpecResolver 
             spec.setThreadNamePrefix(poolProperties.getThreadNamePrefix());
             spec.setQueueType(poolProperties.getQueueType());
             spec.setRejectionPolicy(poolProperties.getRejectionPolicy());
-
-            if (poolProperties.getRejectionWaitTime() != null) {
-                spec.setRejectionWaitTime(poolProperties.getRejectionWaitTime());
-            } else {
-                spec.setRejectionWaitTime(properties.getRejectionWaitTime());
-            }
-
+            spec.setRejectionWaitTime(poolProperties.getRejectionWaitTime());
             spec.setWaitForTasksToCompleteOnShutdown(poolProperties.isWaitForTasksToCompleteOnShutdown());
             spec.setAwaitTermination(poolProperties.getAwaitTermination());
-
             spec.validate();
 
             result.put(poolName, spec);

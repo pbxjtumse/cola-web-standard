@@ -1,210 +1,205 @@
 package com.xjtu.iron.concurrency.api.execution;
 
-import java.util.concurrent.ThreadPoolExecutor;
-
 /**
- * 线程池运行时快照。
- *
- * <p>这是一个“某一瞬间”的不可变诊断对象，适合暴露给监控、健康检查、管理接口。</p>
+ * 线程池某一时刻的诊断快照。
  */
 public class ThreadPoolSnapshot {
 
     /** 线程池名称。 */
-    private final String executorName;
+    private String executorName;
 
     /** 核心线程数。 */
-    private final int corePoolSize;
+    private int corePoolSize;
 
     /** 最大线程数。 */
-    private final int maximumPoolSize;
+    private int maximumPoolSize;
 
-    /** 当前实际线程数。 */
-    private final int poolSize;
+    /** 当前线程池线程数。 */
+    private int poolSize;
 
-    /** 线程池历史最大线程数。 */
-    private final int largestPoolSize;
+    /** 历史最大线程数。 */
+    private int largestPoolSize;
 
-    /** 当前正在执行任务的线程数。 */
-    private final int activeCount;
+    /** 当前活跃线程数。 */
+    private int activeCount;
 
-    /** 当前队列中等待执行的任务数量。 */
-    private final int queueSize;
+    /** 队列当前任务数。 */
+    private int queueSize;
 
     /** 队列剩余容量。 */
-    private final int queueRemainingCapacity;
+    private int queueRemainingCapacity;
 
-    /** 队列总容量估算值。 */
-    private final int queueCapacity;
+    /** 队列总容量。 */
+    private int queueCapacity;
 
-    /** 活跃线程使用率，activeCount / maximumPoolSize。 */
-    private final double activeUsageRatio;
+    /** 活跃线程使用率：activeCount / maximumPoolSize。 */
+    private double activeUsageRatio;
 
-    /** 队列使用率，queueSize / queueCapacity。 */
-    private final double queueUsageRatio;
+    /** 队列使用率：queueSize / queueCapacity。 */
+    private double queueUsageRatio;
 
-    /** 已完成任务总数。 */
-    private final long completedTaskCount;
+    /** 已完成任务数。 */
+    private long completedTaskCount;
 
-    /** 线程池曾经接收过的任务总数。 */
-    private final long taskCount;
+    /** 总任务数。 */
+    private long taskCount;
 
-    /** 线程池是否已经 shutdown。 */
-    private final boolean shutdown;
+    /** 是否已关闭。 */
+    private boolean shutdown;
 
-    /** 线程池是否正在终止。 */
-    private final boolean terminating;
+    /** 是否正在终止。 */
+    private boolean terminating;
 
-    /** 线程池是否已经完全终止。 */
-    private final boolean terminated;
+    /** 是否已终止。 */
+    private boolean terminated;
 
-    /** 当前拒绝策略实现类名称。 */
-    private final String rejectedExecutionHandler;
+    /** 拒绝策略名称。 */
+    private String rejectedExecutionHandler;
 
-    /**
-     * 创建线程池运行时快照。
-     */
-    public ThreadPoolSnapshot(
-            String executorName,
-            int corePoolSize,
-            int maximumPoolSize,
-            int poolSize,
-            int largestPoolSize,
-            int activeCount,
-            int queueSize,
-            int queueRemainingCapacity,
-            int queueCapacity,
-            double activeUsageRatio,
-            double queueUsageRatio,
-            long completedTaskCount,
-            long taskCount,
-            boolean shutdown,
-            boolean terminating,
-            boolean terminated,
-            String rejectedExecutionHandler
-    ) {
+    /** 是否忙碌，由诊断阈值判断。 */
+    private boolean busy;
+
+    public String getExecutorName() {
+        return executorName;
+    }
+
+    public void setExecutorName(String executorName) {
         this.executorName = executorName;
+    }
+
+    public int getCorePoolSize() {
+        return corePoolSize;
+    }
+
+    public void setCorePoolSize(int corePoolSize) {
         this.corePoolSize = corePoolSize;
+    }
+
+    public int getMaximumPoolSize() {
+        return maximumPoolSize;
+    }
+
+    public void setMaximumPoolSize(int maximumPoolSize) {
         this.maximumPoolSize = maximumPoolSize;
+    }
+
+    public int getPoolSize() {
+        return poolSize;
+    }
+
+    public void setPoolSize(int poolSize) {
         this.poolSize = poolSize;
+    }
+
+    public int getLargestPoolSize() {
+        return largestPoolSize;
+    }
+
+    public void setLargestPoolSize(int largestPoolSize) {
         this.largestPoolSize = largestPoolSize;
+    }
+
+    public int getActiveCount() {
+        return activeCount;
+    }
+
+    public void setActiveCount(int activeCount) {
         this.activeCount = activeCount;
+    }
+
+    public int getQueueSize() {
+        return queueSize;
+    }
+
+    public void setQueueSize(int queueSize) {
         this.queueSize = queueSize;
+    }
+
+    public int getQueueRemainingCapacity() {
+        return queueRemainingCapacity;
+    }
+
+    public void setQueueRemainingCapacity(int queueRemainingCapacity) {
         this.queueRemainingCapacity = queueRemainingCapacity;
+    }
+
+    public int getQueueCapacity() {
+        return queueCapacity;
+    }
+
+    public void setQueueCapacity(int queueCapacity) {
         this.queueCapacity = queueCapacity;
+    }
+
+    public double getActiveUsageRatio() {
+        return activeUsageRatio;
+    }
+
+    public void setActiveUsageRatio(double activeUsageRatio) {
         this.activeUsageRatio = activeUsageRatio;
+    }
+
+    public double getQueueUsageRatio() {
+        return queueUsageRatio;
+    }
+
+    public void setQueueUsageRatio(double queueUsageRatio) {
         this.queueUsageRatio = queueUsageRatio;
+    }
+
+    public long getCompletedTaskCount() {
+        return completedTaskCount;
+    }
+
+    public void setCompletedTaskCount(long completedTaskCount) {
         this.completedTaskCount = completedTaskCount;
+    }
+
+    public long getTaskCount() {
+        return taskCount;
+    }
+
+    public void setTaskCount(long taskCount) {
         this.taskCount = taskCount;
+    }
+
+    public boolean isShutdown() {
+        return shutdown;
+    }
+
+    public void setShutdown(boolean shutdown) {
         this.shutdown = shutdown;
+    }
+
+    public boolean isTerminating() {
+        return terminating;
+    }
+
+    public void setTerminating(boolean terminating) {
         this.terminating = terminating;
+    }
+
+    public boolean isTerminated() {
+        return terminated;
+    }
+
+    public void setTerminated(boolean terminated) {
         this.terminated = terminated;
+    }
+
+    public String getRejectedExecutionHandler() {
+        return rejectedExecutionHandler;
+    }
+
+    public void setRejectedExecutionHandler(String rejectedExecutionHandler) {
         this.rejectedExecutionHandler = rejectedExecutionHandler;
     }
 
-    /**
-     * 从 ThreadPoolExecutor 当前状态生成快照。
-     *
-     * @param executorName 线程池名称
-     * @param executor JDK 线程池
-     * @return 线程池快照
-     */
-    public static ThreadPoolSnapshot from(String executorName, ThreadPoolExecutor executor) {
-        int queueSize = executor.getQueue().size();
-        int remainingCapacity = executor.getQueue().remainingCapacity();
-        int queueCapacity = safeQueueCapacity(queueSize, remainingCapacity);
-
-        double activeUsageRatio = executor.getMaximumPoolSize() <= 0
-                ? 0D
-                : (double) executor.getActiveCount() / executor.getMaximumPoolSize();
-
-        double queueUsageRatio = queueCapacity <= 0 || queueCapacity == Integer.MAX_VALUE
-                ? 0D
-                : (double) queueSize / queueCapacity;
-
-        return new ThreadPoolSnapshot(
-                executorName,
-                executor.getCorePoolSize(),
-                executor.getMaximumPoolSize(),
-                executor.getPoolSize(),
-                executor.getLargestPoolSize(),
-                executor.getActiveCount(),
-                queueSize,
-                remainingCapacity,
-                queueCapacity,
-                activeUsageRatio,
-                queueUsageRatio,
-                executor.getCompletedTaskCount(),
-                executor.getTaskCount(),
-                executor.isShutdown(),
-                executor.isTerminating(),
-                executor.isTerminated(),
-                executor.getRejectedExecutionHandler().getClass().getName()
-        );
+    public boolean isBusy() {
+        return busy;
     }
 
-    /**
-     * 安全估算队列总容量。
-     *
-     * @param queueSize 当前队列大小
-     * @param remainingCapacity 队列剩余容量
-     * @return 队列容量估算值
-     */
-    private static int safeQueueCapacity(int queueSize, int remainingCapacity) {
-        if (remainingCapacity == Integer.MAX_VALUE) {
-            return Integer.MAX_VALUE;
-        }
-        long capacity = (long) queueSize + remainingCapacity;
-        return capacity > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) capacity;
+    public void setBusy(boolean busy) {
+        this.busy = busy;
     }
-
-    /** @return 线程池名称 */
-    public String getExecutorName() { return executorName; }
-
-    /** @return 核心线程数 */
-    public int getCorePoolSize() { return corePoolSize; }
-
-    /** @return 最大线程数 */
-    public int getMaximumPoolSize() { return maximumPoolSize; }
-
-    /** @return 当前实际线程数 */
-    public int getPoolSize() { return poolSize; }
-
-    /** @return 历史最大线程数 */
-    public int getLargestPoolSize() { return largestPoolSize; }
-
-    /** @return 当前活跃线程数 */
-    public int getActiveCount() { return activeCount; }
-
-    /** @return 当前队列大小 */
-    public int getQueueSize() { return queueSize; }
-
-    /** @return 队列剩余容量 */
-    public int getQueueRemainingCapacity() { return queueRemainingCapacity; }
-
-    /** @return 队列容量估算值 */
-    public int getQueueCapacity() { return queueCapacity; }
-
-    /** @return 活跃线程使用率 */
-    public double getActiveUsageRatio() { return activeUsageRatio; }
-
-    /** @return 队列使用率 */
-    public double getQueueUsageRatio() { return queueUsageRatio; }
-
-    /** @return 已完成任务数 */
-    public long getCompletedTaskCount() { return completedTaskCount; }
-
-    /** @return 任务总数 */
-    public long getTaskCount() { return taskCount; }
-
-    /** @return 是否已 shutdown */
-    public boolean isShutdown() { return shutdown; }
-
-    /** @return 是否正在终止 */
-    public boolean isTerminating() { return terminating; }
-
-    /** @return 是否已终止 */
-    public boolean isTerminated() { return terminated; }
-
-    /** @return 拒绝策略实现类名称 */
-    public String getRejectedExecutionHandler() { return rejectedExecutionHandler; }
 }

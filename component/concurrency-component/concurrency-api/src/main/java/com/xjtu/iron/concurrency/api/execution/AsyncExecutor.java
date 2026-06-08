@@ -6,35 +6,23 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 /**
- * 异步执行器 负责提交单个任务
+ * 异步执行器。
  *
- * 所以对于 run / supply / submit，推荐策略是：
- * ABORT
- * CALLER_RUNS
- * BLOCKING_WAIT
- *
- * <p>业务系统提交异步任务的统一入口。</p>
+ * <p>业务系统提交异步任务的统一入口。它只负责提交单个任务；多个任务的组合编排交给 {@link AsyncTemplate}。</p>
  */
 public interface AsyncExecutor {
 
     /**
-     * 只提交，不关心结果
+     * 只提交任务，不关心结果。
      *
-     * <p>不返回 Future，不参与 CompletableFuture 编排。</p>
-     * <p>适合 fire-and-forget 场景，例如异步日志、异步通知、轻量后台任务。</p>
-     *
-     * <p>注意：任务执行异常无法由调用方通过 Future 感知，只能依赖日志、指标、告警。</p>
-     *
-     * @param executorName 线程池名称
-     * @param taskName 任务名称
-     * @param runnable 任务逻辑
+     * <p>适合异步日志、埋点、弱依赖通知、缓存清理等 fire-and-forget 场景。</p>
      */
     void execute(String executorName, String taskName, Runnable runnable);
 
     /**
-     * 尝试提交，失败返回 false
+     * 尝试提交任务。
      *
-     * <p>被线程池拒绝时返回 false，不抛异常。</p>
+     * <p>只有线程池拒绝时返回 {@code false}；参数错误、线程池不存在等问题仍然会抛异常。</p>
      */
     default boolean tryExecute(String executorName, String taskName, Runnable runnable) {
         try {
@@ -46,40 +34,19 @@ public interface AsyncExecutor {
     }
 
     /**
-     * 提交一个无返回值的异步任务。
-     *
-     * <p>返回 CompletableFuture，适合调用方需要感知完成、异常、超时或参与编排的场景。</p>
-     *
-     * @param executorName 线程池名称
-     * @param taskName 任务名称
-     * @param runnable 任务逻辑
-     * @return CompletableFuture
-     */
-    CompletableFuture<Void> run(String executorName, String taskName, Runnable runnable);
-
-
-
-    /**
      * 提交一个有返回值的异步任务。
-     *
-     * <p>返回 CompletableFuture，适合后续做 allOf / anyOf / timeout / fallback 等编排。</p>
-     *
-     * @param executorName 线程池名称
-     * @param taskName 任务名称，用于日志、指标、排查问题
-     * @param supplier 任务逻辑
-     * @return CompletableFuture
      */
     <T> CompletableFuture<T> supply(String executorName, String taskName, Supplier<T> supplier);
 
-
+    /**
+     * 提交一个无业务返回值的异步任务，但可以通过 {@code CompletableFuture<Void>} 感知完成和异常。
+     */
+    CompletableFuture<Void> run(String executorName, String taskName, Runnable runnable);
 
     /**
-     * 提交完整任务模型。
+     * 提交完整异步任务模型。
      *
-     * <p>适合需要 timeout、fallback、上下文控制的复杂任务。</p>
-     *
-     * @param task 异步任务模型
-     * @return CompletableFuture
+     * <p>适合需要 timeout、fallback、queueTimeout、上下文控制、任务元数据的复杂任务。</p>
      */
     <T> CompletableFuture<T> submit(AsyncTask<T> task);
 }

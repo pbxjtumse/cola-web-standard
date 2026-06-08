@@ -1,8 +1,8 @@
 package com.xjtu.iron.concurrency.core.execution;
 
-import com.xjtu.iron.concurrency.core.spi.TaskExecutionTemplate;
 import com.xjtu.iron.concurrency.api.execution.AsyncExecutor;
 import com.xjtu.iron.concurrency.api.execution.AsyncTask;
+import com.xjtu.iron.concurrency.core.spi.TaskExecutionTemplate;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -10,7 +10,7 @@ import java.util.function.Supplier;
 /**
  * 默认异步执行器。
  *
- * <p>业务入口保持薄封装，真正投递链路交给 TaskExecutionTemplate。</p>
+ * <p>该类只作为业务入口，实际投递流程交给 {@link TaskExecutionTemplate}。</p>
  */
 public class DefaultAsyncExecutor implements AsyncExecutor {
 
@@ -31,13 +31,13 @@ public class DefaultAsyncExecutor implements AsyncExecutor {
     }
 
     @Override
-    public CompletableFuture<Void> run(String executorName, String taskName, Runnable runnable) {
-        return taskExecutionTemplate.run(executorName, taskName, runnable);
+    public <T> CompletableFuture<T> supply(String executorName, String taskName, Supplier<T> supplier) {
+        return taskExecutionTemplate.supply(executorName, taskName, supplier);
     }
 
     @Override
-    public <T> CompletableFuture<T> supply(String executorName, String taskName, Supplier<T> supplier) {
-        return taskExecutionTemplate.supply(executorName, taskName, supplier);
+    public CompletableFuture<Void> run(String executorName, String taskName, Runnable runnable) {
+        return taskExecutionTemplate.run(executorName, taskName, runnable);
     }
 
     @Override

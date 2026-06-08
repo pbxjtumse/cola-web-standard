@@ -7,7 +7,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 /**
- * CompletableFuture 编排模板。 负责组合多个任务
+ * CompletableFuture 编排模板。
  * | 方法              | 是否等待全部任务 | 是否允许部分成功 | 任一失败会怎样      | 适合场景          |
  * | --------------- | -------: | -------: | ------------ | ------------- |
  * | `allOf`         |        是 |        否 | 整体失败         | 所有任务都是强依赖     |
@@ -65,9 +65,16 @@ public interface AsyncTemplate {
     /**
      * 谁先完成，就返回谁的结果。
      * 第一个完成的任务如果失败，整体也可能失败。注意 anyOf 是“第一个完成”，不是“第一个成功”。
-     * 也就是说，第一个完成的是异常，它也会结束。
      */
     <T> CompletableFuture<T> anyOf(Collection<CompletableFuture<T>> futures);
+
+    /**
+     * 返回第一个成功完成的 Future 结果。
+     *
+     * <p>和 anyOf 不同：anyOf 是第一个完成，可能是失败；anySuccess 会忽略失败任务，直到拿到第一个成功结果。
+     * 如果所有任务都失败，则整体失败。</p>
+     */
+    <T> CompletableFuture<T> anySuccess(Collection<CompletableFuture<T>> futures);
 
     /**
      * 给 Future 增加结果层超时。
