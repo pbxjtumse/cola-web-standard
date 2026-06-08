@@ -88,13 +88,61 @@ public class DefaultAsyncTemplate implements AsyncTemplate {
 
     @Override
     public <T> CompletableFuture<T> anyOf(Collection<CompletableFuture<T>> futures) {
-        CompletableFuture<?>[] array = futures.toArray(new CompletableFuture[0]);
+        if (futures == null || futures.isEmpty()) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("futures must not be empty"));
+        }
 
-        return CompletableFuture.anyOf(array).thenApply(value -> (T) value);
+        CompletableFuture<T> result = new CompletableFuture<>();
+        for (CompletableFuture<T> future : futures) {
+            future.whenComplete((value, error) -> {
+                if (error == null) {
+                    result.complete(value);
+                } else {
+                    result.completeExceptionally(unwrap(error));
+                }
+            });
+        }
+
+        return result;
     }
 
     @Override
-    public <T> CompletableFuture<T> withTimeout(CompletableFuture<T> future, Duration timeout) {
+    public <T> CompletableFuture<T> anySuccess(Collection<CompletableFuture<T>> futures) {
+        if (futures == null || futures.isEmpty()) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("futures must not be empty"));
+        }
+
+        CompletableFuture<T> result = new CompletableFuture<>();
+        java.util.concurrent.atomic.AtomicInteger failureCount = new java.util.concurrent.atomic.AtomicInteger(0);
+        java.util.List<Throwable> errors = new java.util.concurrent.CopyOnWriteArrayList<>();
+        int total = futures.size();
+
+        for (CompletableFuture<T> future : futures) {
+            future.whenComplete((value, error) -> {
+                if (error == null) {
+                    result.complete(value);
+                    return;
+                }
+
+                errors.add(unwrap(error));
+                if (failureCount.incrementAndGet() == total) {
+                    RuntimeException allFailed = new RuntimeException("All futures failed");
+                    for (Throwable throwable : errors) {
+                        allFailed.addSuppressed(throwable);
+                    }
+                    result.completeExceptionally(allFailed);
+                }
+            });
+        }
+
+        return result;
+    }
+
+    @Override
+    public <T> CompletableFuture<T> withTimeout(
+            CompletableFuture<T> future,
+            Duration timeout
+    ) {
         if (timeout == null || timeout.isZero() || timeout.isNegative()) {
             return future;
         }
@@ -103,7 +151,10 @@ public class DefaultAsyncTemplate implements AsyncTemplate {
     }
 
     @Override
-    public <T> CompletableFuture<T> withFallback(CompletableFuture<T> future, Function<Throwable, T> fallback) {
+    public <T> CompletableFuture<T> withFallback(
+            CompletableFuture<T> future,
+            Function<Throwable, T> fallback
+    ) {
         if (fallback == null) {
             return future;
         }
