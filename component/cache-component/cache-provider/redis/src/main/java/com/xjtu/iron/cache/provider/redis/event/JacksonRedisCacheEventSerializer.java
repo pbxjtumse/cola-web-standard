@@ -39,12 +39,19 @@ public class JacksonRedisCacheEventSerializer implements RedisCacheEventSerializ
         /*
          * 枚举大小写宽松匹配。
          */
-        this.objectMapper.configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS, true);
+        this.objectMapper.setConfig(
+                this.objectMapper.getSerializationConfig()
+                        .with(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS)
+        );
+        this.objectMapper.setConfig(
+                this.objectMapper.getDeserializationConfig()
+                        .with(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS)
+        );
 
         /*
          * JSON 里不输出 null 字段，降低消息体积。
          */
-        this.objectMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        this.objectMapper.setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
     }
 
     @Override

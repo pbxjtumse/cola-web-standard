@@ -6,6 +6,11 @@ xjtu:
     concurrency:
       enabled: true
       default-executor: default
+      diagnostics:
+        enabled: true
+        active-usage-warn-threshold: 0.9
+        queue-usage-warn-threshold: 0.8
+        down-when-busy: false
       context:
         enabled: true
         mdc-enabled: true
