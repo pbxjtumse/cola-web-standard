@@ -8,12 +8,7 @@ import org.springframework.context.annotation.Import;
 
 @AutoConfiguration
 @EnableConfigurationProperties(XjtuIronConcurrencyProperties.class)
-@ConditionalOnProperty(
-        prefix = "xjtu.iron.concurrency",
-        name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true
-)
+@ConditionalOnProperty(prefix = "xjtu.iron.concurrency", name = "enabled", havingValue = "true", matchIfMissing = true)
 @Import({
         XjtuIronConcurrencyContextAutoConfiguration.class,
         XjtuIronConcurrencyExecutionAutoConfiguration.class,

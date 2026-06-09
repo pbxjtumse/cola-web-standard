@@ -8,7 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 任务执行事件。
+ * 任务执行事件。对外事件模型，监听器参数
  *
  * <p>该对象用于监听器、指标记录器、异常处理器之间传递任务状态和耗时数据。</p>
  */

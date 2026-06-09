@@ -3,7 +3,7 @@ package com.xjtu.iron.concurrency.api.listener;
 import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
 
 /**
- * 任务执行监听器。
+ * 任务执行监听器。业务方要实现的监听器接口
  *
  * <p>用于扩展日志、审计、指标、任务状态中心、治理组件联动等能力。</p>
  */

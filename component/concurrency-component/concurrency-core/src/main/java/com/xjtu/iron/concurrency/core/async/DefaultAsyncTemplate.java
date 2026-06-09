@@ -1,4 +1,4 @@
-package com.xjtu.iron.concurrency.core.execution;
+package com.xjtu.iron.concurrency.core.async;
 
 import com.xjtu.iron.concurrency.api.execution.AsyncBatchResult;
 import com.xjtu.iron.concurrency.api.execution.AsyncTaskOutcome;
@@ -23,7 +23,7 @@ public class DefaultAsyncTemplate implements AsyncTemplate {
         CompletableFuture<?>[] array = futures.toArray(new CompletableFuture[0]);
 
         return CompletableFuture.allOf(array)
-                .thenApply(ignored -> futures.stream()
+                        .thenApply(ignored -> futures.stream()
                         .map(CompletableFuture::join)
                         .toList());
     }

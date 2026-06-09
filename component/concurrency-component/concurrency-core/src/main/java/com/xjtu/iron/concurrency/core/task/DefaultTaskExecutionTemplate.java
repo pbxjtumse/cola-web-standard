@@ -1,4 +1,4 @@
-package com.xjtu.iron.concurrency.core.execution;
+package com.xjtu.iron.concurrency.core.task;
 
 import com.xjtu.iron.concurrency.api.context.ContextAwareTaskDecorator;
 import com.xjtu.iron.concurrency.api.enums.AsyncTaskStatus;
@@ -93,10 +93,8 @@ public class DefaultTaskExecutionTemplate implements TaskExecutionTemplate {
 
     private <T> CompletableFuture<T> submitInternal(AsyncTask<T> task, boolean fireAndForget) {
         task.validate();
-
         ThreadPoolExecutor executor = threadPoolRegistry.getExecutor(task.getExecutorName());
         CompletableFuture<T> baseFuture = new CompletableFuture<>();
-
         Supplier<T> supplier = task.isContextPropagation()
                 ? taskDecorator.decorate(task.getSupplier())
                 : task.getSupplier();

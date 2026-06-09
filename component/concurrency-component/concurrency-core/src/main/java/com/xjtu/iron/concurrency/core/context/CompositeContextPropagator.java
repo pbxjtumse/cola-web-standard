@@ -17,9 +17,7 @@ public class CompositeContextPropagator implements ContextPropagator {
 
     @Override
     public ContextSnapshot capture() {
-        List<ContextSnapshot> snapshots = propagators.stream()
-                .map(ContextPropagator::capture)
-                .toList();
+        List<ContextSnapshot> snapshots = propagators.stream().map(ContextPropagator::capture).toList();
 
         return () -> {
             List<ContextScope> scopes = new ArrayList<>();

@@ -3,7 +3,7 @@ package com.xjtu.iron.concurrency.api.listener;
 import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
 
 /**
- * fire-and-forget 任务异常处理器。
+ * fire-and-forget 任务异常处理器。 业务方要实现的异常处理接口
  *
  * <p>{@code AsyncExecutor.execute(...)} 不返回 {@code CompletableFuture}，调用方无法直接感知异步异常。
  * 该接口用于统一兜底处理这类异常。</p>

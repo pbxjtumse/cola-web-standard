@@ -1,4 +1,4 @@
-package com.xjtu.iron.concurrency.core.execution;
+package com.xjtu.iron.concurrency.core.task;
 
 /**
  * 可感知拒绝的任务。

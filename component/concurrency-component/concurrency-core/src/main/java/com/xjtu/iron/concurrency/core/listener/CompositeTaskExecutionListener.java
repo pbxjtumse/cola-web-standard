@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 组合任务执行监听器。
+ * 组合任务执行监听器。组件内部组合实现
  *
  * <p>
  * 该类用于将多个 {@link TaskExecutionListener} 聚合为一个监听器，

@@ -60,7 +60,7 @@ public class AsyncTemplateDemoController {
     public Map<String, Object> allOf() {
         CompletableFuture<String> userFuture = asyncExecutor.supply(BIZ_QUERY_EXECUTOR, "queryUser", () -> "user");
         CompletableFuture<String> accountFuture = asyncExecutor.supply(BIZ_QUERY_EXECUTOR, "queryAccount", () -> "account");
-
+        //join() 会阻塞当前执行的线程
         List<String> values = asyncTemplate.allOf(List.of(userFuture, accountFuture)).join();
 
         return Map.of(

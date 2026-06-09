@@ -1,4 +1,4 @@
-package com.xjtu.iron.concurrency.core.execution;
+package com.xjtu.iron.concurrency.core.registry;
 
 import com.xjtu.iron.concurrency.api.execution.TaskExecutionRegistry;
 import com.xjtu.iron.concurrency.api.execution.TaskExecutionSnapshot;
