@@ -1,9 +1,9 @@
 package com.xjtu.iron.concurrency.core.async;
 
-import com.xjtu.iron.concurrency.api.execution.AsyncBatchResult;
-import com.xjtu.iron.concurrency.api.execution.AsyncTaskOutcome;
-import com.xjtu.iron.concurrency.api.execution.AsyncTemplate;
-import com.xjtu.iron.concurrency.api.execution.NamedFuture;
+import com.xjtu.iron.concurrency.api.execution.template.AsyncBatchResult;
+import com.xjtu.iron.concurrency.api.execution.template.AsyncTaskOutcome;
+import com.xjtu.iron.concurrency.api.execution.template.AsyncTemplate;
+import com.xjtu.iron.concurrency.api.execution.template.NamedFuture;
 
 import java.time.Duration;
 import java.util.ArrayList;

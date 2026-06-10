@@ -1,9 +1,9 @@
 package com.xjtu.iron.concurrency.spring.boot.starter.endpoint;
 
-import com.xjtu.iron.concurrency.api.execution.TaskExecutionRegistry;
-import com.xjtu.iron.concurrency.api.execution.TaskExecutionSnapshot;
-import com.xjtu.iron.concurrency.api.execution.ThreadPoolManager;
-import com.xjtu.iron.concurrency.api.execution.ThreadPoolSnapshot;
+import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionRegistry;
+import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionSnapshot;
+import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolManager;
+import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolSnapshot;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;

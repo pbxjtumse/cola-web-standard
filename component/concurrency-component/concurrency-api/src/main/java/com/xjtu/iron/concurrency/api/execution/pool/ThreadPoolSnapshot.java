@@ -1,4 +1,4 @@
-package com.xjtu.iron.concurrency.api.execution;
+package com.xjtu.iron.concurrency.api.execution.pool;
 
 /**
  * 线程池某一时刻的诊断快照。

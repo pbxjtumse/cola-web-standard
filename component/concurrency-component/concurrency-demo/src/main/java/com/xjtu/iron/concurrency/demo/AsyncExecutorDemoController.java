@@ -1,7 +1,7 @@
 package com.xjtu.iron.concurrency.demo;
 
-import com.xjtu.iron.concurrency.api.execution.AsyncExecutor;
-import com.xjtu.iron.concurrency.api.execution.AsyncTask;
+import com.xjtu.iron.concurrency.api.execution.executor.AsyncExecutor;
+import com.xjtu.iron.concurrency.api.execution.task.AsyncTask;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;

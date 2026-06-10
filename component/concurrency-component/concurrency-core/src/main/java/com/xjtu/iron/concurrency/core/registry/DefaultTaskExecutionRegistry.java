@@ -1,7 +1,7 @@
 package com.xjtu.iron.concurrency.core.registry;
 
-import com.xjtu.iron.concurrency.api.execution.TaskExecutionRegistry;
-import com.xjtu.iron.concurrency.api.execution.TaskExecutionSnapshot;
+import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionRegistry;
+import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionSnapshot;
 
 import java.util.ArrayList;
 import java.util.Comparator;

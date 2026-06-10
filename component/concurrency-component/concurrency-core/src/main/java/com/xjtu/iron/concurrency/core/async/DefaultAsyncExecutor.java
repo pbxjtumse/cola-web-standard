@@ -1,7 +1,7 @@
 package com.xjtu.iron.concurrency.core.async;
 
-import com.xjtu.iron.concurrency.api.execution.AsyncExecutor;
-import com.xjtu.iron.concurrency.api.execution.AsyncTask;
+import com.xjtu.iron.concurrency.api.execution.executor.AsyncExecutor;
+import com.xjtu.iron.concurrency.api.execution.task.AsyncTask;
 import com.xjtu.iron.concurrency.core.spi.TaskExecutionTemplate;
 
 import java.util.concurrent.CompletableFuture;

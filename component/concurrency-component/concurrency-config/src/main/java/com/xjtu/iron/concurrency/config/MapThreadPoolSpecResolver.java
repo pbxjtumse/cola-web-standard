@@ -1,6 +1,6 @@
 package com.xjtu.iron.concurrency.config;
 
-import com.xjtu.iron.concurrency.api.execution.ThreadPoolSpec;
+import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolSpec;
 
 import java.util.Map;
 

@@ -1,6 +1,6 @@
 package com.xjtu.iron.concurrency.demo;
 
-import com.xjtu.iron.concurrency.api.execution.AsyncExecutor;
+import com.xjtu.iron.concurrency.api.execution.executor.AsyncExecutor;
 import org.slf4j.MDC;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

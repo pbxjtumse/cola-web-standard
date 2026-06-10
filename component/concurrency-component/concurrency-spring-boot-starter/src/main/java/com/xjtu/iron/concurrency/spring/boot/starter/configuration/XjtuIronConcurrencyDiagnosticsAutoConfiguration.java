@@ -1,7 +1,7 @@
 package com.xjtu.iron.concurrency.spring.boot.starter.configuration;
 
-import com.xjtu.iron.concurrency.api.execution.ThreadPoolManager;
-import com.xjtu.iron.concurrency.api.execution.ThreadPoolSnapshot;
+import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolManager;
+import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolSnapshot;
 import com.xjtu.iron.concurrency.spring.boot.starter.properties.XjtuIronConcurrencyProperties;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;

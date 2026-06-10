@@ -1,6 +1,6 @@
 package com.xjtu.iron.concurrency.spring.boot.starter.resolver;
 
-import com.xjtu.iron.concurrency.api.execution.ThreadPoolSpec;
+import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolSpec;
 import com.xjtu.iron.concurrency.config.ThreadPoolSpecResolver;
 import com.xjtu.iron.concurrency.spring.boot.starter.properties.XjtuIronConcurrencyProperties;
 

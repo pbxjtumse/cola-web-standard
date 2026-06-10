@@ -1,10 +1,10 @@
 package com.xjtu.iron.concurrency.demo;
 
-import com.xjtu.iron.concurrency.api.execution.AsyncBatchResult;
-import com.xjtu.iron.concurrency.api.execution.AsyncExecutor;
-import com.xjtu.iron.concurrency.api.execution.AsyncTaskOutcome;
-import com.xjtu.iron.concurrency.api.execution.AsyncTemplate;
-import com.xjtu.iron.concurrency.api.execution.NamedFuture;
+import com.xjtu.iron.concurrency.api.execution.template.AsyncBatchResult;
+import com.xjtu.iron.concurrency.api.execution.executor.AsyncExecutor;
+import com.xjtu.iron.concurrency.api.execution.template.AsyncTaskOutcome;
+import com.xjtu.iron.concurrency.api.execution.template.AsyncTemplate;
+import com.xjtu.iron.concurrency.api.execution.template.NamedFuture;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;

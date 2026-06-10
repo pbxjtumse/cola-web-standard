@@ -1,6 +1,6 @@
 package com.xjtu.iron.concurrency.core.spi;
 
-import com.xjtu.iron.concurrency.api.execution.AsyncTask;
+import com.xjtu.iron.concurrency.api.execution.task.AsyncTask;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
