@@ -1,6 +1,7 @@
 package com.xjtu.iron.concurrency.spring.boot.starter.configuration;
 
 import com.xjtu.iron.concurrency.api.context.ContextAwareTaskDecorator;
+import com.xjtu.iron.concurrency.api.error.AsyncErrorClassifier;
 import com.xjtu.iron.concurrency.api.execution.executor.AsyncExecutor;
 import com.xjtu.iron.concurrency.api.execution.template.AsyncTemplate;
 import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionRegistry;
@@ -17,7 +18,10 @@ import com.xjtu.iron.concurrency.core.task.DefaultTaskExecutionTemplate;
 import com.xjtu.iron.concurrency.core.execution.DefaultThreadPoolFactory;
 import com.xjtu.iron.concurrency.core.execution.DefaultThreadPoolManager;
 import com.xjtu.iron.concurrency.core.execution.DefaultThreadPoolRegistry;
+import com.xjtu.iron.concurrency.core.error.DefaultAsyncErrorClassifier;
+import com.xjtu.iron.concurrency.core.listener.CompositeTaskExecutionListener;
 import com.xjtu.iron.concurrency.core.listener.NoopAsyncUncaughtExceptionHandler;
+import com.xjtu.iron.concurrency.core.listener.NoopTaskExecutionListener;
 import com.xjtu.iron.concurrency.core.metrics.ConcurrencyMetricsRecorder;
 import com.xjtu.iron.concurrency.core.spi.RejectedExecutionHandlerFactory;
 import com.xjtu.iron.concurrency.core.spi.TaskExecutionTemplate;
@@ -27,6 +31,7 @@ import com.xjtu.iron.concurrency.spring.boot.starter.properties.XjtuIronConcurre
 import com.xjtu.iron.concurrency.spring.boot.starter.resolver.PropertiesThreadPoolSpecResolver;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -105,24 +110,43 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public AsyncErrorClassifier asyncErrorClassifier() {
+        return new DefaultAsyncErrorClassifier();
+    }
+
+    @Bean(name = "ironTaskExecutionListener")
+    @ConditionalOnMissingBean(name = "ironTaskExecutionListener")
+    public TaskExecutionListener ironTaskExecutionListener(ObjectProvider<TaskExecutionListener> listeners) {
+        List<TaskExecutionListener> listenerList = listeners.orderedStream()
+                .filter(listener -> !(listener instanceof CompositeTaskExecutionListener))
+                .toList();
+        if (listenerList.isEmpty()) {
+            return new NoopTaskExecutionListener();
+        }
+        return new CompositeTaskExecutionListener(listenerList);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public TaskExecutionTemplate taskExecutionTemplate(
             ThreadPoolRegistry threadPoolRegistry,
             ContextAwareTaskDecorator contextAwareTaskDecorator,
             AsyncTemplate asyncTemplate,
             ConcurrencyMetricsRecorder concurrencyMetricsRecorder,
-            ObjectProvider<TaskExecutionListener> listeners,
+            @Qualifier("ironTaskExecutionListener") TaskExecutionListener ironTaskExecutionListener,
             AsyncUncaughtExceptionHandler asyncUncaughtExceptionHandler,
-            TaskExecutionRegistry taskExecutionRegistry
+            TaskExecutionRegistry taskExecutionRegistry,
+            AsyncErrorClassifier asyncErrorClassifier
     ) {
-        List<TaskExecutionListener> listenerList = listeners.orderedStream().toList();
         return new DefaultTaskExecutionTemplate(
                 threadPoolRegistry,
                 contextAwareTaskDecorator,
                 asyncTemplate,
                 concurrencyMetricsRecorder,
-                listenerList,
+                ironTaskExecutionListener,
                 asyncUncaughtExceptionHandler,
-                taskExecutionRegistry
+                taskExecutionRegistry,
+                asyncErrorClassifier
         );
     }
 

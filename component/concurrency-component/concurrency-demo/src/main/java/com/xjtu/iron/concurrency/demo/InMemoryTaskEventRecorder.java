@@ -68,6 +68,11 @@ public class InMemoryTaskEventRecorder implements TaskExecutionListener, AsyncUn
     }
 
     @Override
+    public void onCancelled(TaskExecutionEvent event) {
+        addEvent("onCancelled", event);
+    }
+
+    @Override
     public void onFallback(TaskExecutionEvent event) {
         addEvent("onFallback", event);
     }
@@ -141,8 +146,12 @@ public class InMemoryTaskEventRecorder implements TaskExecutionListener, AsyncUn
         row.put("runCostMillis", event.getRunCostMillis());
         row.put("totalCostMillis", event.getTotalCostMillis());
         row.put("message", event.getMessage());
-        if (event.getThrowable() != null) {
-            row.put("throwable", event.getThrowable().getClass().getSimpleName() + ": " + event.getThrowable().getMessage());
+        row.put("error", event.getError());
+        if (event.getError() != null
+                && event.getError().getException() != null
+                && event.getError().getException().getThrowable() != null) {
+            Throwable throwable = event.getError().getException().getThrowable();
+            row.put("throwable", throwable.getClass().getSimpleName() + ": " + throwable.getMessage());
         }
         return row;
     }

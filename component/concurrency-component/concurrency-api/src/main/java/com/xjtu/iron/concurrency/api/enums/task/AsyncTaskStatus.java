@@ -2,20 +2,6 @@ package com.xjtu.iron.concurrency.api.enums.task;
 
 /**
  * 异步任务状态。
- * | 状态          | 谁设置                                           | 什么时候设置                   |
- * | ----------- | --------------------------------------------- | ------------------------ |
- * | `CREATED`   | `AsyncTask` / registry                        | 任务对象刚创建，可选               |
- * | `SUBMITTED` | `DefaultTaskExecutionTemplate`                | 任务准备提交给线程池               |
- * | `RUNNING`   | `TaskCommand.run()`                           | 工作线程真正开始执行               |
- * | `SUCCESS`   | `TaskCommand.run()`                           | supplier/runnable 正常执行完成 |
- * | `FAILED`    | `TaskCommand.run()`                           | supplier/runnable 抛异常    |
- * | `REJECTED`  | `TaskCommand.reject()`                        | 线程池拒绝任务                  |
- * | `TIMEOUT`   | `DefaultTaskExecutionTemplate`                | `withTimeout` 触发结果层超时    |
- * | `CANCELLED` | `TaskCommand.cancelRunning()` / Future cancel | 用户取消或超时后尝试取消             |
- * | `FALLBACK`  | `DefaultTaskExecutionTemplate`                | fallback 被执行并返回降级结果      |
- */
-/**
- * 异步任务状态。
  *
  * <p>
  * 用于描述异步任务当前所处的生命周期阶段，或者最终以什么状态结束。
@@ -69,7 +55,18 @@ public enum AsyncTaskStatus {
     CANCELLED,
 
     /**
-     * 原始任务失败或超时后，fallback 执行成功。
+     * fallback 被触发。
+     *
+     * <p>
+     * 这是一个过渡状态，不表示 fallback 已经成功返回。
+     * 如果 fallback 返回降级值，应进一步记录为 FALLBACK_SUCCESS；
+     * 如果 fallback 自身抛出异常，应进一步记录为 FALLBACK_FAILED。
+     * </p>
+     */
+    FALLBACK,
+
+    /**
+     * 原始任务失败或超时后，fallback 执行成功，并返回降级结果。
      */
     FALLBACK_SUCCESS,
 

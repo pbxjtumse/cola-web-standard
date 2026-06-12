@@ -53,6 +53,11 @@ public class MicrometerConcurrencyMetricsRecorder implements ConcurrencyMetricsR
     }
 
     @Override
+    public void recordCancelled(TaskExecutionEvent event) {
+        counter("xjtu.iron.concurrency.task.cancelled", event).increment();
+    }
+
+    @Override
     public void recordFallback(TaskExecutionEvent event) {
         counter("xjtu.iron.concurrency.task.fallback", event).increment();
     }

@@ -62,6 +62,11 @@ public class CompositeTaskExecutionListener implements TaskExecutionListener {
     }
 
     @Override
+    public void onCancelled(TaskExecutionEvent event) {
+        invoke(listener -> listener.onCancelled(event));
+    }
+
+    @Override
     public void onFallback(TaskExecutionEvent event) {
         invoke(listener -> listener.onFallback(event));
     }

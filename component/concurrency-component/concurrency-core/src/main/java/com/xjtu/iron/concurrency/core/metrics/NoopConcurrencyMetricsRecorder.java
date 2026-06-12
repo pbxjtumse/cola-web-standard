@@ -13,6 +13,7 @@ public class NoopConcurrencyMetricsRecorder implements ConcurrencyMetricsRecorde
     @Override public void recordFailure(TaskExecutionEvent event) { }
     @Override public void recordRejected(TaskExecutionEvent event) { }
     @Override public void recordTimeout(TaskExecutionEvent event) { }
+    @Override public void recordCancelled(TaskExecutionEvent event) { }
     @Override public void recordFallback(TaskExecutionEvent event) { }
     @Override public void recordCompleted(TaskExecutionEvent event) { }
 }

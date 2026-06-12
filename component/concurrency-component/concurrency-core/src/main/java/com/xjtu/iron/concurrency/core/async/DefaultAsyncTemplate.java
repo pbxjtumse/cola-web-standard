@@ -114,7 +114,7 @@ public class DefaultAsyncTemplate implements AsyncTemplate {
 
         CompletableFuture<T> result = new CompletableFuture<>();
         java.util.concurrent.atomic.AtomicInteger failureCount = new java.util.concurrent.atomic.AtomicInteger(0);
-        java.util.List<Throwable> errors = new java.util.concurrent.CopyOnWriteArrayList<>();
+        List<Throwable> errors = new java.util.concurrent.CopyOnWriteArrayList<>();
         int total = futures.size();
 
         for (CompletableFuture<T> future : futures) {

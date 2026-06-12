@@ -3,9 +3,9 @@ package com.xjtu.iron.concurrency.api.listener;
 import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
 
 /**
- * 任务执行监听器。业务方要实现的监听器接口
+ * 任务执行监听器。
  *
- * <p>用于扩展日志、审计、指标、任务状态中心、治理组件联动等能力。</p>
+ * <p>业务方可以实现该接口，监听任务生命周期事件。</p>
  */
 public interface TaskExecutionListener {
 
@@ -33,7 +33,11 @@ public interface TaskExecutionListener {
     default void onTimeout(TaskExecutionEvent event) {
     }
 
-    /** fallback 被触发时触发。 */
+    /** 任务被取消时触发。 */
+    default void onCancelled(TaskExecutionEvent event) {
+    }
+
+    /** fallback 被触发、执行成功或执行失败时触发。 */
     default void onFallback(TaskExecutionEvent event) {
     }
 

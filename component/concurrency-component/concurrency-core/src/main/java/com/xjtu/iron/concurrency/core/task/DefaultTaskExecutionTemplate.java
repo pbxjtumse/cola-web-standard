@@ -1,20 +1,31 @@
 package com.xjtu.iron.concurrency.core.task;
 
 import com.xjtu.iron.concurrency.api.context.ContextAwareTaskDecorator;
+import com.xjtu.iron.concurrency.api.enums.error.AsyncErrorCategory;
+import com.xjtu.iron.concurrency.api.enums.error.AsyncErrorReason;
+import com.xjtu.iron.concurrency.api.enums.error.AsyncErrorStage;
+import com.xjtu.iron.concurrency.api.enums.error.AsyncRecoveryAction;
 import com.xjtu.iron.concurrency.api.enums.task.AsyncTaskStatus;
+import com.xjtu.iron.concurrency.api.error.ApplicationErrorInfo;
+import com.xjtu.iron.concurrency.api.error.AsyncError;
+import com.xjtu.iron.concurrency.api.error.AsyncErrorClassification;
+import com.xjtu.iron.concurrency.api.error.AsyncErrorClassifier;
+import com.xjtu.iron.concurrency.api.error.CompletableFutureExceptionUtils;
+import com.xjtu.iron.concurrency.api.error.ExceptionInfo;
+import com.xjtu.iron.concurrency.api.error.RecoveryHint;
+import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
+import com.xjtu.iron.concurrency.api.exception.ConcurrencyException;
 import com.xjtu.iron.concurrency.api.exception.ConcurrencyRejectedException;
+import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionRegistry;
+import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionSnapshot;
 import com.xjtu.iron.concurrency.api.execution.task.AsyncTask;
 import com.xjtu.iron.concurrency.api.execution.template.AsyncTemplate;
-import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionRegistry;
 import com.xjtu.iron.concurrency.api.listener.AsyncUncaughtExceptionHandler;
-import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
 import com.xjtu.iron.concurrency.api.listener.TaskExecutionListener;
 import com.xjtu.iron.concurrency.core.metrics.ConcurrencyMetricsRecorder;
 import com.xjtu.iron.concurrency.core.spi.TaskExecutionTemplate;
 import com.xjtu.iron.concurrency.core.spi.ThreadPoolRegistry;
 
-import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
@@ -30,26 +41,29 @@ public class DefaultTaskExecutionTemplate implements TaskExecutionTemplate {
     private final ContextAwareTaskDecorator taskDecorator;
     private final AsyncTemplate asyncTemplate;
     private final ConcurrencyMetricsRecorder metricsRecorder;
-    private final List<TaskExecutionListener> listeners;
+    private final TaskExecutionListener taskExecutionListener;
     private final AsyncUncaughtExceptionHandler uncaughtExceptionHandler;
     private final TaskExecutionRegistry taskExecutionRegistry;
+    private final AsyncErrorClassifier asyncErrorClassifier;
 
     public DefaultTaskExecutionTemplate(
             ThreadPoolRegistry threadPoolRegistry,
             ContextAwareTaskDecorator taskDecorator,
             AsyncTemplate asyncTemplate,
             ConcurrencyMetricsRecorder metricsRecorder,
-            List<TaskExecutionListener> listeners,
+            TaskExecutionListener taskExecutionListener,
             AsyncUncaughtExceptionHandler uncaughtExceptionHandler,
-            TaskExecutionRegistry taskExecutionRegistry
+            TaskExecutionRegistry taskExecutionRegistry,
+            AsyncErrorClassifier asyncErrorClassifier
     ) {
         this.threadPoolRegistry = threadPoolRegistry;
         this.taskDecorator = taskDecorator;
         this.asyncTemplate = asyncTemplate;
         this.metricsRecorder = metricsRecorder;
-        this.listeners = listeners == null ? Collections.emptyList() : List.copyOf(listeners);
+        this.taskExecutionListener = taskExecutionListener;
         this.uncaughtExceptionHandler = uncaughtExceptionHandler;
         this.taskExecutionRegistry = taskExecutionRegistry;
+        this.asyncErrorClassifier = asyncErrorClassifier;
     }
 
     @Override
@@ -104,22 +118,24 @@ public class DefaultTaskExecutionTemplate implements TaskExecutionTemplate {
                 supplier,
                 baseFuture,
                 metricsRecorder,
-                listeners,
+                taskExecutionListener,
                 uncaughtExceptionHandler,
                 taskExecutionRegistry,
+                asyncErrorClassifier,
                 fireAndForget
         );
 
-        TaskExecutionEvent submitted = buildSubmittedEvent(task, fireAndForget);
+        TaskExecutionEvent submitted = buildEvent(task, fireAndForget, AsyncTaskStatus.SUBMITTED, AsyncError.none());
         metricsRecorder.recordSubmitted(submitted.copy());
-        listeners.forEach(listener -> listener.onSubmitted(submitted.copy()));
+        taskExecutionRegistry.update(TaskExecutionSnapshot.from(submitted));
+        taskExecutionListener.onSubmitted(submitted.copy());
 
         try {
             executor.execute(command);
         } catch (RejectedExecutionException ex) {
             command.reject(ex);
             if (fireAndForget) {
-                throw new ConcurrencyRejectedException(task.getExecutorName(), task.getTaskName(), ex);
+                throw new ConcurrencyRejectedException(task.getExecutorName(), task.getTaskName(), rejectedError(ex), ex);
             }
         }
 
@@ -132,11 +148,9 @@ public class DefaultTaskExecutionTemplate implements TaskExecutionTemplate {
             result = asyncTemplate.withTimeout(result, task.getTimeout());
             result = result.whenComplete((value, error) -> {
                 if (error != null && isTimeout(error)) {
-                    TaskExecutionEvent timeout = buildTimeoutEvent(task, error);
-                    metricsRecorder.recordTimeout(timeout.copy());
-                    listeners.forEach(listener -> listener.onTimeout(timeout.copy()));
+                    command.completeTimeout(error, AsyncErrorStage.WAIT_RESULT);
                     if (task.isCancelOnTimeout()) {
-                        command.cancelRunning(task.isInterruptOnCancel());
+                        command.interruptRunningIfNecessary(task.isInterruptOnCancel());
                     }
                 }
             });
@@ -145,17 +159,48 @@ public class DefaultTaskExecutionTemplate implements TaskExecutionTemplate {
         if (task.getFallback() != null) {
             CompletableFuture<T> beforeFallback = result;
             result = asyncTemplate.withFallback(beforeFallback, error -> {
-                TaskExecutionEvent fallback = buildFallbackEvent(task, error);
-                metricsRecorder.recordFallback(fallback.copy());
-                listeners.forEach(listener -> listener.onFallback(fallback.copy()));
-                return task.getFallback().apply(error);
+                AsyncError originalError = resolveError(task, error, AsyncErrorStage.FALLBACK);
+                publishFallback(task, AsyncTaskStatus.FALLBACK, originalError, error, "Fallback triggered");
+                try {
+                    T fallbackValue = task.getFallback().apply(error);
+                    publishFallback(task, AsyncTaskStatus.FALLBACK_SUCCESS, originalError, error, "Fallback success");
+                    return fallbackValue;
+                } catch (Throwable fallbackThrowable) {
+                    AsyncError fallbackError = fallbackError(fallbackThrowable);
+                    publishFallback(task, AsyncTaskStatus.FALLBACK_FAILED, fallbackError, fallbackThrowable, "Fallback failed");
+                    throw fallbackThrowable instanceof RuntimeException runtimeException
+                            ? runtimeException
+                            : new RuntimeException(fallbackThrowable);
+                }
             });
         }
 
         return result;
     }
 
-    private TaskExecutionEvent buildSubmittedEvent(AsyncTask<?> task, boolean fireAndForget) {
+    private void publishFallback(
+            AsyncTask<?> task,
+            AsyncTaskStatus status,
+            AsyncError error,
+            Throwable throwable,
+            String message
+    ) {
+        TaskExecutionEvent event = buildEvent(task, false, status, error);
+        long now = System.currentTimeMillis();
+        event.setEndTimeMillis(now);
+        event.setTotalCostMillis(Math.max(0, now - event.getSubmitTimeMillis()));
+        event.setMessage(message);
+        metricsRecorder.recordFallback(event.copy());
+        taskExecutionRegistry.update(TaskExecutionSnapshot.from(event));
+        taskExecutionListener.onFallback(event.copy());
+    }
+
+    private TaskExecutionEvent buildEvent(
+            AsyncTask<?> task,
+            boolean fireAndForget,
+            AsyncTaskStatus status,
+            AsyncError error
+    ) {
         TaskExecutionEvent event = new TaskExecutionEvent();
         event.setTaskId(task.getTaskId());
         event.setExecutorName(task.getExecutorName());
@@ -163,28 +208,45 @@ public class DefaultTaskExecutionTemplate implements TaskExecutionTemplate {
         event.setBizKey(task.getBizKey());
         event.setDescription(task.getDescription());
         event.setTags(task.getTags());
-        event.setStatus(AsyncTaskStatus.SUBMITTED);
+        event.setStatus(status);
+        event.setError(error == null ? AsyncError.none() : error);
         event.setSubmitTimeMillis(System.currentTimeMillis());
         event.setFireAndForget(fireAndForget);
         return event;
     }
 
-    private TaskExecutionEvent buildTimeoutEvent(AsyncTask<?> task, Throwable throwable) {
-        TaskExecutionEvent event = buildSubmittedEvent(task, false);
-        long now = System.currentTimeMillis();
-        event.setStatus(AsyncTaskStatus.TIMEOUT);
-        event.setEndTimeMillis(now);
-        event.setThrowable(throwable);
-        return event;
+    private AsyncError resolveError(AsyncTask<?> task, Throwable throwable, AsyncErrorStage stage) {
+        Throwable unwrapped = CompletableFutureExceptionUtils.unwrap(throwable);
+        if (unwrapped instanceof ConcurrencyException concurrencyException) {
+            return concurrencyException.getError() == null ? AsyncError.unknown(throwable) : concurrencyException.getError().copy();
+        }
+        return asyncErrorClassifier.classify(task, throwable, stage);
     }
 
-    private TaskExecutionEvent buildFallbackEvent(AsyncTask<?> task, Throwable throwable) {
-        TaskExecutionEvent event = buildSubmittedEvent(task, false);
-        long now = System.currentTimeMillis();
-        event.setStatus(AsyncTaskStatus.FALLBACK);
-        event.setEndTimeMillis(now);
-        event.setThrowable(throwable);
-        return event;
+    private AsyncError rejectedError(Throwable throwable) {
+        return AsyncError.builder()
+                .classification(AsyncErrorClassification.of(
+                        AsyncErrorCategory.RESOURCE,
+                        AsyncErrorReason.REJECTED,
+                        AsyncErrorStage.SUBMIT
+                ))
+                .application(ApplicationErrorInfo.none())
+                .exception(ExceptionInfo.from(throwable))
+                .recovery(RecoveryHint.of(AsyncRecoveryAction.DELAY_RETRY, true, false, true))
+                .build();
+    }
+
+    private AsyncError fallbackError(Throwable throwable) {
+        return AsyncError.builder()
+                .classification(AsyncErrorClassification.of(
+                        AsyncErrorCategory.SYSTEM,
+                        AsyncErrorReason.FALLBACK_THROWN,
+                        AsyncErrorStage.FALLBACK
+                ))
+                .application(ApplicationErrorInfo.none())
+                .exception(ExceptionInfo.from(throwable))
+                .recovery(RecoveryHint.of(AsyncRecoveryAction.ALERT, false, false, true))
+                .build();
     }
 
     private boolean isTimeout(Throwable error) {

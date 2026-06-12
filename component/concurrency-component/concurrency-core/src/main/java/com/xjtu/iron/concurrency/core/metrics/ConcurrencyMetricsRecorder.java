@@ -25,7 +25,10 @@ public interface ConcurrencyMetricsRecorder {
     /** 记录任务超时。 */
     void recordTimeout(TaskExecutionEvent event);
 
-    /** 记录 fallback。 */
+    /** 记录任务取消。 */
+    void recordCancelled(TaskExecutionEvent event);
+
+    /** 记录 fallback 触发、成功或失败。 */
     void recordFallback(TaskExecutionEvent event);
 
     /** 记录任务最终完成。 */
