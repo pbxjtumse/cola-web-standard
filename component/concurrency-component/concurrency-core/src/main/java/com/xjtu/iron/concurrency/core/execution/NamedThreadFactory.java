@@ -1,5 +1,6 @@
 package com.xjtu.iron.concurrency.core.execution;
 
+import java.util.Objects;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -9,11 +10,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class NamedThreadFactory implements ThreadFactory {
 
     private final String threadNamePrefix;
+    private final boolean daemon;
 
     private final AtomicInteger index = new AtomicInteger(1);
 
     public NamedThreadFactory(String threadNamePrefix) {
-        this.threadNamePrefix = threadNamePrefix;
+        this(threadNamePrefix, false);
+    }
+
+    public NamedThreadFactory(String threadNamePrefix, boolean daemon) {
+        this.threadNamePrefix = Objects.requireNonNull(threadNamePrefix, "threadNamePrefix must not be null");
+        this.daemon = daemon;
     }
 
     @Override

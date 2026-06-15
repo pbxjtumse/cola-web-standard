@@ -1,13 +1,11 @@
 package com.xjtu.iron.concurrency.core.task;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
-
 import com.xjtu.iron.concurrency.api.enums.task.AsyncTaskStatus;
 import com.xjtu.iron.concurrency.api.task.TaskResultMode;
 import com.xjtu.iron.concurrency.api.task.TaskTimingSnapshot;
 
-
+import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -15,8 +13,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * 任务执行运行时状态。
  *
  * <p>
- * 该对象只在并行组件 core 内部使用，用于保存任务执行过程中动态变化的数据。
- * 它不能直接用于 REST 返回、Redis 存储或数据库持久化。
+ * 该对象只在 concurrency-core 内部使用，保存线程、单调时钟和并发终态控制等不可序列化状态。
+ * TaskExecutionEvent 与 TaskExecutionSnapshot 只接收它生成的只读时间快照。
  * </p>
  */
 public final class TaskExecutionRuntime {
@@ -27,85 +25,96 @@ public final class TaskExecutionRuntime {
     private final TaskResultMode resultMode;
 
     /**
-     * 任务提交时的墙上时钟时间，毫秒。
-     *
-     * <p>
-     * 用于对外展示时间点。
-     * </p>
+     * 任务提交时的墙上时钟时间，供日志和页面展示。
      */
     private final long submitTimeMillis;
 
     /**
-     * 任务提交时的单调时钟值。
-     *
-     * <p>
-     * 用于计算耗时，避免系统时钟回拨影响耗时结果。
-     * </p>
+     * 任务提交时的单调时钟值，专门用于可靠计算耗时。
      */
     private final long submitNanoTime;
 
     /**
-     * 任务开始执行时的墙上时钟时间，毫秒。
+     * 原始任务真正开始执行时的墙上时钟时间。
      */
     private volatile long startTimeMillis;
 
     /**
-     * 任务开始执行时的单调时钟值。
+     * 原始任务真正开始执行时的单调时钟值。
      */
     private volatile long startNanoTime;
 
     /**
-     * 任务结束时的墙上时钟时间，毫秒。
+     * 原始任务结果确定时的墙上时钟时间。
+     *
+     * <p>例如原始 Supplier 成功、失败、被拒绝、超时或取消。</p>
      */
-    private volatile long endTimeMillis;
+    private volatile long executionEndTimeMillis;
 
     /**
-     * 任务结束时的单调时钟值。
+     * 原始任务结果确定时的单调时钟值。
      */
-    private volatile long endNanoTime;
+    private volatile long executionEndNanoTime;
 
     /**
-     * 当前正在执行任务的线程。
+     * 整个任务管道最终完成时的墙上时钟时间。
+     *
+     * <p>配置 fallback 时，该时间可能晚于原始任务结束时间。</p>
+     */
+    private volatile long finalEndTimeMillis;
+
+    /**
+     * 整个任务管道最终完成时的单调时钟值。
+     */
+    private volatile long finalEndNanoTime;
+
+    /**
+     * 当前正在执行原始任务的线程。
+     *
+     * <p>用于超时或取消后尽力发送 interrupt；Java 中断不是强制终止。</p>
+     */
+    private final AtomicReference<Thread> runningThread = new AtomicReference<>();
+
+    /**
+     * 当前最新任务状态。
+     */
+    private final AtomicReference<AsyncTaskStatus> status =
+            new AtomicReference<>(AsyncTaskStatus.CREATED);
+
+    /**
+     * 原始任务结果是否已经确定。
      *
      * <p>
-     * 用于超时或主动取消后尝试发送 interrupt。
+     * 用于解决结果超时与工作线程晚到成功之间的竞争，确保原始任务只记录一个结果。
      * </p>
      */
-    private final AtomicReference<Thread> runningThread =
-            new AtomicReference<>();
+    private final AtomicBoolean baseOutcomeResolved = new AtomicBoolean(false);
 
     /**
-     * 当前任务状态。
-     */
-    private final AtomicReference<AsyncTaskStatus> status = new AtomicReference<>(AsyncTaskStatus.CREATED);
-
-    /**
-     * 最终结果是否已经确定。
+     * 整个结果管道是否已经进入最终状态。
      *
      * <p>
-     * 用于避免成功、失败、超时、拒绝、取消等多个并发路径重复完成任务。
+     * 原始任务失败但存在 fallback 时，baseOutcomeResolved 已经为 true，
+     * finalOutcomeResolved 要等到 FALLBACK_SUCCESS 或 FALLBACK_FAILED 后才变为 true。
      * </p>
      */
-    private final AtomicBoolean finalized =
-            new AtomicBoolean(false);
+    private final AtomicBoolean finalOutcomeResolved = new AtomicBoolean(false);
 
     public TaskExecutionRuntime(TaskResultMode resultMode) {
-        this.resultMode = resultMode == null
-                ? TaskResultMode.RESULT_AWARE
-                : resultMode;
+        this.resultMode = resultMode == null ? TaskResultMode.RESULT_AWARE : resultMode;
         this.submitTimeMillis = System.currentTimeMillis();
         this.submitNanoTime = System.nanoTime();
     }
 
     /**
-     * 标记任务已经提交。
+     * 标记任务已提交。
      */
     public void markSubmitted() {
         status.set(AsyncTaskStatus.SUBMITTED);
     }
 
     /**
-     * 标记任务开始运行。
+     * 标记原始任务开始运行。
      */
     public void markRunning() {
         startTimeMillis = System.currentTimeMillis();
@@ -115,117 +124,165 @@ public final class TaskExecutionRuntime {
     }
 
     /**
-     * 尝试进入最终状态。
+     * 尝试确定原始任务结果。
      *
-     * @param terminalStatus 最终状态
-     * @return true 表示本次成功确定最终结果；false 表示此前已经被其他路径确定
+     * @param baseStatus 原始任务结果状态
+     * @return true 表示当前路径首次确定原始任务结果
      */
-    public boolean tryFinalize(AsyncTaskStatus terminalStatus) {
-        if (!finalized.compareAndSet(false, true)) {
+    public boolean tryResolveBaseOutcome(AsyncTaskStatus baseStatus) {
+        Objects.requireNonNull(baseStatus, "baseStatus must not be null");
+
+        if (!baseOutcomeResolved.compareAndSet(false, true)) {
             return false;
         }
 
-        endTimeMillis = System.currentTimeMillis();
-        endNanoTime = System.nanoTime();
-        status.set(terminalStatus);
+        executionEndTimeMillis = System.currentTimeMillis();
+        executionEndNanoTime = System.nanoTime();
+        status.set(baseStatus);
         return true;
     }
 
     /**
-     * 记录一个非最终的中间状态。
+     * 记录 fallback 等非最终过程状态。
      *
-     * <p>
-     * 例如原任务 FAILED 后还会继续执行 fallback，
-     * 此时 FAILED 是执行事件，但最终结果尚未确定。
-     * </p>
+     * @param intermediateStatus 中间状态
      */
-    public void markStatus(AsyncTaskStatus status) {
-        if (!finalized.get() && status != null) {
-            this.status.set(status);
+    public void markIntermediate(AsyncTaskStatus intermediateStatus) {
+        if (!finalOutcomeResolved.get() && intermediateStatus != null) {
+            status.set(intermediateStatus);
         }
     }
 
     /**
-     * 清除当前运行线程引用。
+     * 尝试确定整个任务管道的最终状态。
+     *
+     * @param finalStatus 最终状态
+     * @return true 表示当前路径首次确定最终状态
+     */
+    public boolean tryFinalize(AsyncTaskStatus finalStatus) {
+        Objects.requireNonNull(finalStatus, "finalStatus must not be null");
+
+        if (!finalOutcomeResolved.compareAndSet(false, true)) {
+            return false;
+        }
+
+        finalEndTimeMillis = System.currentTimeMillis();
+        finalEndNanoTime = System.nanoTime();
+        status.set(finalStatus);
+        return true;
+    }
+
+    /**
+     * 判断任务是否已经发生排队超时。
+     *
+     * @param queueTimeout 排队超时时间
+     * @return 是否超时
+     */
+    public boolean isQueueTimeout(Duration queueTimeout) {
+        if (queueTimeout == null || queueTimeout.isZero() || queueTimeout.isNegative()) {
+            return false;
+        }
+        return elapsedMillis(submitNanoTime, System.nanoTime()) > queueTimeout.toMillis();
+    }
+
+    /**
+     * 清除当前运行线程引用，避免线程对象被长期持有。
      */
     public void clearRunningThread() {
         runningThread.set(null);
     }
 
     /**
-     * 尝试中断当前运行线程。
+     * 尽力中断当前运行线程。
      *
-     * @param interrupt 是否发送中断信号
+     * @param mayInterruptIfRunning 是否发送中断信号
      */
-    public void interruptIfNecessary(boolean interrupt) {
-        if (!interrupt) {
+    public void interruptIfNecessary(boolean mayInterruptIfRunning) {
+        if (!mayInterruptIfRunning) {
             return;
         }
 
         Thread thread = runningThread.get();
-
         if (thread != null) {
             thread.interrupt();
         }
     }
 
     /**
-     * 生成不可变的耗时快照。
+     * 生成当前时间与耗时快照。
+     *
+     * <p>
+     * queueCost 表示提交到开始运行的时间；runCost 只统计原始任务执行时间；
+     * totalCost 在有 fallback 时会包含 fallback 的处理时间。
+     * </p>
+     *
+     * @return 不可变时间快照
      */
     public TaskTimingSnapshot timingSnapshot() {
         long nowNano = System.nanoTime();
+        long nowMillis = System.currentTimeMillis();
+        boolean fallbackInProgress = !finalOutcomeResolved.get()
+                && status.get() == AsyncTaskStatus.FALLBACK;
+        long visibleEndMillis = finalEndTimeMillis > 0
+                ? finalEndTimeMillis
+                : (fallbackInProgress ? nowMillis : executionEndTimeMillis);
+        long visibleEndNano = finalEndNanoTime > 0
+                ? finalEndNanoTime
+                : (fallbackInProgress ? nowNano : executionEndNanoTime);
 
-        long queueCostNanos;
-
-        if (startNanoTime > 0) {
-            queueCostNanos = startNanoTime - submitNanoTime;
-        } else {
-            queueCostNanos = (endNanoTime > 0 ? endNanoTime : nowNano)
-                    - submitNanoTime;
-        }
-
-        long runCostNanos = 0;
-
-        if (startNanoTime > 0) {
-            runCostNanos = (endNanoTime > 0 ? endNanoTime : nowNano)
-                    - startNanoTime;
-        }
-
-        long totalCostNanos =
-                (endNanoTime > 0 ? endNanoTime : nowNano)
-                        - submitNanoTime;
+        long queueCostNanos = startNanoTime > 0
+                ? startNanoTime - submitNanoTime
+                : (visibleEndNano > 0 ? visibleEndNano : nowNano) - submitNanoTime;
+        long runCostNanos = startNanoTime > 0
+                ? (executionEndNanoTime > 0 ? executionEndNanoTime : nowNano) - startNanoTime
+                : 0L;
+        long totalCostNanos = (visibleEndNano > 0 ? visibleEndNano : nowNano) - submitNanoTime;
 
         return new TaskTimingSnapshot(
                 submitTimeMillis,
                 startTimeMillis,
-                endTimeMillis,
+                visibleEndMillis,
                 nanosToMillis(queueCostNanos),
                 nanosToMillis(runCostNanos),
                 nanosToMillis(totalCostNanos)
         );
     }
 
-    private long nanosToMillis(long nanos) {
-        return Math.max(0L, nanos / 1_000_000L);
-    }
-
+    /**
+     * 判断调用方是否需要感知结果。
+     */
     public boolean isResultAware() {
         return resultMode == TaskResultMode.RESULT_AWARE;
     }
 
+    /**
+     * 判断任务是否为只投递模式。
+     */
     public boolean isFireAndForget() {
         return resultMode == TaskResultMode.FIRE_AND_FORGET;
     }
 
-    public boolean isFinalized() {
-        return finalized.get();
+    public TaskResultMode getResultMode() {
+        return resultMode;
     }
 
     public AsyncTaskStatus getStatus() {
         return status.get();
     }
 
-    public long getSubmitTimeMillis() {
-        return submitTimeMillis;
+    public boolean isBaseOutcomeResolved() {
+        return baseOutcomeResolved.get();
+    }
+
+    public boolean isFinalOutcomeResolved() {
+        return finalOutcomeResolved.get();
+    }
+
+    private long elapsedMillis(long startNanos, long endNanos) {
+        return nanosToMillis(Math.max(0L, endNanos - startNanos));
+    }
+
+    private long nanosToMillis(long nanos) {
+        return Math.max(0L, nanos / 1_000_000L);
     }
 }

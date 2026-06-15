@@ -82,6 +82,23 @@ public class ExceptionInfo {
         return info;
     }
 
+    /**
+     * 创建不包含原始 Throwable 的可序列化副本。
+     *
+     * <p>任务状态快照、REST 接口和持久化对象应使用该副本，避免序列化完整异常对象。</p>
+     *
+     * @return 不携带 Throwable 的异常摘要
+     */
+    public ExceptionInfo copyWithoutThrowable() {
+        ExceptionInfo info = new ExceptionInfo();
+        info.errorClass = errorClass;
+        info.errorMessage = errorMessage;
+        info.rootErrorClass = rootErrorClass;
+        info.rootErrorMessage = rootErrorMessage;
+        info.throwable = null;
+        return info;
+    }
+
     public String getErrorClass() {
         return errorClass;
     }

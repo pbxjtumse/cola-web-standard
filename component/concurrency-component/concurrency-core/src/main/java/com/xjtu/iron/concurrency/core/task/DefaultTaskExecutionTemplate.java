@@ -1,28 +1,14 @@
 package com.xjtu.iron.concurrency.core.task;
 
 import com.xjtu.iron.concurrency.api.context.ContextAwareTaskDecorator;
-import com.xjtu.iron.concurrency.api.enums.error.AsyncErrorCategory;
-import com.xjtu.iron.concurrency.api.enums.error.AsyncErrorReason;
 import com.xjtu.iron.concurrency.api.enums.error.AsyncErrorStage;
-import com.xjtu.iron.concurrency.api.enums.error.AsyncRecoveryAction;
-import com.xjtu.iron.concurrency.api.enums.task.AsyncTaskStatus;
-import com.xjtu.iron.concurrency.api.error.ApplicationErrorInfo;
 import com.xjtu.iron.concurrency.api.error.AsyncError;
-import com.xjtu.iron.concurrency.api.error.AsyncErrorClassification;
 import com.xjtu.iron.concurrency.api.error.AsyncErrorClassifier;
-import com.xjtu.iron.concurrency.api.error.CompletableFutureExceptionUtils;
-import com.xjtu.iron.concurrency.api.error.ExceptionInfo;
-import com.xjtu.iron.concurrency.api.error.RecoveryHint;
-import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
-import com.xjtu.iron.concurrency.api.exception.ConcurrencyException;
 import com.xjtu.iron.concurrency.api.exception.ConcurrencyRejectedException;
-import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionRegistry;
-import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionSnapshot;
 import com.xjtu.iron.concurrency.api.execution.task.AsyncTask;
-import com.xjtu.iron.concurrency.api.execution.template.AsyncTemplate;
-import com.xjtu.iron.concurrency.api.listener.AsyncUncaughtExceptionHandler;
-import com.xjtu.iron.concurrency.api.listener.TaskExecutionListener;
-import com.xjtu.iron.concurrency.core.metrics.ConcurrencyMetricsRecorder;
+import com.xjtu.iron.concurrency.api.task.TaskResultMode;
+import com.xjtu.iron.concurrency.core.lifecycle.TaskLifecyclePublisher;
+import com.xjtu.iron.concurrency.core.pipeline.TaskResultPipeline;
 import com.xjtu.iron.concurrency.core.spi.TaskExecutionTemplate;
 import com.xjtu.iron.concurrency.core.spi.ThreadPoolRegistry;
 
@@ -34,36 +20,61 @@ import java.util.function.Supplier;
 
 /**
  * 默认任务投递模板。
+ *
+ * <p>
+ * 该类只负责校验任务、选择线程池、创建执行上下文、创建 TaskCommand、提交任务，
+ * timeout 与 fallback 等结果处理交给 TaskResultPipeline。
+ * </p>
  */
-public class DefaultTaskExecutionTemplate implements TaskExecutionTemplate {
+public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate {
 
+    /**
+     * 线程池注册表。
+     */
     private final ThreadPoolRegistry threadPoolRegistry;
+
+    /**
+     * 上下文任务装饰器。
+     */
     private final ContextAwareTaskDecorator taskDecorator;
-    private final AsyncTemplate asyncTemplate;
-    private final ConcurrencyMetricsRecorder metricsRecorder;
-    private final TaskExecutionListener taskExecutionListener;
-    private final AsyncUncaughtExceptionHandler uncaughtExceptionHandler;
-    private final TaskExecutionRegistry taskExecutionRegistry;
-    private final AsyncErrorClassifier asyncErrorClassifier;
+
+    /**
+     * 任务生命周期发布器。
+     */
+    private final TaskLifecyclePublisher lifecyclePublisher;
+
+    /**
+     * timeout 与 fallback 结果管道。
+     */
+    private final TaskResultPipeline resultPipeline;
+
+    /**
+     * 组合后的错误分类器。
+     */
+    private final AsyncErrorClassifier errorClassifier;
+
+    /**
+     * fire-and-forget 异常处理器。
+     */
+    private final com.xjtu.iron.concurrency.api.listener.AsyncUncaughtExceptionHandler uncaughtExceptionHandler;
 
     public DefaultTaskExecutionTemplate(
             ThreadPoolRegistry threadPoolRegistry,
             ContextAwareTaskDecorator taskDecorator,
-            AsyncTemplate asyncTemplate,
-            ConcurrencyMetricsRecorder metricsRecorder,
-            TaskExecutionListener taskExecutionListener,
-            AsyncUncaughtExceptionHandler uncaughtExceptionHandler,
-            TaskExecutionRegistry taskExecutionRegistry,
-            AsyncErrorClassifier asyncErrorClassifier
+            TaskLifecyclePublisher lifecyclePublisher,
+            TaskResultPipeline resultPipeline,
+            AsyncErrorClassifier errorClassifier,
+            com.xjtu.iron.concurrency.api.listener.AsyncUncaughtExceptionHandler uncaughtExceptionHandler
     ) {
-        this.threadPoolRegistry = threadPoolRegistry;
-        this.taskDecorator = taskDecorator;
-        this.asyncTemplate = asyncTemplate;
-        this.metricsRecorder = metricsRecorder;
-        this.taskExecutionListener = taskExecutionListener;
-        this.uncaughtExceptionHandler = uncaughtExceptionHandler;
-        this.taskExecutionRegistry = taskExecutionRegistry;
-        this.asyncErrorClassifier = asyncErrorClassifier;
+        this.threadPoolRegistry = Objects.requireNonNull(threadPoolRegistry, "threadPoolRegistry must not be null");
+        this.taskDecorator = Objects.requireNonNull(taskDecorator, "taskDecorator must not be null");
+        this.lifecyclePublisher = Objects.requireNonNull(lifecyclePublisher, "lifecyclePublisher must not be null");
+        this.resultPipeline = Objects.requireNonNull(resultPipeline, "resultPipeline must not be null");
+        this.errorClassifier = Objects.requireNonNull(errorClassifier, "errorClassifier must not be null");
+        this.uncaughtExceptionHandler = Objects.requireNonNull(
+                uncaughtExceptionHandler,
+                "uncaughtExceptionHandler must not be null"
+        );
     }
 
     @Override
@@ -73,7 +84,7 @@ public class DefaultTaskExecutionTemplate implements TaskExecutionTemplate {
             runnable.run();
             return null;
         });
-        submitInternal(task, true);
+        submitInternal(task, TaskResultMode.FIRE_AND_FORGET);
     }
 
     @Override
@@ -96,167 +107,78 @@ public class DefaultTaskExecutionTemplate implements TaskExecutionTemplate {
     }
 
     @Override
-    public <T> CompletableFuture<T> supply(String executorName, String taskName, Supplier<T> supplier) {
+    public <T> CompletableFuture<T> supply(
+            String executorName,
+            String taskName,
+            Supplier<T> supplier
+    ) {
         return submit(AsyncTask.of(executorName, taskName, supplier));
     }
 
     @Override
     public <T> CompletableFuture<T> submit(AsyncTask<T> task) {
-        return submitInternal(task, false);
+        return submitInternal(task, TaskResultMode.RESULT_AWARE);
     }
 
-    private <T> CompletableFuture<T> submitInternal(AsyncTask<T> task, boolean fireAndForget) {
+    /**
+     * 执行统一任务提交流程。
+     */
+    private <T> CompletableFuture<T> submitInternal(
+            AsyncTask<T> task,
+            TaskResultMode resultMode
+    ) {
+        Objects.requireNonNull(task, "task must not be null");
         task.validate();
+
         ThreadPoolExecutor executor = threadPoolRegistry.getExecutor(task.getExecutorName());
         CompletableFuture<T> baseFuture = new CompletableFuture<>();
-        Supplier<T> supplier = task.isContextPropagation()
+        Supplier<T> executable = task.isContextPropagation()
                 ? taskDecorator.decorate(task.getOperation())
                 : task.getOperation();
-
-        TaskCommand<T> command = new TaskCommand<>(
+        TaskExecutionRuntime runtime = new TaskExecutionRuntime(resultMode);
+        TaskExecutionContext<T> context = new TaskExecutionContext<>(
                 task,
-                supplier,
+                executable,
                 baseFuture,
-                metricsRecorder,
-                taskExecutionListener,
-                uncaughtExceptionHandler,
-                taskExecutionRegistry,
-                asyncErrorClassifier,
-                fireAndForget
+                runtime
+        );
+        TaskCommand<T> command = new TaskCommand<>(
+                context,
+                lifecyclePublisher,
+                errorClassifier,
+                uncaughtExceptionHandler
         );
 
-        TaskExecutionEvent submitted = buildEvent(task, fireAndForget, AsyncTaskStatus.SUBMITTED, AsyncError.none());
-        metricsRecorder.recordSubmitted(submitted.copy());
-        taskExecutionRegistry.update(TaskExecutionSnapshot.from(submitted));
-        taskExecutionListener.onSubmitted(submitted.copy());
+        command.submitted();
 
         try {
             executor.execute(command);
         } catch (RejectedExecutionException ex) {
+            /*
+             * 部分自定义拒绝策略会先调用 command.reject 再抛异常；
+             * TaskExecutionRuntime 的 CAS 会保证拒绝状态只记录一次。
+             */
             command.reject(ex);
-            if (fireAndForget) {
-                throw new ConcurrencyRejectedException(task.getExecutorName(), task.getTaskName(), rejectedError(ex), ex);
+
+            if (resultMode == TaskResultMode.FIRE_AND_FORGET) {
+                AsyncError error = errorClassifier.classify(
+                        task,
+                        ex,
+                        AsyncErrorStage.SUBMIT
+                );
+                throw new ConcurrencyRejectedException(
+                        task.getExecutorName(),
+                        task.getTaskName(),
+                        error,
+                        ex
+                );
             }
         }
 
-        if (fireAndForget) {
+        if (resultMode == TaskResultMode.FIRE_AND_FORGET) {
             return baseFuture;
         }
 
-        CompletableFuture<T> result = baseFuture;
-        if (task.getTimeout() != null) {
-            result = asyncTemplate.withTimeout(result, task.getTimeout());
-            result = result.whenComplete((value, error) -> {
-                if (error != null && isTimeout(error)) {
-                    command.completeTimeout(error, AsyncErrorStage.WAIT_RESULT);
-                    if (task.isCancelOnTimeout()) {
-                        command.interruptRunningIfNecessary(task.isInterruptOnCancel());
-                    }
-                }
-            });
-        }
-
-        if (task.getFallback() != null) {
-            CompletableFuture<T> beforeFallback = result;
-            result = asyncTemplate.withFallback(beforeFallback, error -> {
-                AsyncError originalError = resolveError(task, error, AsyncErrorStage.FALLBACK);
-                publishFallback(task, AsyncTaskStatus.FALLBACK, originalError, error, "Fallback triggered");
-                try {
-                    T fallbackValue = task.getFallback().apply(error);
-                    publishFallback(task, AsyncTaskStatus.FALLBACK_SUCCESS, originalError, error, "Fallback success");
-                    return fallbackValue;
-                } catch (Throwable fallbackThrowable) {
-                    AsyncError fallbackError = fallbackError(fallbackThrowable);
-                    publishFallback(task, AsyncTaskStatus.FALLBACK_FAILED, fallbackError, fallbackThrowable, "Fallback failed");
-                    throw fallbackThrowable instanceof RuntimeException runtimeException
-                            ? runtimeException
-                            : new RuntimeException(fallbackThrowable);
-                }
-            });
-        }
-
-        return result;
-    }
-
-    private void publishFallback(
-            AsyncTask<?> task,
-            AsyncTaskStatus status,
-            AsyncError error,
-            Throwable throwable,
-            String message
-    ) {
-        TaskExecutionEvent event = buildEvent(task, false, status, error);
-        long now = System.currentTimeMillis();
-        event.setEndTimeMillis(now);
-        event.setTotalCostMillis(Math.max(0, now - event.getSubmitTimeMillis()));
-        event.setMessage(message);
-        metricsRecorder.recordFallback(event.copy());
-        taskExecutionRegistry.update(TaskExecutionSnapshot.from(event));
-        taskExecutionListener.onFallback(event.copy());
-    }
-
-    private TaskExecutionEvent buildEvent(
-            AsyncTask<?> task,
-            boolean fireAndForget,
-            AsyncTaskStatus status,
-            AsyncError error
-    ) {
-        TaskExecutionEvent event = new TaskExecutionEvent();
-        event.setTaskId(task.getTaskId());
-        event.setExecutorName(task.getExecutorName());
-        event.setTaskName(task.getTaskName());
-        event.setBizKey(task.getBizKey());
-        event.setDescription(task.getDescription());
-        event.setTags(task.getTags());
-        event.setStatus(status);
-        event.setError(error == null ? AsyncError.none() : error);
-        event.setSubmitTimeMillis(System.currentTimeMillis());
-        event.setFireAndForget(fireAndForget);
-        return event;
-    }
-
-    private AsyncError resolveError(AsyncTask<?> task, Throwable throwable, AsyncErrorStage stage) {
-        Throwable unwrapped = CompletableFutureExceptionUtils.unwrap(throwable);
-        if (unwrapped instanceof ConcurrencyException concurrencyException) {
-            return concurrencyException.getError() == null ? AsyncError.unknown(throwable) : concurrencyException.getError().copy();
-        }
-        return asyncErrorClassifier.classify(task, throwable, stage);
-    }
-
-    private AsyncError rejectedError(Throwable throwable) {
-        return AsyncError.builder()
-                .classification(AsyncErrorClassification.of(
-                        AsyncErrorCategory.RESOURCE,
-                        AsyncErrorReason.REJECTED,
-                        AsyncErrorStage.SUBMIT
-                ))
-                .application(ApplicationErrorInfo.none())
-                .exception(ExceptionInfo.from(throwable))
-                .recovery(RecoveryHint.of(AsyncRecoveryAction.DELAY_RETRY, true, false, true))
-                .build();
-    }
-
-    private AsyncError fallbackError(Throwable throwable) {
-        return AsyncError.builder()
-                .classification(AsyncErrorClassification.of(
-                        AsyncErrorCategory.SYSTEM,
-                        AsyncErrorReason.FALLBACK_THROWN,
-                        AsyncErrorStage.FALLBACK
-                ))
-                .application(ApplicationErrorInfo.none())
-                .exception(ExceptionInfo.from(throwable))
-                .recovery(RecoveryHint.of(AsyncRecoveryAction.ALERT, false, false, true))
-                .build();
-    }
-
-    private boolean isTimeout(Throwable error) {
-        Throwable current = error;
-        while (current != null) {
-            if (current instanceof java.util.concurrent.TimeoutException) {
-                return true;
-            }
-            current = current.getCause();
-        }
-        return false;
+        return resultPipeline.apply(context, command);
     }
 }

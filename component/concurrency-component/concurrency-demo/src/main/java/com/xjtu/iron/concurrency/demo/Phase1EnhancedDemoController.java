@@ -7,7 +7,6 @@ import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionRegistry;
 import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionSnapshot;
 import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolManager;
 import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolSnapshot;
-import com.xjtu.iron.concurrency.api.listener.AsyncUncaughtExceptionHandler;
 import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
 import com.xjtu.iron.concurrency.api.listener.TaskExecutionListener;
 import com.xjtu.iron.concurrency.api.retry.RetryPolicy;
@@ -116,18 +115,10 @@ public class Phase1EnhancedDemoController {
                 System.out.println("[demo-listener] completed taskId=" + event.getTaskId()
                         + ", taskName=" + event.getTaskName()
                         + ", status=" + event.getStatus()
-                        + ", queueCost=" + event.getQueueCostMillis()
-                        + ", runCost=" + event.getRunCostMillis());
+                        + ", queueCost=" + event.getTiming().getQueueCostMillis()
+                        + ", runCost=" + event.getTiming().getRunCostMillis());
             }
         };
     }
 
-    /**
-     * 示例 fire-and-forget 异常处理器：业务可以替换默认 Noop 实现。
-     */
-    @Bean
-    public AsyncUncaughtExceptionHandler demoAsyncUncaughtExceptionHandler() {
-        return (event, throwable) -> System.err.println("[demo-uncaught] task="
-                + event.getTaskName() + ", error=" + throwable.getMessage());
-    }
 }

@@ -83,6 +83,23 @@ public class AsyncError {
         return error;
     }
 
+    /**
+     * 创建不包含原始 Throwable 的可序列化副本。
+     *
+     * <p>适合任务快照、管理接口、Redis 和数据库持久化。</p>
+     *
+     * @return 可序列化错误副本
+     */
+    public AsyncError copyWithoutThrowable() {
+        AsyncError error = new AsyncError();
+        error.classification = classification == null ? AsyncErrorClassification.none() : classification.copy();
+        error.application = application == null ? ApplicationErrorInfo.none() : application.copy();
+        error.exception = exception == null ? ExceptionInfo.none() : exception.copyWithoutThrowable();
+        error.recovery = recovery == null ? RecoveryHint.none() : recovery.copy();
+        error.attributes = attributes == null ? new LinkedHashMap<>() : new LinkedHashMap<>(attributes);
+        return error;
+    }
+
     public boolean isNone() {
         return classification == null
                 || classification.getCategory() == AsyncErrorCategory.NONE;

@@ -1,358 +1,299 @@
 package com.xjtu.iron.concurrency.core.task;
 
-import com.xjtu.iron.concurrency.api.enums.error.AsyncErrorCategory;
-import com.xjtu.iron.concurrency.api.enums.error.AsyncErrorReason;
 import com.xjtu.iron.concurrency.api.enums.error.AsyncErrorStage;
-import com.xjtu.iron.concurrency.api.enums.error.AsyncRecoveryAction;
 import com.xjtu.iron.concurrency.api.enums.task.AsyncTaskStatus;
-import com.xjtu.iron.concurrency.api.error.ApplicationErrorInfo;
 import com.xjtu.iron.concurrency.api.error.AsyncError;
-import com.xjtu.iron.concurrency.api.error.AsyncErrorClassification;
 import com.xjtu.iron.concurrency.api.error.AsyncErrorClassifier;
-import com.xjtu.iron.concurrency.api.error.ExceptionInfo;
-import com.xjtu.iron.concurrency.api.error.RecoveryHint;
+import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
 import com.xjtu.iron.concurrency.api.exception.AsyncTaskException;
 import com.xjtu.iron.concurrency.api.exception.ConcurrencyRejectedException;
-import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionRegistry;
-import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionSnapshot;
-import com.xjtu.iron.concurrency.api.execution.task.AsyncTask;
-import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
 import com.xjtu.iron.concurrency.api.listener.AsyncUncaughtExceptionHandler;
-import com.xjtu.iron.concurrency.api.listener.TaskExecutionListener;
-import com.xjtu.iron.concurrency.core.metrics.ConcurrencyMetricsRecorder;
+import com.xjtu.iron.concurrency.core.lifecycle.TaskLifecyclePublisher;
 
-import java.util.concurrent.CompletableFuture;
+import java.util.Objects;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
 
 /**
  * 线程池真正执行的任务命令。
  *
  * <p>
- * TaskCommand 是最终提交给 ThreadPoolExecutor 的 Runnable。
- * 它负责执行用户任务，并把任务状态同步到 CompletableFuture、指标、监听器和任务状态注册表。
+ * TaskCommand 只负责原始任务：提交、开始、成功、失败、拒绝、超时和取消。
+ * timeout/fallback 组成的结果恢复管道由 TaskResultPipeline 负责。
  * </p>
  *
  * @param <T> 任务返回值类型
  */
-public class TaskCommand<T> implements Runnable, RejectedTaskAware {
+public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
 
-    /** 任务模型，包含 executorName、taskName、taskId、bizKey、timeout、fallback 等元数据。 */
-    private final AsyncTask<T> task;
+    /**
+     * 本次任务执行上下文，是任务定义、装饰后执行逻辑、Future 和运行时状态的唯一数据来源。
+     */
+    private final TaskExecutionContext<T> context;
 
-    /** 实际执行业务逻辑的 Supplier。Runnable 类型任务会被适配成返回 null 的 Supplier。 */
-    private final Supplier<T> supplier;
+    /**
+     * 生命周期发布器，统一分发指标、注册表和监听器。
+     */
+    private final TaskLifecyclePublisher lifecyclePublisher;
 
-    /** 任务结果 Future。run/supply/submit 会使用；execute 类型任务虽然也创建 Future，但调用方不感知。 */
-    private final CompletableFuture<T> future;
+    /**
+     * 组合后的错误分类器。
+     */
+    private final AsyncErrorClassifier errorClassifier;
 
-    /** 指标记录器，用于记录提交、开始、成功、失败、拒绝、超时、取消、fallback、完成等指标。 */
-    private final ConcurrencyMetricsRecorder metricsRecorder;
-
-    /** 任务监听器。这里建议传入 CompositeTaskExecutionListener，TaskCommand 不关心有多少真实监听器。 */
-    private final TaskExecutionListener taskExecutionListener;
-
-    /** fire-and-forget 异常处理器。execute 方法没有 Future 返回值，异常通过该处理器兜底。 */
+    /**
+     * fire-and-forget 任务异常处理器。
+     */
     private final AsyncUncaughtExceptionHandler uncaughtExceptionHandler;
 
-    /** 任务状态注册表，用于保存最近任务状态，支持通过 taskId 查询。 */
-    private final TaskExecutionRegistry taskExecutionRegistry;
-
-    /** 异步错误分类器，用于把 Throwable 转换为结构化 AsyncError。 */
-    private final AsyncErrorClassifier asyncErrorClassifier;
-
-
-
     public TaskCommand(
-            AsyncTask<T> task,
-            Supplier<T> supplier,
-            CompletableFuture<T> future,
-            ConcurrencyMetricsRecorder metricsRecorder,
-            TaskExecutionListener taskExecutionListener,
-            AsyncUncaughtExceptionHandler uncaughtExceptionHandler,
-            TaskExecutionRegistry taskExecutionRegistry,
-            AsyncErrorClassifier asyncErrorClassifier,
-            boolean fireAndForget
+            TaskExecutionContext<T> context,
+            TaskLifecyclePublisher lifecyclePublisher,
+            AsyncErrorClassifier errorClassifier,
+            AsyncUncaughtExceptionHandler uncaughtExceptionHandler
     ) {
-        this.task = task;
-        this.supplier = supplier;
-        this.future = future;
-        this.metricsRecorder = metricsRecorder;
-        this.taskExecutionListener = taskExecutionListener;
-        this.uncaughtExceptionHandler = uncaughtExceptionHandler;
-        this.taskExecutionRegistry = taskExecutionRegistry;
-        this.asyncErrorClassifier = asyncErrorClassifier;
-        this.fireAndForget = fireAndForget;
-        this.submitTimeMillis = System.currentTimeMillis();
+        this.context = Objects.requireNonNull(context, "context must not be null");
+        this.lifecyclePublisher = Objects.requireNonNull(lifecyclePublisher, "lifecyclePublisher must not be null");
+        this.errorClassifier = Objects.requireNonNull(errorClassifier, "errorClassifier must not be null");
+        this.uncaughtExceptionHandler = Objects.requireNonNull(
+                uncaughtExceptionHandler,
+                "uncaughtExceptionHandler must not be null"
+        );
+    }
+
+    /**
+     * 发布任务已提交事件。
+     */
+    public void submitted() {
+        context.getRuntime().markSubmitted();
+        lifecyclePublisher.publish(context.event(
+                AsyncTaskStatus.SUBMITTED,
+                AsyncError.none(),
+                "Task submitted"
+        ));
     }
 
     @Override
     public void run() {
-        this.runningThread = Thread.currentThread();
-        this.startTimeMillis = System.currentTimeMillis();
+        TaskExecutionRuntime runtime = context.getRuntime();
 
-        if (isQueueTimeout()) {
-            TimeoutException timeout = new TimeoutException("Task queue timeout, queueCostMillis=" + calculateQueueCostMillis());
-            completeTimeout(timeout, AsyncErrorStage.QUEUE);
-            this.runningThread = null;
+        /*
+         * 结果层超时可能在线程真正从队列取出任务前已经确定原始结果。
+         * 此时不应该继续执行用户 operation。
+         */
+        if (runtime.isBaseOutcomeResolved()) {
             return;
         }
 
-        TaskExecutionEvent started = buildEvent(AsyncTaskStatus.RUNNING, AsyncError.none());
-        publishStarted(started);
+        if (runtime.isQueueTimeout(context.getTask().getQueueTimeout())) {
+            TimeoutException timeout = new TimeoutException("Task queue timeout");
+            completeTimeout(timeout, AsyncErrorStage.QUEUE);
+            return;
+        }
+
+        runtime.markRunning();
+        lifecyclePublisher.publish(context.event(
+                AsyncTaskStatus.RUNNING,
+                AsyncError.none(),
+                "Task started"
+        ));
 
         try {
-            T value = supplier.get();
+            T value = context.getExecutable().get();
             completeSuccess(value);
-        } catch (Throwable ex) {
-            completeFailure(ex);
+        } catch (Throwable throwable) {
+            completeFailure(throwable);
         } finally {
-            this.runningThread = null;
+            runtime.clearRunningThread();
         }
     }
 
+    /**
+     * 在线程池拒绝任务时完成原始任务。
+     *
+     * @param throwable 拒绝异常
+     */
     @Override
     public void reject(Throwable throwable) {
-        if (!completed.compareAndSet(false, true)) {
+        TaskExecutionRuntime runtime = context.getRuntime();
+        if (!runtime.tryResolveBaseOutcome(AsyncTaskStatus.REJECTED)) {
             return;
         }
 
-        this.endTimeMillis = System.currentTimeMillis();
-        AsyncError error = rejectedError(throwable);
+        Throwable rejectedCause = throwable instanceof RejectedExecutionException
+                ? throwable
+                : new RejectedExecutionException("Task rejected", throwable);
+        AsyncError error = errorClassifier.classify(
+                context.getTask(),
+                rejectedCause,
+                AsyncErrorStage.SUBMIT
+        );
         ConcurrencyRejectedException rejectedException = new ConcurrencyRejectedException(
-                task.getExecutorName(),
-                task.getTaskName(),
+                context.getTask().getExecutorName(),
+                context.getTask().getTaskName(),
                 error,
-                throwable instanceof RejectedExecutionException ? throwable : new RejectedExecutionException(throwable)
+                rejectedCause
         );
 
-        TaskExecutionEvent event = buildEvent(AsyncTaskStatus.REJECTED, error);
-        if (!fireAndForget && future != null) {
-            future.completeExceptionally(rejectedException);
-        }
-
-        metricsRecorder.recordRejected(event.copy());
-        taskExecutionRegistry.update(TaskExecutionSnapshot.from(event));
-        taskExecutionListener.onRejected(event.copy());
-        publishCompleted(event);
+        TaskExecutionEvent event = context.event(
+                AsyncTaskStatus.REJECTED,
+                error,
+                "Task rejected"
+        );
+        lifecyclePublisher.publish(event);
+        finalizeWhenNoFallback(event);
+        context.getBaseFuture().completeExceptionally(rejectedException);
     }
 
     /**
-     * 标记结果层超时或排队超时。
+     * 标记排队阶段或等待结果阶段超时。
      *
      * @param throwable 超时异常
-     * @param stage 超时发生阶段：QUEUE 表示排队超时；WAIT_RESULT 表示结果层超时
+     * @param stage QUEUE 表示排队超时；WAIT_RESULT 表示结果层超时
      */
     public void completeTimeout(Throwable throwable, AsyncErrorStage stage) {
-        if (!completed.compareAndSet(false, true)) {
+        TaskExecutionRuntime runtime = context.getRuntime();
+        if (!runtime.tryResolveBaseOutcome(AsyncTaskStatus.TIMEOUT)) {
             return;
         }
 
-        this.endTimeMillis = System.currentTimeMillis();
-        AsyncError error = timeoutError(throwable, stage);
+        AsyncErrorStage actualStage = stage == null ? AsyncErrorStage.WAIT_RESULT : stage;
+        AsyncError error = errorClassifier.classify(
+                context.getTask(),
+                throwable,
+                actualStage
+        );
         AsyncTaskException timeoutException = new AsyncTaskException(
-                task.getExecutorName(),
-                task.getTaskName(),
-                task.getTaskId(),
+                context.getTask().getExecutorName(),
+                context.getTask().getTaskName(),
+                context.getTask().getTaskId(),
                 error,
                 throwable
         );
 
-        TaskExecutionEvent event = buildEvent(AsyncTaskStatus.TIMEOUT, error);
-        if (!fireAndForget && future != null) {
-            future.completeExceptionally(timeoutException);
-        }
-
-        metricsRecorder.recordTimeout(event.copy());
-        taskExecutionRegistry.update(TaskExecutionSnapshot.from(event));
-        taskExecutionListener.onTimeout(event.copy());
-        publishCompleted(event);
+        TaskExecutionEvent event = context.event(
+                AsyncTaskStatus.TIMEOUT,
+                error,
+                actualStage == AsyncErrorStage.QUEUE ? "Task queue timeout" : "Task result timeout"
+        );
+        lifecyclePublisher.publish(event);
+        finalizeWhenNoFallback(event);
+        context.getBaseFuture().completeExceptionally(timeoutException);
     }
 
     /**
-     * 标记任务取消。
+     * 标记任务被主动取消。
+     *
+     * @param throwable 取消原因
+     * @param mayInterruptIfRunning 是否尽力中断运行线程
      */
     public void completeCancelled(Throwable throwable, boolean mayInterruptIfRunning) {
-        if (!completed.compareAndSet(false, true)) {
+        TaskExecutionRuntime runtime = context.getRuntime();
+        if (!runtime.tryResolveBaseOutcome(AsyncTaskStatus.CANCELLED)) {
             return;
         }
 
-        this.endTimeMillis = System.currentTimeMillis();
-        AsyncError error = cancelledError(throwable);
-        TaskExecutionEvent event = buildEvent(AsyncTaskStatus.CANCELLED, error);
+        Throwable cancellation = throwable == null
+                ? new CancellationException("Task cancelled")
+                : throwable;
+        AsyncError error = errorClassifier.classify(
+                context.getTask(),
+                cancellation,
+                AsyncErrorStage.CANCEL
+        );
+        TaskExecutionEvent event = context.event(
+                AsyncTaskStatus.CANCELLED,
+                error,
+                "Task cancelled"
+        );
 
-        if (!fireAndForget && future != null) {
-            future.cancel(mayInterruptIfRunning);
-        }
-        interruptRunningIfNecessary(mayInterruptIfRunning);
-
-        metricsRecorder.recordCancelled(event.copy());
-        taskExecutionRegistry.update(TaskExecutionSnapshot.from(event));
-        taskExecutionListener.onCancelled(event.copy());
-        publishCompleted(event);
+        runtime.interruptIfNecessary(mayInterruptIfRunning);
+        lifecyclePublisher.publish(event);
+        finalizeWhenNoFallback(event);
+        context.getBaseFuture().cancel(mayInterruptIfRunning);
     }
 
     /**
-     * 超时后仅尝试中断底层线程，不改变已记录的 TIMEOUT 状态。
+     * 超时后只尝试中断底层线程，不把 TIMEOUT 状态覆盖成 CANCELLED。
+     *
+     * @param mayInterruptIfRunning 是否发送中断信号
      */
     public void interruptRunningIfNecessary(boolean mayInterruptIfRunning) {
-        if (mayInterruptIfRunning && runningThread != null) {
-            runningThread.interrupt();
-        }
+        context.getRuntime().interruptIfNecessary(mayInterruptIfRunning);
     }
 
+    /**
+     * 完成原始任务成功结果。
+     */
     private void completeSuccess(T value) {
-        if (!completed.compareAndSet(false, true)) {
+        TaskExecutionRuntime runtime = context.getRuntime();
+        if (!runtime.tryResolveBaseOutcome(AsyncTaskStatus.SUCCESS)) {
             return;
         }
 
-        this.endTimeMillis = System.currentTimeMillis();
-        TaskExecutionEvent event = buildEvent(AsyncTaskStatus.SUCCESS, AsyncError.none());
-
-        if (!fireAndForget && future != null) {
-            future.complete(value);
-        }
-
-        metricsRecorder.recordSuccess(event.copy());
-        taskExecutionRegistry.update(TaskExecutionSnapshot.from(event));
-        taskExecutionListener.onSuccess(event.copy());
-        publishCompleted(event);
+        runtime.tryFinalize(AsyncTaskStatus.SUCCESS);
+        TaskExecutionEvent event = context.event(
+                AsyncTaskStatus.SUCCESS,
+                AsyncError.none(),
+                "Task success"
+        );
+        lifecyclePublisher.publish(event);
+        lifecyclePublisher.publishCompleted(event);
+        context.getBaseFuture().complete(value);
     }
 
+    /**
+     * 完成原始任务失败结果。
+     */
     private void completeFailure(Throwable throwable) {
-        if (!completed.compareAndSet(false, true)) {
+        TaskExecutionRuntime runtime = context.getRuntime();
+        if (!runtime.tryResolveBaseOutcome(AsyncTaskStatus.FAILED)) {
             return;
         }
 
-        this.endTimeMillis = System.currentTimeMillis();
-        AsyncError error = asyncErrorClassifier.classify(task, throwable, AsyncErrorStage.RUN);
+        AsyncError error = errorClassifier.classify(
+                context.getTask(),
+                throwable,
+                AsyncErrorStage.RUN
+        );
         AsyncTaskException taskException = new AsyncTaskException(
-                task.getExecutorName(),
-                task.getTaskName(),
-                task.getTaskId(),
+                context.getTask().getExecutorName(),
+                context.getTask().getTaskName(),
+                context.getTask().getTaskId(),
                 error,
                 throwable
         );
+        TaskExecutionEvent event = context.event(
+                AsyncTaskStatus.FAILED,
+                error,
+                "Task failed"
+        );
 
-        TaskExecutionEvent event = buildEvent(AsyncTaskStatus.FAILED, error);
-        if (fireAndForget) {
+        lifecyclePublisher.publish(event);
+        finalizeWhenNoFallback(event);
+
+        if (runtime.isFireAndForget()) {
             uncaughtExceptionHandler.handleException(event.copy(), taskException);
-        } else if (future != null) {
-            future.completeExceptionally(taskException);
+        }
+        context.getBaseFuture().completeExceptionally(taskException);
+    }
+
+    /**
+     * 原始异常状态不存在 fallback 时，直接确定整个任务管道的最终状态。
+     */
+    private void finalizeWhenNoFallback(TaskExecutionEvent baseTerminalEvent) {
+        if (context.hasFallback() && context.getRuntime().isResultAware()) {
+            return;
         }
 
-        metricsRecorder.recordFailure(event.copy());
-        taskExecutionRegistry.update(TaskExecutionSnapshot.from(event));
-        taskExecutionListener.onFailure(event.copy());
-        publishCompleted(event);
-    }
-
-    private void publishStarted(TaskExecutionEvent event) {
-        metricsRecorder.recordStarted(event.copy());
-        taskExecutionRegistry.update(TaskExecutionSnapshot.from(event));
-        taskExecutionListener.onStarted(event.copy());
-    }
-
-    private void publishCompleted(TaskExecutionEvent event) {
-        metricsRecorder.recordCompleted(event.copy());
-        taskExecutionListener.onCompleted(event.copy());
-    }
-
-    private TaskExecutionEvent buildEvent(AsyncTaskStatus status, AsyncError error) {
-        TaskExecutionEvent event = new TaskExecutionEvent();
-        event.setTaskId(task.getTaskId());
-        event.setExecutorName(task.getExecutorName());
-        event.setTaskName(task.getTaskName());
-        event.setBizKey(task.getBizKey());
-        event.setDescription(task.getDescription());
-        event.setTags(task.getTags());
-        event.setStatus(status);
-        event.setError(error == null ? AsyncError.none() : error);
-        event.setSubmitTimeMillis(submitTimeMillis);
-        event.setStartTimeMillis(startTimeMillis);
-        event.setEndTimeMillis(endTimeMillis);
-        event.setQueueCostMillis(calculateQueueCostMillis());
-        event.setRunCostMillis(calculateRunCostMillis());
-        event.setTotalCostMillis(calculateTotalCostMillis());
-        event.setFireAndForget(fireAndForget);
-        return event;
-    }
-
-    private boolean isQueueTimeout() {
-        if (task.getQueueTimeout() == null || task.getQueueTimeout().isZero() || task.getQueueTimeout().isNegative()) {
-            return false;
+        if (context.getRuntime().tryFinalize(baseTerminalEvent.getStatus())) {
+            TaskExecutionEvent finalEvent = context.event(
+                    baseTerminalEvent.getStatus(),
+                    baseTerminalEvent.getError(),
+                    baseTerminalEvent.getMessage()
+            );
+            lifecyclePublisher.publishCompleted(finalEvent);
         }
-        return calculateQueueCostMillis() > task.getQueueTimeout().toMillis();
-    }
-
-    private long calculateQueueCostMillis() {
-        if (startTimeMillis > 0) {
-            return Math.max(0, startTimeMillis - submitTimeMillis);
-        }
-        if (endTimeMillis > 0) {
-            return Math.max(0, endTimeMillis - submitTimeMillis);
-        }
-        return Math.max(0, System.currentTimeMillis() - submitTimeMillis);
-    }
-
-    private long calculateRunCostMillis() {
-        if (startTimeMillis <= 0 || endTimeMillis <= 0) {
-            return 0;
-        }
-        return Math.max(0, endTimeMillis - startTimeMillis);
-    }
-
-    private long calculateTotalCostMillis() {
-        if (endTimeMillis <= 0) {
-            return 0;
-        }
-        return Math.max(0, endTimeMillis - submitTimeMillis);
-    }
-
-    private AsyncError rejectedError(Throwable throwable) {
-        return AsyncError.builder()
-                .classification(AsyncErrorClassification.of(
-                        AsyncErrorCategory.RESOURCE,
-                        AsyncErrorReason.REJECTED,
-                        AsyncErrorStage.SUBMIT
-                ))
-                .application(ApplicationErrorInfo.none())
-                .exception(ExceptionInfo.from(throwable))
-                .recovery(RecoveryHint.of(AsyncRecoveryAction.DELAY_RETRY, true, false, true))
-                .build();
-    }
-
-    private AsyncError timeoutError(Throwable throwable, AsyncErrorStage stage) {
-        AsyncErrorReason reason = stage == AsyncErrorStage.QUEUE ? AsyncErrorReason.QUEUE_TIMEOUT : AsyncErrorReason.TIMEOUT;
-        return AsyncError.builder()
-                .classification(AsyncErrorClassification.of(
-                        stage == AsyncErrorStage.QUEUE ? AsyncErrorCategory.RESOURCE : AsyncErrorCategory.DEPENDENCY,
-                        reason,
-                        stage == null ? AsyncErrorStage.WAIT_RESULT : stage
-                ))
-                .application(ApplicationErrorInfo.none())
-                .exception(ExceptionInfo.from(throwable))
-                .recovery(RecoveryHint.of(
-                        stage == AsyncErrorStage.QUEUE ? AsyncRecoveryAction.DELAY_RETRY : AsyncRecoveryAction.FAST_RETRY,
-                        true,
-                        false,
-                        stage == AsyncErrorStage.QUEUE
-                ))
-                .build();
-    }
-
-    private AsyncError cancelledError(Throwable throwable) {
-        return AsyncError.builder()
-                .classification(AsyncErrorClassification.of(
-                        AsyncErrorCategory.COMPONENT,
-                        AsyncErrorReason.CANCELLED,
-                        AsyncErrorStage.CANCEL
-                ))
-                .application(ApplicationErrorInfo.none())
-                .exception(ExceptionInfo.from(throwable))
-                .recovery(RecoveryHint.none())
-                .build();
     }
 }

@@ -19,7 +19,6 @@ import com.xjtu.iron.concurrency.api.execution.task.AsyncTask;
 import com.xjtu.iron.concurrency.core.error.DefaultAsyncErrorClassifier;
 import org.springframework.stereotype.Component;
 
-package com.xjtu.iron.domain.exception;
 /**
  * 营销业务异步错误分类器。
  *

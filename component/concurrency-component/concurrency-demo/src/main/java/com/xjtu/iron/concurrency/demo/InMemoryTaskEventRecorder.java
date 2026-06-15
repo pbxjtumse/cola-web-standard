@@ -78,6 +78,16 @@ public class InMemoryTaskEventRecorder implements TaskExecutionListener, AsyncUn
     }
 
     @Override
+    public void onFallbackSuccess(TaskExecutionEvent event) {
+        addEvent("onFallbackSuccess", event);
+    }
+
+    @Override
+    public void onFallbackFailure(TaskExecutionEvent event) {
+        addEvent("onFallbackFailure", event);
+    }
+
+    @Override
     public void onCompleted(TaskExecutionEvent event) {
         addEvent("onCompleted", event);
     }
@@ -137,14 +147,14 @@ public class InMemoryTaskEventRecorder implements TaskExecutionListener, AsyncUn
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("phase", phase);
         row.put("status", event.getStatus() == null ? null : event.getStatus().name());
-        row.put("taskId", event.getTaskId());
-        row.put("executorName", event.getExecutorName());
-        row.put("taskName", event.getTaskName());
-        row.put("bizKey", event.getBizKey());
-        row.put("tags", event.getTags());
-        row.put("queueCostMillis", event.getQueueCostMillis());
-        row.put("runCostMillis", event.getRunCostMillis());
-        row.put("totalCostMillis", event.getTotalCostMillis());
+        row.put("taskId", event.getTask().getTaskId());
+        row.put("executorName", event.getTask().getExecutorName());
+        row.put("taskName", event.getTask().getTaskName());
+        row.put("bizKey", event.getTask().getBizKey());
+        row.put("tags", event.getTask().getTags());
+        row.put("queueCostMillis", event.getTiming().getQueueCostMillis());
+        row.put("runCostMillis", event.getTiming().getRunCostMillis());
+        row.put("totalCostMillis", event.getTiming().getTotalCostMillis());
         row.put("message", event.getMessage());
         row.put("error", event.getError());
         if (event.getError() != null
