@@ -7,13 +7,49 @@ import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
  */
 public class NoopConcurrencyMetricsRecorder implements ConcurrencyMetricsRecorder {
 
-    @Override public void recordSubmitted(TaskExecutionEvent event) { }
-    @Override public void recordStarted(TaskExecutionEvent event) { }
-    @Override public void recordSuccess(TaskExecutionEvent event) { }
-    @Override public void recordFailure(TaskExecutionEvent event) { }
-    @Override public void recordRejected(TaskExecutionEvent event) { }
-    @Override public void recordTimeout(TaskExecutionEvent event) { }
-    @Override public void recordCancelled(TaskExecutionEvent event) { }
-    @Override public void recordFallback(TaskExecutionEvent event) { }
-    @Override public void recordCompleted(TaskExecutionEvent event) { }
+    @Override
+    public void recordSubmitted(TaskExecutionEvent event) {
+    }
+
+    @Override
+    public void recordStarted(TaskExecutionEvent event) {
+    }
+
+    @Override
+    public void recordSuccess(TaskExecutionEvent event) {
+    }
+
+    @Override
+    public void recordFailure(TaskExecutionEvent event) {
+    }
+
+    @Override
+    public void recordRejected(TaskExecutionEvent event) {
+    }
+
+    @Override
+    public void recordTimeout(TaskExecutionEvent event) {
+    }
+
+    @Override
+    public void recordCancelled(TaskExecutionEvent event) {
+    }
+
+    @Override
+    public void recordFallback(TaskExecutionEvent event) {
+    }
+
+    @Override
+    public void recordFallbackSuccess(TaskExecutionEvent event) {
+
+    }
+
+    @Override
+    public void recordFallbackFailure(TaskExecutionEvent event) {
+
+    }
+
+    @Override
+    public void recordCompleted(TaskExecutionEvent event) {
+    }
 }

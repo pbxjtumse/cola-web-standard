@@ -28,8 +28,14 @@ public interface ConcurrencyMetricsRecorder {
     /** 记录任务取消。 */
     void recordCancelled(TaskExecutionEvent event);
 
-    /** 记录 fallback 触发、成功或失败。 */
+    /** 记录 fallback 触发初始化 */
     void recordFallback(TaskExecutionEvent event);
+
+    /** 记录 fallback 触发成功或失败。 */
+    void recordFallbackSuccess(TaskExecutionEvent event);
+
+    /** 记录 fallback 触发失败。 */
+    void recordFallbackFailure(TaskExecutionEvent event);
 
     /** 记录任务最终完成。 */
     void recordCompleted(TaskExecutionEvent event);

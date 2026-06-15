@@ -63,23 +63,7 @@ public class TaskCommand<T> implements Runnable, RejectedTaskAware {
     /** 异步错误分类器，用于把 Throwable 转换为结构化 AsyncError。 */
     private final AsyncErrorClassifier asyncErrorClassifier;
 
-    /** 是否 fire-and-forget 任务。true 表示来自 execute；false 表示来自 run/supply/submit。 */
-    private final boolean fireAndForget;
 
-    /** 任务提交时间。用于计算 queueCostMillis 和 totalCostMillis。 */
-    private final long submitTimeMillis;
-
-    /** 当前正在执行该任务的线程。用于超时后尝试 interrupt。 */
-    private volatile Thread runningThread;
-
-    /** 任务开始执行时间。在线程池工作线程真正开始执行 run 方法时赋值。 */
-    private volatile long startTimeMillis;
-
-    /** 任务结束时间。任务成功、失败、拒绝、取消、超时时赋值。 */
-    private volatile long endTimeMillis;
-
-    /** 任务是否已经进入终态。用于避免 success/failure/timeout/rejected/cancelled 重复覆盖。 */
-    private final AtomicBoolean completed = new AtomicBoolean(false);
 
     public TaskCommand(
             AsyncTask<T> task,

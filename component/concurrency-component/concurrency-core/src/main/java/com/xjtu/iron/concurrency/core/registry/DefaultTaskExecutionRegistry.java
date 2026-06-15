@@ -30,10 +30,10 @@ public class DefaultTaskExecutionRegistry implements TaskExecutionRegistry {
 
     @Override
     public void update(TaskExecutionSnapshot snapshot) {
-        if (snapshot == null || snapshot.getTaskId() == null) {
+        if (snapshot == null || snapshot.getTask() == null) {
             return;
         }
-        snapshots.put(snapshot.getTaskId(), snapshot);
+        snapshots.put(snapshot.getTask().getTaskId(), snapshot);
         evictIfNecessary();
     }
 

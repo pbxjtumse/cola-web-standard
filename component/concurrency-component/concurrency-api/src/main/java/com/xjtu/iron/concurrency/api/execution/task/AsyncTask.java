@@ -51,7 +51,7 @@ public class AsyncTask<T> {
     private boolean interruptOnCancel = false;
 
     /** 任务执行逻辑。 */
-    private Supplier<T> supplier;
+    private Supplier<T> operation;
 
     /** 任务失败或超时后的 fallback 逻辑。 */
     private Function<Throwable, T> fallback;
@@ -70,7 +70,7 @@ public class AsyncTask<T> {
         task.taskId = UUID.randomUUID().toString();
         task.executorName = executorName;
         task.taskName = taskName;
-        task.supplier = supplier;
+        task.operation = supplier;
         return task;
     }
 
@@ -150,7 +150,7 @@ public class AsyncTask<T> {
         if (taskName == null || taskName.isBlank()) {
             throw new IllegalArgumentException("taskName must not be blank");
         }
-        Objects.requireNonNull(supplier, "supplier must not be null");
+        Objects.requireNonNull(operation, "supplier must not be null");
         if (timeout != null && timeout.isNegative()) {
             throw new IllegalArgumentException("timeout must not be negative");
         }
@@ -245,12 +245,12 @@ public class AsyncTask<T> {
         this.interruptOnCancel = interruptOnCancel;
     }
 
-    public Supplier<T> getSupplier() {
-        return supplier;
+    public Supplier<T> getOperation() {
+        return operation;
     }
 
     public void setSupplier(Supplier<T> supplier) {
-        this.supplier = supplier;
+        this.operation = supplier;
     }
 
     public Function<Throwable, T> getFallback() {

@@ -110,8 +110,8 @@ public class DefaultTaskExecutionTemplate implements TaskExecutionTemplate {
         ThreadPoolExecutor executor = threadPoolRegistry.getExecutor(task.getExecutorName());
         CompletableFuture<T> baseFuture = new CompletableFuture<>();
         Supplier<T> supplier = task.isContextPropagation()
-                ? taskDecorator.decorate(task.getSupplier())
-                : task.getSupplier();
+                ? taskDecorator.decorate(task.getOperation())
+                : task.getOperation();
 
         TaskCommand<T> command = new TaskCommand<>(
                 task,

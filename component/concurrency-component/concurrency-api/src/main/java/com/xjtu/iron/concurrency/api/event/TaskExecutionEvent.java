@@ -4,9 +4,10 @@ import com.xjtu.iron.concurrency.api.enums.task.AsyncTaskStatus;
 import com.xjtu.iron.concurrency.api.error.AsyncError;
 
 import java.time.Instant;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import com.xjtu.iron.concurrency.api.task.TaskMetadata;
+import com.xjtu.iron.concurrency.api.task.TaskResultMode;
+import com.xjtu.iron.concurrency.api.task.TaskTimingSnapshot;
+
 
 /**
  * 任务执行事件。
@@ -15,265 +16,109 @@ import java.util.Map;
  * 用于向任务监听器、任务状态注册表、指标记录器传递任务执行过程中的状态、耗时、错误和上下文信息。
  * </p>
  */
-public class TaskExecutionEvent {
+
+public final class TaskExecutionEvent {
 
     /**
-     * 任务唯一 ID。
+     * 任务基础元数据。
      */
-    private String taskId;
+    private final TaskMetadata task;
 
     /**
-     * 线程池名称。
+     * 本次事件对应的任务状态。
      */
-    private String executorName;
+    private final AsyncTaskStatus status;
 
     /**
-     * 任务名称。
+     * 任务结果模式。
      */
-    private String taskName;
+    private final TaskResultMode resultMode;
 
     /**
-     * 业务标识。
+     * 截止本次事件发生时的时间和耗时快照。
+     */
+    private final TaskTimingSnapshot timing;
+
+    /**
+     * 结构化错误信息。
      *
      * <p>
-     * 例如 orderId=xxx、userId=xxx、batchNo=xxx。
-     * 该字段适合用于排查和补偿，不建议作为指标 tag。
+     * 正常事件为 AsyncError.none()。
      * </p>
      */
-    private String bizKey;
+    private final AsyncError error;
 
     /**
-     * 任务描述。
+     * 本次事件的人类可读说明。
      */
-    private String description;
+    private final String message;
 
     /**
-     * 事件说明。
+     * 事件发生时间。
      */
-    private String message;
+    private final Instant occurredAt;
 
-    /**
-     * 任务标签。
-     *
-     * <p>
-     * 适合存放 scene、source、tenant 等低基数字段。
-     * </p>
-     */
-    private Map<String, String> tags = new LinkedHashMap<>();
-
-    /**
-     * 任务状态。
-     */
-    private AsyncTaskStatus status;
-
-    /**
-     * 异步错误详情。
-     *
-     * <p>
-     * 成功任务可以为 AsyncError.none()。
-     * 失败、拒绝、超时、取消、fallback 失败时记录具体错误。
-     * </p>
-     */
-    private AsyncError error = AsyncError.none();
-
-    /**
-     * 任务提交时间戳，毫秒。
-     */
-    private long submitTimeMillis;
-
-    /**
-     * 任务开始执行时间戳，毫秒。
-     */
-    private long startTimeMillis;
-
-    /**
-     * 任务结束时间戳，毫秒。
-     */
-    private long endTimeMillis;
-
-    /**
-     * 排队耗时，毫秒。
-     */
-    private long queueCostMillis;
-
-    /**
-     * 实际执行耗时，毫秒。
-     */
-    private long runCostMillis;
-
-    /**
-     * 从提交到结束的总耗时，毫秒。
-     */
-    private long totalCostMillis;
-
-    /**
-     * 是否 fire-and-forget 任务。
-     */
-    private boolean fireAndForget;
-
-    /**
-     * 事件创建时间。
-     */
-    private Instant eventTime = Instant.now();
+    public TaskExecutionEvent(
+            TaskMetadata task,
+            AsyncTaskStatus status,
+            TaskResultMode resultMode,
+            TaskTimingSnapshot timing,
+            AsyncError error,
+            String message,
+            Instant occurredAt
+    ) {
+        this.task = task;
+        this.status = status;
+        this.resultMode = resultMode;
+        this.timing = timing == null
+                ? TaskTimingSnapshot.empty()
+                : timing;
+        this.error = error == null
+                ? AsyncError.none()
+                : error.copy();
+        this.message = message;
+        this.occurredAt = occurredAt == null
+                ? Instant.now()
+                : occurredAt;
+    }
 
     public TaskExecutionEvent copy() {
-        TaskExecutionEvent event = new TaskExecutionEvent();
-        event.taskId = taskId;
-        event.executorName = executorName;
-        event.taskName = taskName;
-        event.bizKey = bizKey;
-        event.description = description;
-        event.message = message;
-        event.tags = tags == null ? new LinkedHashMap<>() : new LinkedHashMap<>(tags);
-        event.status = status;
-        event.error = error == null ? AsyncError.none() : error.copy();
-        event.submitTimeMillis = submitTimeMillis;
-        event.startTimeMillis = startTimeMillis;
-        event.endTimeMillis = endTimeMillis;
-        event.queueCostMillis = queueCostMillis;
-        event.runCostMillis = runCostMillis;
-        event.totalCostMillis = totalCostMillis;
-        event.fireAndForget = fireAndForget;
-        event.eventTime = eventTime;
-        return event;
+        return new TaskExecutionEvent(
+                task,
+                status,
+                resultMode,
+                timing,
+                error,
+                message,
+                occurredAt
+        );
     }
 
-    public String getTaskId() {
-        return taskId;
-    }
-
-    public void setTaskId(String taskId) {
-        this.taskId = taskId;
-    }
-
-    public String getExecutorName() {
-        return executorName;
-    }
-
-    public void setExecutorName(String executorName) {
-        this.executorName = executorName;
-    }
-
-    public String getTaskName() {
-        return taskName;
-    }
-
-    public void setTaskName(String taskName) {
-        this.taskName = taskName;
-    }
-
-    public String getBizKey() {
-        return bizKey;
-    }
-
-    public void setBizKey(String bizKey) {
-        this.bizKey = bizKey;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public void setMessage(String message) {
-        this.message = message;
-    }
-
-    public Map<String, String> getTags() {
-        if (tags == null) {
-            return Collections.emptyMap();
-        }
-        return Collections.unmodifiableMap(tags);
-    }
-
-    public void setTags(Map<String, String> tags) {
-        this.tags = tags == null ? new LinkedHashMap<>() : new LinkedHashMap<>(tags);
+    public TaskMetadata getTask() {
+        return task;
     }
 
     public AsyncTaskStatus getStatus() {
         return status;
     }
 
-    public void setStatus(AsyncTaskStatus status) {
-        this.status = status;
+    public TaskResultMode getResultMode() {
+        return resultMode;
+    }
+
+    public TaskTimingSnapshot getTiming() {
+        return timing;
     }
 
     public AsyncError getError() {
         return error;
     }
 
-    public void setError(AsyncError error) {
-        this.error = error == null ? AsyncError.none() : error;
+    public String getMessage() {
+        return message;
     }
 
-    public long getSubmitTimeMillis() {
-        return submitTimeMillis;
-    }
-
-    public void setSubmitTimeMillis(long submitTimeMillis) {
-        this.submitTimeMillis = submitTimeMillis;
-    }
-
-    public long getStartTimeMillis() {
-        return startTimeMillis;
-    }
-
-    public void setStartTimeMillis(long startTimeMillis) {
-        this.startTimeMillis = startTimeMillis;
-    }
-
-    public long getEndTimeMillis() {
-        return endTimeMillis;
-    }
-
-    public void setEndTimeMillis(long endTimeMillis) {
-        this.endTimeMillis = endTimeMillis;
-    }
-
-    public long getQueueCostMillis() {
-        return queueCostMillis;
-    }
-
-    public void setQueueCostMillis(long queueCostMillis) {
-        this.queueCostMillis = queueCostMillis;
-    }
-
-    public long getRunCostMillis() {
-        return runCostMillis;
-    }
-
-    public void setRunCostMillis(long runCostMillis) {
-        this.runCostMillis = runCostMillis;
-    }
-
-    public long getTotalCostMillis() {
-        return totalCostMillis;
-    }
-
-    public void setTotalCostMillis(long totalCostMillis) {
-        this.totalCostMillis = totalCostMillis;
-    }
-
-    public boolean isFireAndForget() {
-        return fireAndForget;
-    }
-
-    public void setFireAndForget(boolean fireAndForget) {
-        this.fireAndForget = fireAndForget;
-    }
-
-    public Instant getEventTime() {
-        return eventTime;
-    }
-
-    public void setEventTime(Instant eventTime) {
-        this.eventTime = eventTime;
+    public Instant getOccurredAt() {
+        return occurredAt;
     }
 }

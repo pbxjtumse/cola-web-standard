@@ -10,7 +10,7 @@ import java.util.Map;
 
 /**
  * 异步任务错误描述。
- *
+ * 业务系统把自己的 DomainException / BizException 映射成 AsyncError。
  * <p>
  * 用于描述一次异步任务非正常结束的完整错误信息。
  * 它由错误分类、应用侧错误信息、Java 异常信息、恢复建议和扩展字段组成。
