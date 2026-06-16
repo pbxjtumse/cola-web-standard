@@ -112,8 +112,8 @@ public class Phase1EnhancedDemoController {
         return new TaskExecutionListener() {
             @Override
             public void onCompleted(TaskExecutionEvent event) {
-                System.out.println("[demo-listener] completed taskId=" + event.getTaskId()
-                        + ", taskName=" + event.getTaskName()
+                System.out.println("[demo-listener] completed taskId=" + event.getTask().getTaskId()
+                        + ", taskName=" + event.getTask().getTaskName()
                         + ", status=" + event.getStatus()
                         + ", queueCost=" + event.getTiming().getQueueCostMillis()
                         + ", runCost=" + event.getTiming().getRunCostMillis());

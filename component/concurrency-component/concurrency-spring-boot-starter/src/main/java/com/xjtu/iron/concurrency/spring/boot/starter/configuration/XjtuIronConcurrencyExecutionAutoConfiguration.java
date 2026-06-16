@@ -300,7 +300,9 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AsyncExecutor asyncExecutor(TaskExecutionTemplate taskExecutionTemplate) {
+    public AsyncExecutor asyncExecutor(
+            TaskExecutionTemplate taskExecutionTemplate
+    ) {
         return new DefaultAsyncExecutor(taskExecutionTemplate);
     }
 

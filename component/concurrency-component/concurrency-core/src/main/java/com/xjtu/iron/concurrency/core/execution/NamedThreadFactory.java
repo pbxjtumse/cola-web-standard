@@ -27,7 +27,7 @@ public class NamedThreadFactory implements ThreadFactory {
     public Thread newThread(Runnable runnable) {
         Thread thread = new Thread(runnable);
         thread.setName(threadNamePrefix + index.getAndIncrement());
-        thread.setDaemon(false);
+        thread.setDaemon(daemon);
         thread.setUncaughtExceptionHandler((t, e) -> {
             // 实现时用 logger 打印
         });

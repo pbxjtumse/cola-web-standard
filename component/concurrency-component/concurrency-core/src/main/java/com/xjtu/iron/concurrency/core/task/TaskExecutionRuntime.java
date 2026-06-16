@@ -25,6 +25,16 @@ public final class TaskExecutionRuntime {
     private final TaskResultMode resultMode;
 
     /**
+     * 生命周期状态转换锁。
+     *
+     * <p>
+     * 用于协调工作线程开始运行与超时线程确定终态之间的竞争，避免 TIMEOUT 已经生效后
+     * 又被 RUNNING 覆盖。AtomicBoolean 负责快速状态判断，本锁负责多字段原子更新。
+     * </p>
+     */
+    private final Object stateLock = new Object();
+
+    /**
      * 任务提交时的墙上时钟时间，供日志和页面展示。
      */
     private final long submitTimeMillis;
@@ -116,11 +126,18 @@ public final class TaskExecutionRuntime {
     /**
      * 标记原始任务开始运行。
      */
-    public void markRunning() {
-        startTimeMillis = System.currentTimeMillis();
-        startNanoTime = System.nanoTime();
-        runningThread.set(Thread.currentThread());
-        status.set(AsyncTaskStatus.RUNNING);
+    public boolean tryMarkRunning() {
+        synchronized (stateLock) {
+            if (baseOutcomeResolved.get() || finalOutcomeResolved.get()) {
+                return false;
+            }
+
+            startTimeMillis = System.currentTimeMillis();
+            startNanoTime = System.nanoTime();
+            runningThread.set(Thread.currentThread());
+            status.set(AsyncTaskStatus.RUNNING);
+            return true;
+        }
     }
 
     /**
@@ -132,14 +149,16 @@ public final class TaskExecutionRuntime {
     public boolean tryResolveBaseOutcome(AsyncTaskStatus baseStatus) {
         Objects.requireNonNull(baseStatus, "baseStatus must not be null");
 
-        if (!baseOutcomeResolved.compareAndSet(false, true)) {
-            return false;
-        }
+        synchronized (stateLock) {
+            if (!baseOutcomeResolved.compareAndSet(false, true)) {
+                return false;
+            }
 
-        executionEndTimeMillis = System.currentTimeMillis();
-        executionEndNanoTime = System.nanoTime();
-        status.set(baseStatus);
-        return true;
+            executionEndTimeMillis = System.currentTimeMillis();
+            executionEndNanoTime = System.nanoTime();
+            status.set(baseStatus);
+            return true;
+        }
     }
 
     /**
@@ -148,8 +167,10 @@ public final class TaskExecutionRuntime {
      * @param intermediateStatus 中间状态
      */
     public void markIntermediate(AsyncTaskStatus intermediateStatus) {
-        if (!finalOutcomeResolved.get() && intermediateStatus != null) {
-            status.set(intermediateStatus);
+        synchronized (stateLock) {
+            if (!finalOutcomeResolved.get() && intermediateStatus != null) {
+                status.set(intermediateStatus);
+            }
         }
     }
 
@@ -162,14 +183,16 @@ public final class TaskExecutionRuntime {
     public boolean tryFinalize(AsyncTaskStatus finalStatus) {
         Objects.requireNonNull(finalStatus, "finalStatus must not be null");
 
-        if (!finalOutcomeResolved.compareAndSet(false, true)) {
-            return false;
-        }
+        synchronized (stateLock) {
+            if (!finalOutcomeResolved.compareAndSet(false, true)) {
+                return false;
+            }
 
-        finalEndTimeMillis = System.currentTimeMillis();
-        finalEndNanoTime = System.nanoTime();
-        status.set(finalStatus);
-        return true;
+            finalEndTimeMillis = System.currentTimeMillis();
+            finalEndNanoTime = System.nanoTime();
+            status.set(finalStatus);
+            return true;
+        }
     }
 
     /**
@@ -182,7 +205,7 @@ public final class TaskExecutionRuntime {
         if (queueTimeout == null || queueTimeout.isZero() || queueTimeout.isNegative()) {
             return false;
         }
-        return elapsedMillis(submitNanoTime, System.nanoTime()) > queueTimeout.toMillis();
+        return elapsedMillis(submitNanoTime, System.nanoTime()) >= queueTimeout.toMillis();
     }
 
     /**

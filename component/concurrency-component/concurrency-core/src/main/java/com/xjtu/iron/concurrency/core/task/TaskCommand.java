@@ -92,7 +92,14 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
             return;
         }
 
-        runtime.markRunning();
+        /*
+         * 工作线程开始运行与结果层超时可能并发发生。tryMarkRunning 与
+         * tryResolveBaseOutcome 使用同一状态锁，确保 TIMEOUT 不会再被 RUNNING 覆盖。
+         */
+        if (!runtime.tryMarkRunning()) {
+            return;
+        }
+
         lifecyclePublisher.publish(context.event(
                 AsyncTaskStatus.RUNNING,
                 AsyncError.none(),
@@ -152,10 +159,10 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
      * @param throwable 超时异常
      * @param stage QUEUE 表示排队超时；WAIT_RESULT 表示结果层超时
      */
-    public void completeTimeout(Throwable throwable, AsyncErrorStage stage) {
+    public boolean completeTimeout(Throwable throwable, AsyncErrorStage stage) {
         TaskExecutionRuntime runtime = context.getRuntime();
         if (!runtime.tryResolveBaseOutcome(AsyncTaskStatus.TIMEOUT)) {
-            return;
+            return false;
         }
 
         AsyncErrorStage actualStage = stage == null ? AsyncErrorStage.WAIT_RESULT : stage;
@@ -180,6 +187,7 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
         lifecyclePublisher.publish(event);
         finalizeWhenNoFallback(event);
         context.getBaseFuture().completeExceptionally(timeoutException);
+        return true;
     }
 
     /**

@@ -23,8 +23,5 @@ public interface TaskResultPipeline {
      * @param <T> 任务结果类型
      * @return 应用 timeout、fallback 后的最终 Future
      */
-    <T> CompletableFuture<T> apply(
-            TaskExecutionContext<T> context,
-            TaskCommand<T> command
-    );
+    <T> CompletableFuture<T> apply(TaskExecutionContext<T> context, TaskCommand<T> command);
 }

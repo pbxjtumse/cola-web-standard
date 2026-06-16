@@ -5,7 +5,6 @@ import com.xjtu.iron.concurrency.core.lifecycle.TaskLifecyclePublisher;
 import com.xjtu.iron.concurrency.core.metrics.ConcurrencyMetricsRecorder;
 import com.xjtu.iron.concurrency.core.metrics.NoopConcurrencyMetricsRecorder;
 import com.xjtu.iron.concurrency.core.metrics.ThreadPoolMetricName;
-import com.xjtu.iron.concurrency.core.pipeline.DefaultTaskResultPipeline;
 import com.xjtu.iron.concurrency.core.pipeline.TaskResultPipeline;
 import com.xjtu.iron.concurrency.core.spi.ThreadPoolRegistry;
 import com.xjtu.iron.concurrency.spring.boot.starter.observability.MicrometerConcurrencyMetricsRecorder;
@@ -57,24 +56,5 @@ public class XjtuIronConcurrencyObservabilityAutoConfiguration {
                         .register(meterRegistry);
             }
         });
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public TaskResultPipeline taskResultPipeline(
-            @Qualifier("ironAsyncErrorClassifier")
-            AsyncErrorClassifier asyncErrorClassifier,
-            TaskLifecyclePublisher taskLifecyclePublisher,
-            @Qualifier("ironConcurrencyTimeoutScheduler")
-            ScheduledExecutorService timeoutScheduler,
-            @Qualifier("ironConcurrencyFallbackExecutor")
-            Executor fallbackExecutor
-    ) {
-        return new DefaultTaskResultPipeline(
-                asyncErrorClassifier,
-                taskLifecyclePublisher,
-                timeoutScheduler,
-                fallbackExecutor
-        );
     }
 }
