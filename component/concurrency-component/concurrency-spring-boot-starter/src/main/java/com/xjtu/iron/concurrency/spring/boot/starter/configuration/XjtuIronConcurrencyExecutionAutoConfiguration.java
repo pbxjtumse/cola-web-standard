@@ -179,15 +179,17 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
     public TaskExecutionListener ironTaskExecutionListener(
             ObjectProvider<TaskExecutionListener> listeners
     ) {
-        List<TaskExecutionListener> listenerList = listeners.orderedStream()
-                .filter(listener -> !(listener instanceof CompositeTaskExecutionListener))
-                .toList();
-
-        if (listenerList.isEmpty()) {
-            return new NoopTaskExecutionListener();
-        }
-
-        return new CompositeTaskExecutionListener(listenerList);
+        /*
+         * 这里不能在 Bean 创建阶段直接调用 orderedStream().toList()。
+         * 直接解析会立即实例化所有业务监听器；如果某个监听器 Bean 所在类又依赖
+         * AsyncExecutor，就会形成：AsyncExecutor -> LifecyclePublisher -> CompositeListener
+         * -> 业务监听器 -> AsyncExecutor 的循环依赖。
+         *
+         * CompositeTaskExecutionListener 会在第一次任务事件到达时再解析并缓存监听器。
+         */
+        return new CompositeTaskExecutionListener(
+                () -> listeners.orderedStream().toList()
+        );
     }
 
     @Bean

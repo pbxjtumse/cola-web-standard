@@ -2,71 +2,39 @@ package com.xjtu.iron.concurrency.core.execution;
 
 import com.xjtu.iron.concurrency.api.enums.RejectionPolicy;
 import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolSpec;
+import com.xjtu.iron.concurrency.core.rejection.*;
 import com.xjtu.iron.concurrency.core.spi.RejectedExecutionHandlerFactory;
-import com.xjtu.iron.concurrency.core.task.RejectedTaskAware;
 
-import java.util.concurrent.RejectedExecutionException;
+import java.util.Objects;
 import java.util.concurrent.RejectedExecutionHandler;
-import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * 默认拒绝策略工厂。
+ *
+ * <p>
+ * 工厂只负责根据配置选择策略实现；每种拒绝策略的具体行为放在独立类中，
+ * 便于单元测试、诊断和后续扩展。
+ * </p>
  */
-public class DefaultRejectedExecutionHandlerFactory implements RejectedExecutionHandlerFactory {
+public final class DefaultRejectedExecutionHandlerFactory
+        implements RejectedExecutionHandlerFactory {
 
     @Override
     public RejectedExecutionHandler create(ThreadPoolSpec spec) {
-        RejectionPolicy policy = spec.getRejectionPolicy();
+        Objects.requireNonNull(spec, "spec must not be null");
 
-        if (policy == RejectionPolicy.CALLER_RUNS) {
-            return callerRunsPolicy();
-        }
-        if (policy == RejectionPolicy.DISCARD) {
-            return discardPolicy();
-        }
-        if (policy == RejectionPolicy.DISCARD_OLDEST) {
-            return discardOldestPolicy();
-        }
-        if (policy == RejectionPolicy.BLOCKING_WAIT) {
-            return new BlockingWaitRejectedExecutionHandler(spec.getRejectionWaitTime());
-        }
-        return new ThreadPoolExecutor.AbortPolicy();
-    }
+        RejectionPolicy policy = spec.getRejectionPolicy() == null
+                ? RejectionPolicy.ABORT
+                : spec.getRejectionPolicy();
 
-    private RejectedExecutionHandler callerRunsPolicy() {
-        return (runnable, executor) -> {
-            if (executor.isShutdown()) {
-                throw new RejectedExecutionException("Executor already shutdown");
-            }
-            runnable.run();
-        };
-    }
-
-    private RejectedExecutionHandler discardPolicy() {
-        return (runnable, executor) -> {
-            RejectedExecutionException ex = new RejectedExecutionException("Task discarded by DISCARD policy");
-            if (runnable instanceof RejectedTaskAware rejectedTaskAware) {
-                rejectedTaskAware.reject(ex);
-            }
-            throw ex;
-        };
-    }
-
-    private RejectedExecutionHandler discardOldestPolicy() {
-        return (runnable, executor) -> {
-            if (executor.isShutdown()) {
-                RejectedExecutionException ex = new RejectedExecutionException("Executor already shutdown");
-                if (runnable instanceof RejectedTaskAware rejectedTaskAware) {
-                    rejectedTaskAware.reject(ex);
-                }
-                throw ex;
-            }
-
-            Runnable oldest = executor.getQueue().poll();
-            if (oldest instanceof RejectedTaskAware rejectedTaskAware) {
-                rejectedTaskAware.reject(new RejectedExecutionException("Task discarded by DISCARD_OLDEST policy"));
-            }
-            executor.execute(runnable);
+        return switch (policy) {
+            case ABORT -> new AwareAbortRejectedExecutionHandler();
+            case CALLER_RUNS -> new CallerRunsRejectedExecutionHandler();
+            case DISCARD -> new DiscardRejectedExecutionHandler();
+            case DISCARD_OLDEST -> new DiscardOldestRejectedExecutionHandler();
+            case BLOCKING_WAIT -> new BlockingWaitRejectedExecutionHandler(
+                    spec.getRejectionWaitTime()
+            );
         };
     }
 }

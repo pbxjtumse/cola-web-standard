@@ -143,11 +143,7 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
                 rejectedCause
         );
 
-        TaskExecutionEvent event = context.event(
-                AsyncTaskStatus.REJECTED,
-                error,
-                "Task rejected"
-        );
+        TaskExecutionEvent event = context.event(AsyncTaskStatus.REJECTED, error, "Task rejected");
         lifecyclePublisher.publish(event);
         finalizeWhenNoFallback(event);
         context.getBaseFuture().completeExceptionally(rejectedException);

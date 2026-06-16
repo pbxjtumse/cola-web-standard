@@ -88,8 +88,7 @@ public final class TaskExecutionRuntime {
     /**
      * 当前最新任务状态。
      */
-    private final AtomicReference<AsyncTaskStatus> status =
-            new AtomicReference<>(AsyncTaskStatus.CREATED);
+    private final AtomicReference<AsyncTaskStatus> status = new AtomicReference<>(AsyncTaskStatus.CREATED);
 
     /**
      * 原始任务结果是否已经确定。
