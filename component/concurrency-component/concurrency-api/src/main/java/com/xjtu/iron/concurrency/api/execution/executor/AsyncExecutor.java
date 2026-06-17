@@ -2,6 +2,8 @@ package com.xjtu.iron.concurrency.api.execution.executor;
 
 import com.xjtu.iron.concurrency.api.exception.ConcurrencyRejectedException;
 import com.xjtu.iron.concurrency.api.execution.task.AsyncTask;
+import com.xjtu.iron.concurrency.api.execution.task.TaskCancelResult;
+import com.xjtu.iron.concurrency.api.execution.task.TaskHandle;
 import com.xjtu.iron.concurrency.api.execution.template.AsyncTemplate;
 
 import java.util.concurrent.CompletableFuture;
@@ -51,4 +53,26 @@ public interface AsyncExecutor {
      * <p>适合需要 timeout、fallback、queueTimeout、上下文控制、任务元数据的复杂任务。</p>
      */
     <T> CompletableFuture<T> submit(AsyncTask<T> task);
+
+    /**
+     * 提交完整异步任务并返回可取消句柄。
+     *
+     * <p>
+     * 需要主动取消时应使用该方法。句柄取消会同步更新 CANCELLED 状态、监听器、指标和运行任务注册表。
+     * </p>
+     *
+     * @param task 异步任务模型
+     * @param <T> 结果类型
+     * @return 可控制任务句柄
+     */
+    <T> TaskHandle<T> submitHandle(AsyncTask<T> task);
+
+    /**
+     * 根据 taskId 取消当前 JVM 节点中的运行任务。
+     *
+     * @param taskId 任务唯一 ID
+     * @param mayInterruptIfRunning 是否尽力中断正在运行的原始任务或 fallback
+     * @return 取消结果
+     */
+    TaskCancelResult cancel(String taskId, boolean mayInterruptIfRunning);
 }

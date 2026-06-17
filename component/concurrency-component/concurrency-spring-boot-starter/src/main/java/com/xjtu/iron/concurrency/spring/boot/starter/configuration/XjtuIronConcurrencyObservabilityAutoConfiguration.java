@@ -1,20 +1,26 @@
 package com.xjtu.iron.concurrency.spring.boot.starter.configuration;
 
+import com.xjtu.iron.concurrency.api.error.AsyncErrorClassifier;
+import com.xjtu.iron.concurrency.core.lifecycle.TaskLifecyclePublisher;
 import com.xjtu.iron.concurrency.core.metrics.ConcurrencyMetricsRecorder;
 import com.xjtu.iron.concurrency.core.metrics.NoopConcurrencyMetricsRecorder;
 import com.xjtu.iron.concurrency.core.metrics.ThreadPoolMetricName;
+import com.xjtu.iron.concurrency.core.pipeline.TaskResultPipeline;
 import com.xjtu.iron.concurrency.core.spi.ThreadPoolRegistry;
 import com.xjtu.iron.concurrency.spring.boot.starter.observability.MicrometerConcurrencyMetricsRecorder;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.binder.MeterBinder;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * 并发组件可观测性自动装配。

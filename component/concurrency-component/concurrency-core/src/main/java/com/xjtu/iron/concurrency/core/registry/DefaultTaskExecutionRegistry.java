@@ -8,16 +8,64 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 基于内存的任务状态注册表。
  *
- * <p>一期用于本机最近任务诊断；二期可以替换成 Redis 或 DB 实现。</p>
+ * <p>
+ * 使用 ConcurrentHashMap 保存 taskId 的最新快照，使用带版本号的双端队列维护最近更新时间顺序。
+ * 更新操作不再对全部快照进行排序；淘汰和 recent 查询会忽略旧版本索引。
+ * </p>
+ *
+ * <p>
+ * 一期用于当前 JVM 的最近任务诊断。后续跨节点任务状态查询应替换为 Redis、DB 或独立任务中心。
+ * </p>
  */
-public class DefaultTaskExecutionRegistry implements TaskExecutionRegistry {
+public final class DefaultTaskExecutionRegistry
+        implements TaskExecutionRegistry {
 
-    private final ConcurrentMap<String, TaskExecutionSnapshot> snapshots = new ConcurrentHashMap<>();
+    /**
+     * taskId 到最新版本快照的映射。
+     */
+    private final ConcurrentMap<String, VersionedSnapshot> snapshots =
+            new ConcurrentHashMap<>();
+
+    /**
+     * 最近更新时间索引，队首是最新版本。
+     *
+     * <p>
+     * 同一个 taskId 多次更新会留下旧索引；查询和淘汰通过版本号过滤，后台压缩负责清理积累的旧索引。
+     * </p>
+     */
+    private final ConcurrentLinkedDeque<IndexEntry> updateOrder =
+            new ConcurrentLinkedDeque<>();
+
+    /**
+     * 单调递增版本号。
+     */
+    private final AtomicLong sequence = new AtomicLong();
+
+    /**
+     * 顺序索引近似元素数量。
+     *
+     * <p>
+     * ConcurrentLinkedDeque.size() 需要线性遍历，因此使用独立计数避免每次 update 都扫描整个索引。
+     * </p>
+     */
+    private final AtomicLong indexSize = new AtomicLong();
+
+    /**
+     * 防止多个线程同时执行索引压缩。
+     */
+    private final AtomicBoolean compacting = new AtomicBoolean(false);
+
+    /**
+     * 最多保留的不同 taskId 数量。
+     */
     private final int maxSize;
 
     public DefaultTaskExecutionRegistry() {
@@ -30,36 +78,133 @@ public class DefaultTaskExecutionRegistry implements TaskExecutionRegistry {
 
     @Override
     public void update(TaskExecutionSnapshot snapshot) {
-        if (snapshot == null || snapshot.getTask() == null) {
+        if (snapshot == null
+                || snapshot.getTask() == null
+                || snapshot.getTaskId() == null
+                || snapshot.getTaskId().isBlank()) {
             return;
         }
-        snapshots.put(snapshot.getTask().getTaskId(), snapshot);
+
+        long version = sequence.incrementAndGet();
+        String taskId = snapshot.getTaskId();
+        VersionedSnapshot versioned = new VersionedSnapshot(version, snapshot);
+
+        snapshots.put(taskId, versioned);
+        updateOrder.addFirst(new IndexEntry(taskId, version));
+        indexSize.incrementAndGet();
+
         evictIfNecessary();
+        compactIndexIfNecessary();
     }
 
     @Override
     public Optional<TaskExecutionSnapshot> get(String taskId) {
-        return Optional.ofNullable(snapshots.get(taskId));
+        if (taskId == null || taskId.isBlank()) {
+            return Optional.empty();
+        }
+
+        VersionedSnapshot versioned = snapshots.get(taskId);
+        return versioned == null
+                ? Optional.empty()
+                : Optional.of(versioned.snapshot());
     }
 
     @Override
     public List<TaskExecutionSnapshot> recent(int limit) {
-        int actualLimit = limit <= 0 ? 100 : limit;
-        return snapshots.values().stream()
-                .sorted(Comparator.comparingLong(TaskExecutionSnapshot::getSubmitTimeMillis).reversed())
-                .limit(actualLimit)
-                .toList();
+        int actualLimit = limit <= 0
+                ? Math.min(100, maxSize)
+                : Math.min(limit, maxSize);
+        List<TaskExecutionSnapshot> result = new ArrayList<>(actualLimit);
+
+        for (IndexEntry entry : updateOrder) {
+            VersionedSnapshot current = snapshots.get(entry.taskId());
+
+            /*
+             * 只有索引版本与 Map 中最新版本一致时才返回，旧状态索引自动跳过。
+             */
+            if (current == null || current.version() != entry.version()) {
+                continue;
+            }
+
+            result.add(current.snapshot());
+            if (result.size() >= actualLimit) {
+                break;
+            }
+        }
+
+        return List.copyOf(result);
     }
 
+    /**
+     * 超过容量时从最旧索引开始淘汰。
+     *
+     * <p>
+     * 使用版本比较删除，避免旧索引误删同一 taskId 的最新快照。
+     * </p>
+     */
     private void evictIfNecessary() {
-        if (snapshots.size() <= maxSize) {
+        while (snapshots.size() > maxSize) {
+            IndexEntry oldest = updateOrder.pollLast();
+            if (oldest == null) {
+                indexSize.set(0L);
+                return;
+            }
+            indexSize.decrementAndGet();
+
+            snapshots.computeIfPresent(oldest.taskId(), (taskId, current) ->
+                    current.version() == oldest.version()
+                            ? null
+                            : current
+            );
+        }
+    }
+
+    /**
+     * 当旧版本索引数量明显膨胀时，使用当前最新快照重建顺序索引。
+     *
+     * <p>
+     * 该操作不是每次 update 都执行，只在索引长度超过 maxSize 的四倍时尝试，
+     * 从而避免原实现每次超容都复制并排序全部快照。
+     * </p>
+     */
+    private void compactIndexIfNecessary() {
+        if (indexSize.get() <= maxSize * 4L
+                || !compacting.compareAndSet(false, true)) {
             return;
         }
-        List<TaskExecutionSnapshot> ordered = new ArrayList<>(snapshots.values());
-        ordered.sort(Comparator.comparingLong(TaskExecutionSnapshot::getSubmitTimeMillis));
-        int removeCount = Math.max(1, snapshots.size() - maxSize);
-        for (int i = 0; i < removeCount && i < ordered.size(); i++) {
-            snapshots.remove(ordered.get(i).getTaskId());
+
+        try {
+            List<IndexEntry> currentEntries = snapshots.entrySet().stream()
+                    .map(entry -> new IndexEntry(
+                            entry.getKey(),
+                            entry.getValue().version()
+                    ))
+                    .sorted(Comparator.comparingLong(IndexEntry::version).reversed())
+                    .toList();
+
+            updateOrder.clear();
+            updateOrder.addAll(currentEntries);
+            indexSize.set(currentEntries.size());
+        } finally {
+            compacting.set(false);
         }
+    }
+
+    /**
+     * Map 中保存的最新版本快照。
+     */
+    private record VersionedSnapshot(
+            long version,
+            TaskExecutionSnapshot snapshot
+    ) {
+    }
+
+    /**
+     * 最近更新时间索引项。
+     */
+    private record IndexEntry(
+            String taskId,
+            long version
+    ) {
     }
 }

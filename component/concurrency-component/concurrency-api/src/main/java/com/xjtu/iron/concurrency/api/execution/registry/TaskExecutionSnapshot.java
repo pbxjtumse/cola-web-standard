@@ -3,6 +3,7 @@ package com.xjtu.iron.concurrency.api.execution.registry;
 import com.xjtu.iron.concurrency.api.enums.task.AsyncTaskStatus;
 import com.xjtu.iron.concurrency.api.error.AsyncError;
 import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
+import com.xjtu.iron.concurrency.api.task.TaskExecutionMode;
 import com.xjtu.iron.concurrency.api.task.TaskMetadata;
 import com.xjtu.iron.concurrency.api.task.TaskResultMode;
 import com.xjtu.iron.concurrency.api.task.TaskTimingSnapshot;
@@ -31,6 +32,11 @@ public class TaskExecutionSnapshot {
      * 任务结果模式。
      */
     private TaskResultMode resultMode;
+
+    /**
+     * 原始任务实际执行方式。
+     */
+    private TaskExecutionMode executionMode = TaskExecutionMode.UNASSIGNED;
 
     /**
      * 时间和耗时信息。
@@ -62,6 +68,7 @@ public class TaskExecutionSnapshot {
         snapshot.setTask(event.getTask());
         snapshot.setStatus(event.getStatus());
         snapshot.setResultMode(event.getResultMode());
+        snapshot.setExecutionMode(event.getExecutionMode());
         snapshot.setTiming(event.getTiming());
         snapshot.setError(event.getError().copyWithoutThrowable());
         snapshot.setUpdatedAtMillis(event.getOccurredAt().toEpochMilli());
@@ -90,6 +97,16 @@ public class TaskExecutionSnapshot {
 
     public void setResultMode(TaskResultMode resultMode) {
         this.resultMode = resultMode;
+    }
+
+    public TaskExecutionMode getExecutionMode() {
+        return executionMode;
+    }
+
+    public void setExecutionMode(TaskExecutionMode executionMode) {
+        this.executionMode = executionMode == null
+                ? TaskExecutionMode.UNASSIGNED
+                : executionMode;
     }
 
     public TaskTimingSnapshot getTiming() {

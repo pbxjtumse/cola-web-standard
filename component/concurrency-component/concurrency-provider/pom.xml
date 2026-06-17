@@ -9,10 +9,14 @@
     </parent>
 
     <artifactId>concurrency-provider</artifactId>
-    <packaging>jar</packaging>
+    <packaging>pom</packaging>
 
     <name>concurrency-provider</name>
     <url>http://maven.apache.org</url>
+    <modules>
+        <module>concurrency-provider-local</module>
+        <module>concurrency-provider-redis</module>
+    </modules>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

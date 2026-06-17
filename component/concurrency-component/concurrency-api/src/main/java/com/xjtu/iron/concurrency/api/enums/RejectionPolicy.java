@@ -6,9 +6,9 @@ package com.xjtu.iron.concurrency.api.enums;
 public enum RejectionPolicy {
 
     /**
-     * 直接抛出异常。
+     * 拒绝感知版 ABORT。
      *
-     * <p>推荐默认策略。</p>
+     * <p>任务标记为 REJECTED、Future 异常完成，并向提交方同步抛出拒绝异常。推荐默认策略。</p>
      */
     ABORT,
 

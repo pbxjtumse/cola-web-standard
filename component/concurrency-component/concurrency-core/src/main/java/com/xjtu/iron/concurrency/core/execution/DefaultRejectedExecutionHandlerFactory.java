@@ -2,7 +2,11 @@ package com.xjtu.iron.concurrency.core.execution;
 
 import com.xjtu.iron.concurrency.api.enums.RejectionPolicy;
 import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolSpec;
-import com.xjtu.iron.concurrency.core.rejection.*;
+import com.xjtu.iron.concurrency.core.rejection.AwareAbortRejectedExecutionHandler;
+import com.xjtu.iron.concurrency.core.rejection.BlockingWaitRejectedExecutionHandler;
+import com.xjtu.iron.concurrency.core.rejection.CallerRunsRejectedExecutionHandler;
+import com.xjtu.iron.concurrency.core.rejection.DiscardOldestRejectedExecutionHandler;
+import com.xjtu.iron.concurrency.core.rejection.DiscardRejectedExecutionHandler;
 import com.xjtu.iron.concurrency.core.spi.RejectedExecutionHandlerFactory;
 
 import java.util.Objects;
@@ -12,8 +16,7 @@ import java.util.concurrent.RejectedExecutionHandler;
  * 默认拒绝策略工厂。
  *
  * <p>
- * 工厂只负责根据配置选择策略实现；每种拒绝策略的具体行为放在独立类中，
- * 便于单元测试、诊断和后续扩展。
+ * 工厂只负责根据配置选择处理器，具体行为由 execution.rejection 包中的独立类实现。
  * </p>
  */
 public final class DefaultRejectedExecutionHandlerFactory

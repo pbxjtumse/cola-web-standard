@@ -116,6 +116,7 @@ public final class TaskExecutionContext<T> {
                 metadata,
                 status,
                 runtime.getResultMode(),
+                runtime.getExecutionMode(),
                 runtime.timingSnapshot(),
                 error,
                 message,

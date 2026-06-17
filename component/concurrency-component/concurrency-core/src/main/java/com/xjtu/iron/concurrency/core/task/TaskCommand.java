@@ -8,6 +8,7 @@ import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
 import com.xjtu.iron.concurrency.api.exception.AsyncTaskException;
 import com.xjtu.iron.concurrency.api.exception.ConcurrencyRejectedException;
 import com.xjtu.iron.concurrency.api.listener.AsyncUncaughtExceptionHandler;
+import com.xjtu.iron.concurrency.api.task.TaskExecutionMode;
 import com.xjtu.iron.concurrency.core.lifecycle.TaskLifecyclePublisher;
 
 import java.util.Objects;
@@ -25,7 +26,8 @@ import java.util.concurrent.TimeoutException;
  *
  * @param <T> 任务返回值类型
  */
-public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
+public final class TaskCommand<T>
+        implements Runnable, RejectedTaskAware, CallerRunsAware {
 
     /**
      * 本次任务执行上下文，是任务定义、装饰后执行逻辑、Future 和运行时状态的唯一数据来源。
@@ -54,8 +56,14 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
             AsyncUncaughtExceptionHandler uncaughtExceptionHandler
     ) {
         this.context = Objects.requireNonNull(context, "context must not be null");
-        this.lifecyclePublisher = Objects.requireNonNull(lifecyclePublisher, "lifecyclePublisher must not be null");
-        this.errorClassifier = Objects.requireNonNull(errorClassifier, "errorClassifier must not be null");
+        this.lifecyclePublisher = Objects.requireNonNull(
+                lifecyclePublisher,
+                "lifecyclePublisher must not be null"
+        );
+        this.errorClassifier = Objects.requireNonNull(
+                errorClassifier,
+                "errorClassifier must not be null"
+        );
         this.uncaughtExceptionHandler = Objects.requireNonNull(
                 uncaughtExceptionHandler,
                 "uncaughtExceptionHandler must not be null"
@@ -74,15 +82,23 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
         ));
     }
 
+    /**
+     * CALLER_RUNS 拒绝处理器在当前线程执行任务之前调用。
+     */
+    @Override
+    public void markCallerThreadExecution() {
+        context.getRuntime().markCallerThreadExecution();
+    }
+
     @Override
     public void run() {
         TaskExecutionRuntime runtime = context.getRuntime();
 
         /*
-         * 结果层超时可能在线程真正从队列取出任务前已经确定原始结果。
+         * 结果层超时或主动取消可能在线程真正从队列取出任务前已经确定结果。
          * 此时不应该继续执行用户 operation。
          */
-        if (runtime.isBaseOutcomeResolved()) {
+        if (runtime.isBaseOutcomeResolved() || runtime.isFinalOutcomeResolved()) {
             return;
         }
 
@@ -93,8 +109,8 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
         }
 
         /*
-         * 工作线程开始运行与结果层超时可能并发发生。tryMarkRunning 与
-         * tryResolveBaseOutcome 使用同一状态锁，确保 TIMEOUT 不会再被 RUNNING 覆盖。
+         * 工作线程开始运行与结果层超时、取消可能并发发生。
+         * tryMarkRunning 与终态方法使用同一状态锁，避免终态被 RUNNING 覆盖。
          */
         if (!runtime.tryMarkRunning()) {
             return;
@@ -103,7 +119,9 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
         lifecyclePublisher.publish(context.event(
                 AsyncTaskStatus.RUNNING,
                 AsyncError.none(),
-                "Task started"
+                runtime.getExecutionMode() == TaskExecutionMode.CALLER_THREAD
+                        ? "Task started in caller thread"
+                        : "Task started in pool thread"
         ));
 
         try {
@@ -118,6 +136,12 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
 
     /**
      * 在线程池拒绝任务时完成原始任务。
+     * 线程池已关闭：
+     *   TaskCommand 标记 REJECTED
+     *   CompletableFuture 异常完成
+     *   Registry 更新 REJECTED
+     *   Listener 收到 onRejected
+     *   向提交方抛出拒绝异常
      *
      * @param throwable 拒绝异常
      */
@@ -143,7 +167,11 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
                 rejectedCause
         );
 
-        TaskExecutionEvent event = context.event(AsyncTaskStatus.REJECTED, error, "Task rejected");
+        TaskExecutionEvent event = context.event(
+                AsyncTaskStatus.REJECTED,
+                error,
+                "Task rejected"
+        );
         lifecyclePublisher.publish(event);
         finalizeWhenNoFallback(event);
         context.getBaseFuture().completeExceptionally(rejectedException);
@@ -154,6 +182,7 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
      *
      * @param throwable 超时异常
      * @param stage QUEUE 表示排队超时；WAIT_RESULT 表示结果层超时
+     * @return true 表示当前超时路径首次确定原始任务结果
      */
     public boolean completeTimeout(Throwable throwable, AsyncErrorStage stage) {
         TaskExecutionRuntime runtime = context.getRuntime();
@@ -161,7 +190,9 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
             return false;
         }
 
-        AsyncErrorStage actualStage = stage == null ? AsyncErrorStage.WAIT_RESULT : stage;
+        AsyncErrorStage actualStage = stage == null
+                ? AsyncErrorStage.WAIT_RESULT
+                : stage;
         AsyncError error = errorClassifier.classify(
                 context.getTask(),
                 throwable,
@@ -178,7 +209,9 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
         TaskExecutionEvent event = context.event(
                 AsyncTaskStatus.TIMEOUT,
                 error,
-                actualStage == AsyncErrorStage.QUEUE ? "Task queue timeout" : "Task result timeout"
+                actualStage == AsyncErrorStage.QUEUE
+                        ? "Task queue timeout"
+                        : "Task result timeout"
         );
         lifecyclePublisher.publish(event);
         finalizeWhenNoFallback(event);
@@ -187,15 +220,24 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
     }
 
     /**
-     * 标记任务被主动取消。
+     * 主动取消整个任务结果管道。
+     *
+     * <p>
+     * 该方法既支持任务仍在队列、原始任务正在运行，也支持 fallback 正在运行。
+     * 取消成功后会发布 CANCELLED 和 COMPLETED，并尽力中断相关线程。
+     * </p>
      *
      * @param throwable 取消原因
      * @param mayInterruptIfRunning 是否尽力中断运行线程
+     * @return true 表示当前取消请求首次确定最终状态
      */
-    public void completeCancelled(Throwable throwable, boolean mayInterruptIfRunning) {
+    public boolean completeCancelled(
+            Throwable throwable,
+            boolean mayInterruptIfRunning
+    ) {
         TaskExecutionRuntime runtime = context.getRuntime();
-        if (!runtime.tryResolveBaseOutcome(AsyncTaskStatus.CANCELLED)) {
-            return;
+        if (!runtime.tryCancel()) {
+            return false;
         }
 
         Throwable cancellation = throwable == null
@@ -214,8 +256,14 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
 
         runtime.interruptIfNecessary(mayInterruptIfRunning);
         lifecyclePublisher.publish(event);
-        finalizeWhenNoFallback(event);
-        context.getBaseFuture().cancel(mayInterruptIfRunning);
+        lifecyclePublisher.publishCompleted(event);
+
+        /*
+         * baseFuture 取消用于通知 timeout/fallback 管道停止继续处理原始结果。
+         * 最终返回给业务的 Future 由 TaskControl 同步取消。
+         */
+        context.getBaseFuture().cancel(false);
+        return true;
     }
 
     /**
@@ -225,6 +273,20 @@ public final class TaskCommand<T> implements Runnable, RejectedTaskAware {
      */
     public void interruptRunningIfNecessary(boolean mayInterruptIfRunning) {
         context.getRuntime().interruptIfNecessary(mayInterruptIfRunning);
+    }
+
+    /**
+     * 判断当前命令是否已经被拒绝。
+     */
+    public boolean isRejected() {
+        return context.getRuntime().getStatus() == AsyncTaskStatus.REJECTED;
+    }
+
+    /**
+     * 获取任务执行上下文，供 core 内部运行控制使用。
+     */
+    TaskExecutionContext<T> getContext() {
+        return context;
     }
 
     /**

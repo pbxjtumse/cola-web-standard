@@ -21,9 +21,20 @@ public final class DiscardOldestRejectedExecutionHandler implements RejectedExec
         }
 
         BlockingQueue<Runnable> queue = executor.getQueue();
+
+        /*
+         * 移除队列中等待时间最长的任务。
+         */
         Runnable oldest = queue.poll();
 
         if (oldest != null) {
+            /*
+             * 被移除的旧任务不会再执行，必须明确通知它进入拒绝状态，
+             * 避免旧任务对应的 CompletableFuture 永久未完成。
+             *
+             * 这里不向当前提交线程抛出旧任务异常，
+             * 因为当前 runnable 仍然有机会成功进入队列。
+             */
             RejectedTaskSupport.reject(oldest, "Task discarded by DISCARD_OLDEST policy");
         }
 
@@ -36,6 +47,10 @@ public final class DiscardOldestRejectedExecutionHandler implements RejectedExec
          * 在 poll 与 offer 之间可能有其他生产者抢占队列空位。
          */
         if (!accepted) {
+            /*
+             * 旧任务被移除后的空位又被其他并发提交者抢走，
+             * 当前任务也必须明确拒绝。
+             */
             throw RejectedTaskSupport.reject(runnable, "Current task rejected after discarding oldest task");
         }
 
@@ -48,3 +63,4 @@ public final class DiscardOldestRejectedExecutionHandler implements RejectedExec
         }
     }
 }
+

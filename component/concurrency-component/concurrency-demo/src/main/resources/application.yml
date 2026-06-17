@@ -6,14 +6,32 @@ xjtu:
     concurrency:
       enabled: true
       default-executor: default
+
       diagnostics:
         enabled: true
         active-usage-warn-threshold: 0.9
         queue-usage-warn-threshold: 0.8
         down-when-busy: false
+
       context:
         enabled: true
         mdc-enabled: true
+
+      task-registry:
+        max-size: 10000
+
+      pipeline:
+        timeout-scheduler-size: 1
+        timeout-thread-name-prefix: iron-concurrency-timeout-
+        timeout-daemon: true
+        fallback-core-pool-size: 2
+        fallback-max-pool-size: 8
+        fallback-queue-capacity: 1024
+        fallback-keep-alive-time: 60s
+        fallback-thread-name-prefix: iron-concurrency-fallback-
+        fallback-daemon: true
+        fallback-rejection-policy: ABORT
+
       thread-pools:
         default:
           core-pool-size: 4
@@ -23,6 +41,7 @@ xjtu:
           thread-name-prefix: xjtu-default-
           queue-type: BOUNDED_LINKED_BLOCKING_QUEUE
           rejection-policy: ABORT
+
         biz-query-pool:
           core-pool-size: 8
           max-pool-size: 32
@@ -31,3 +50,30 @@ xjtu:
           thread-name-prefix: biz-query-
           queue-type: BOUNDED_LINKED_BLOCKING_QUEUE
           rejection-policy: ABORT
+
+        tiny-pool:
+          core-pool-size: 1
+          max-pool-size: 1
+          queue-capacity: 1
+          keep-alive-time: 60s
+          thread-name-prefix: tiny-pool-
+          queue-type: BOUNDED_ARRAY_BLOCKING_QUEUE
+          rejection-policy: ABORT
+
+        caller-runs-pool:
+          core-pool-size: 1
+          max-pool-size: 1
+          queue-capacity: 1
+          keep-alive-time: 60s
+          thread-name-prefix: caller-runs-pool-
+          queue-type: BOUNDED_ARRAY_BLOCKING_QUEUE
+          rejection-policy: CALLER_RUNS
+
+        discard-pool:
+          core-pool-size: 1
+          max-pool-size: 1
+          queue-capacity: 1
+          keep-alive-time: 60s
+          thread-name-prefix: discard-pool-
+          queue-type: BOUNDED_ARRAY_BLOCKING_QUEUE
+          rejection-policy: DISCARD

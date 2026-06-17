@@ -1,6 +1,7 @@
 package com.xjtu.iron.concurrency.core.task;
 
 import com.xjtu.iron.concurrency.api.enums.task.AsyncTaskStatus;
+import com.xjtu.iron.concurrency.api.task.TaskExecutionMode;
 import com.xjtu.iron.concurrency.api.task.TaskResultMode;
 import com.xjtu.iron.concurrency.api.task.TaskTimingSnapshot;
 
@@ -13,8 +14,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * 任务执行运行时状态。
  *
  * <p>
- * 该对象只在 concurrency-core 内部使用，保存线程、单调时钟和并发终态控制等不可序列化状态。
- * TaskExecutionEvent 与 TaskExecutionSnapshot 只接收它生成的只读时间快照。
+ * 该对象只在 concurrency-core 内部使用，保存线程、执行方式、单调时钟和并发终态控制等
+ * 不可序列化状态。对外事件与快照只接收它生成的只读数据。
  * </p>
  */
 public final class TaskExecutionRuntime {
@@ -28,8 +29,8 @@ public final class TaskExecutionRuntime {
      * 生命周期状态转换锁。
      *
      * <p>
-     * 用于协调工作线程开始运行与超时线程确定终态之间的竞争，避免 TIMEOUT 已经生效后
-     * 又被 RUNNING 覆盖。AtomicBoolean 负责快速状态判断，本锁负责多字段原子更新。
+     * 用于协调工作线程、超时线程、取消线程和 fallback 线程之间的竞争，
+     * 确保多字段状态更新具有一致性。
      * </p>
      */
     private final Object stateLock = new Object();
@@ -86,9 +87,23 @@ public final class TaskExecutionRuntime {
     private final AtomicReference<Thread> runningThread = new AtomicReference<>();
 
     /**
+     * 当前正在执行 fallback 的线程。
+     *
+     * <p>用于主动取消时尽力中断 fallback；Java 中断仍然是协作式的。</p>
+     */
+    private final AtomicReference<Thread> fallbackThread = new AtomicReference<>();
+
+    /**
      * 当前最新任务状态。
      */
-    private final AtomicReference<AsyncTaskStatus> status = new AtomicReference<>(AsyncTaskStatus.CREATED);
+    private final AtomicReference<AsyncTaskStatus> status =
+            new AtomicReference<>(AsyncTaskStatus.CREATED);
+
+    /**
+     * 原始任务实际执行方式。
+     */
+    private final AtomicReference<TaskExecutionMode> executionMode =
+            new AtomicReference<>(TaskExecutionMode.UNASSIGNED);
 
     /**
      * 原始任务结果是否已经确定。
@@ -123,7 +138,23 @@ public final class TaskExecutionRuntime {
     }
 
     /**
+     * 在 CallerRuns 拒绝处理器执行任务之前标记调用方线程执行模式。
+     */
+    public void markCallerThreadExecution() {
+        executionMode.compareAndSet(
+                TaskExecutionMode.UNASSIGNED,
+                TaskExecutionMode.CALLER_THREAD
+        );
+    }
+
+    /**
      * 标记原始任务开始运行。
+     *
+     * <p>
+     * 如果拒绝处理器没有提前标记 CALLER_THREAD，则默认认为由线程池工作线程执行。
+     * </p>
+     *
+     * @return true 表示任务可以开始；false 表示超时、取消等路径已经先确定结果
      */
     public boolean tryMarkRunning() {
         synchronized (stateLock) {
@@ -131,6 +162,10 @@ public final class TaskExecutionRuntime {
                 return false;
             }
 
+            executionMode.compareAndSet(
+                    TaskExecutionMode.UNASSIGNED,
+                    TaskExecutionMode.THREAD_POOL
+            );
             startTimeMillis = System.currentTimeMillis();
             startNanoTime = System.nanoTime();
             runningThread.set(Thread.currentThread());
@@ -174,6 +209,20 @@ public final class TaskExecutionRuntime {
     }
 
     /**
+     * 标记 fallback 已经开始在线程中执行。
+     */
+    public void markFallbackRunning() {
+        fallbackThread.set(Thread.currentThread());
+    }
+
+    /**
+     * 清除 fallback 线程引用。
+     */
+    public void clearFallbackThread() {
+        fallbackThread.set(null);
+    }
+
+    /**
      * 尝试确定整个任务管道的最终状态。
      *
      * @param finalStatus 最终状态
@@ -190,6 +239,38 @@ public final class TaskExecutionRuntime {
             finalEndTimeMillis = System.currentTimeMillis();
             finalEndNanoTime = System.nanoTime();
             status.set(finalStatus);
+            return true;
+        }
+    }
+
+    /**
+     * 尝试把任务整体取消。
+     *
+     * <p>
+     * 该方法既支持任务尚在队列、原始任务正在运行，也支持原始任务失败后 fallback 正在运行。
+     * 一旦成功，原始结果和最终结果都不会再被其他路径覆盖。
+     * </p>
+     *
+     * @return true 表示当前取消请求首次确定最终状态
+     */
+    public boolean tryCancel() {
+        synchronized (stateLock) {
+            if (finalOutcomeResolved.get()) {
+                return false;
+            }
+
+            long nowMillis = System.currentTimeMillis();
+            long nowNanos = System.nanoTime();
+
+            if (baseOutcomeResolved.compareAndSet(false, true)) {
+                executionEndTimeMillis = nowMillis;
+                executionEndNanoTime = nowNanos;
+            }
+
+            finalOutcomeResolved.set(true);
+            finalEndTimeMillis = nowMillis;
+            finalEndNanoTime = nowNanos;
+            status.set(AsyncTaskStatus.CANCELLED);
             return true;
         }
     }
@@ -215,7 +296,7 @@ public final class TaskExecutionRuntime {
     }
 
     /**
-     * 尽力中断当前运行线程。
+     * 尽力中断原始任务和 fallback 线程。
      *
      * @param mayInterruptIfRunning 是否发送中断信号
      */
@@ -224,9 +305,14 @@ public final class TaskExecutionRuntime {
             return;
         }
 
-        Thread thread = runningThread.get();
-        if (thread != null) {
-            thread.interrupt();
+        Thread original = runningThread.get();
+        if (original != null) {
+            original.interrupt();
+        }
+
+        Thread fallback = fallbackThread.get();
+        if (fallback != null && fallback != original) {
+            fallback.interrupt();
         }
     }
 
@@ -243,14 +329,14 @@ public final class TaskExecutionRuntime {
     public TaskTimingSnapshot timingSnapshot() {
         long nowNano = System.nanoTime();
         long nowMillis = System.currentTimeMillis();
-        boolean fallbackInProgress = !finalOutcomeResolved.get()
-                && status.get() == AsyncTaskStatus.FALLBACK;
+        boolean pipelineInProgress = !finalOutcomeResolved.get()
+                && (status.get() == AsyncTaskStatus.FALLBACK);
         long visibleEndMillis = finalEndTimeMillis > 0
                 ? finalEndTimeMillis
-                : (fallbackInProgress ? nowMillis : executionEndTimeMillis);
+                : (pipelineInProgress ? nowMillis : executionEndTimeMillis);
         long visibleEndNano = finalEndNanoTime > 0
                 ? finalEndNanoTime
-                : (fallbackInProgress ? nowNano : executionEndNanoTime);
+                : (pipelineInProgress ? nowNano : executionEndNanoTime);
 
         long queueCostNanos = startNanoTime > 0
                 ? startNanoTime - submitNanoTime
@@ -290,6 +376,10 @@ public final class TaskExecutionRuntime {
 
     public AsyncTaskStatus getStatus() {
         return status.get();
+    }
+
+    public TaskExecutionMode getExecutionMode() {
+        return executionMode.get();
     }
 
     public boolean isBaseOutcomeResolved() {

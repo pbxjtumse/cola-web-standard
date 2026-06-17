@@ -45,6 +45,11 @@ public class XjtuIronConcurrencyProperties {
     private TaskRegistryProperties taskRegistry = new TaskRegistryProperties();
 
     /**
+     * timeout 与 fallback 结果管道配置。
+     */
+    private PipelineProperties pipeline = new PipelineProperties();
+
+    /**
      * 线程池配置集合。
      */
     private Map<String, ThreadPoolProperties> threadPools = new LinkedHashMap<>();
@@ -95,6 +100,14 @@ public class XjtuIronConcurrencyProperties {
 
     public void setTaskRegistry(TaskRegistryProperties taskRegistry) {
         this.taskRegistry = taskRegistry;
+    }
+
+    public PipelineProperties getPipeline() {
+        return pipeline;
+    }
+
+    public void setPipeline(PipelineProperties pipeline) {
+        this.pipeline = pipeline == null ? new PipelineProperties() : pipeline;
     }
 
     public Map<String, ThreadPoolProperties> getThreadPools() {
@@ -207,6 +220,182 @@ public class XjtuIronConcurrencyProperties {
 
         public void setMaxSize(int maxSize) {
             this.maxSize = maxSize;
+        }
+    }
+
+    /**
+     * timeout 与 fallback 结果处理管道配置。
+     */
+    public static class PipelineProperties {
+
+        /**
+         * 结果层超时调度线程数。
+         *
+         * <p>调度线程只执行短小的超时判定，不应执行 fallback 或业务 RPC。</p>
+         */
+        private int timeoutSchedulerSize = 1;
+
+        /**
+         * 超时调度线程名称前缀。
+         */
+        private String timeoutThreadNamePrefix = "iron-concurrency-timeout-";
+
+        /**
+         * 超时调度线程是否为 daemon。
+         */
+        private boolean timeoutDaemon = true;
+
+        /**
+         * fallback 执行器核心线程数。
+         */
+        private int fallbackCorePoolSize = 2;
+
+        /**
+         * fallback 执行器最大线程数。
+         */
+        private int fallbackMaxPoolSize = 8;
+
+        /**
+         * fallback 执行器有界队列容量。
+         */
+        private int fallbackQueueCapacity = 1024;
+
+        /**
+         * fallback 非核心线程空闲回收时间。
+         */
+        private Duration fallbackKeepAliveTime = Duration.ofSeconds(60);
+
+        /**
+         * fallback 线程名称前缀。
+         */
+        private String fallbackThreadNamePrefix = "iron-concurrency-fallback-";
+
+        /**
+         * fallback 线程是否为 daemon。
+         */
+        private boolean fallbackDaemon = true;
+
+        /**
+         * fallback 执行器拒绝策略。
+         *
+         * <p>
+         * 只允许 ABORT 或 CALLER_RUNS。DISCARD 会导致 fallback 结果无法完成，
+         * BLOCKING_WAIT 会阻塞完成原始 Future 的线程，因此不适用于内部恢复管道。
+         * </p>
+         */
+        private RejectionPolicy fallbackRejectionPolicy = RejectionPolicy.ABORT;
+
+        public int getTimeoutSchedulerSize() {
+            return timeoutSchedulerSize;
+        }
+
+        public void setTimeoutSchedulerSize(int timeoutSchedulerSize) {
+            this.timeoutSchedulerSize = timeoutSchedulerSize;
+        }
+
+        public String getTimeoutThreadNamePrefix() {
+            return timeoutThreadNamePrefix;
+        }
+
+        public void setTimeoutThreadNamePrefix(String timeoutThreadNamePrefix) {
+            this.timeoutThreadNamePrefix = timeoutThreadNamePrefix;
+        }
+
+        public boolean isTimeoutDaemon() {
+            return timeoutDaemon;
+        }
+
+        public void setTimeoutDaemon(boolean timeoutDaemon) {
+            this.timeoutDaemon = timeoutDaemon;
+        }
+
+        public int getFallbackCorePoolSize() {
+            return fallbackCorePoolSize;
+        }
+
+        public void setFallbackCorePoolSize(int fallbackCorePoolSize) {
+            this.fallbackCorePoolSize = fallbackCorePoolSize;
+        }
+
+        public int getFallbackMaxPoolSize() {
+            return fallbackMaxPoolSize;
+        }
+
+        public void setFallbackMaxPoolSize(int fallbackMaxPoolSize) {
+            this.fallbackMaxPoolSize = fallbackMaxPoolSize;
+        }
+
+        public int getFallbackQueueCapacity() {
+            return fallbackQueueCapacity;
+        }
+
+        public void setFallbackQueueCapacity(int fallbackQueueCapacity) {
+            this.fallbackQueueCapacity = fallbackQueueCapacity;
+        }
+
+        public Duration getFallbackKeepAliveTime() {
+            return fallbackKeepAliveTime;
+        }
+
+        public void setFallbackKeepAliveTime(Duration fallbackKeepAliveTime) {
+            this.fallbackKeepAliveTime = fallbackKeepAliveTime;
+        }
+
+        public String getFallbackThreadNamePrefix() {
+            return fallbackThreadNamePrefix;
+        }
+
+        public void setFallbackThreadNamePrefix(String fallbackThreadNamePrefix) {
+            this.fallbackThreadNamePrefix = fallbackThreadNamePrefix;
+        }
+
+        public boolean isFallbackDaemon() {
+            return fallbackDaemon;
+        }
+
+        public void setFallbackDaemon(boolean fallbackDaemon) {
+            this.fallbackDaemon = fallbackDaemon;
+        }
+
+        public RejectionPolicy getFallbackRejectionPolicy() {
+            return fallbackRejectionPolicy;
+        }
+
+        public void setFallbackRejectionPolicy(RejectionPolicy fallbackRejectionPolicy) {
+            this.fallbackRejectionPolicy = fallbackRejectionPolicy;
+        }
+
+        /**
+         * 校验管道配置。
+         */
+        public void validate() {
+            if (timeoutSchedulerSize <= 0) {
+                throw new IllegalArgumentException("pipeline.timeoutSchedulerSize must be greater than 0");
+            }
+            if (fallbackCorePoolSize <= 0) {
+                throw new IllegalArgumentException("pipeline.fallbackCorePoolSize must be greater than 0");
+            }
+            if (fallbackMaxPoolSize < fallbackCorePoolSize) {
+                throw new IllegalArgumentException(
+                        "pipeline.fallbackMaxPoolSize must be greater than or equal to fallbackCorePoolSize"
+                );
+            }
+            if (fallbackQueueCapacity <= 0) {
+                throw new IllegalArgumentException("pipeline.fallbackQueueCapacity must be greater than 0");
+            }
+            if (fallbackKeepAliveTime == null
+                    || fallbackKeepAliveTime.isZero()
+                    || fallbackKeepAliveTime.isNegative()) {
+                throw new IllegalArgumentException(
+                        "pipeline.fallbackKeepAliveTime must be greater than 0"
+                );
+            }
+            if (fallbackRejectionPolicy != RejectionPolicy.ABORT
+                    && fallbackRejectionPolicy != RejectionPolicy.CALLER_RUNS) {
+                throw new IllegalArgumentException(
+                        "pipeline.fallbackRejectionPolicy only supports ABORT or CALLER_RUNS"
+                );
+            }
         }
     }
 

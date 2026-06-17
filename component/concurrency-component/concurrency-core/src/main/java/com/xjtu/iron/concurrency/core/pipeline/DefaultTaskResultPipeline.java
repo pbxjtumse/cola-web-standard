@@ -14,6 +14,7 @@ import com.xjtu.iron.concurrency.core.task.TaskExecutionContext;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
@@ -177,9 +178,10 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
             if (throwable == null) {
                 completed = result.complete(value);
             } else {
-                completed = result.completeExceptionally(
-                        CompletableFutureExceptionUtils.unwrap(throwable)
-                );
+                Throwable unwrapped = CompletableFutureExceptionUtils.unwrap(throwable);
+                completed = unwrapped instanceof CancellationException
+                        ? result.cancel(false)
+                        : result.completeExceptionally(unwrapped);
             }
 
             if (completed) {
@@ -259,6 +261,19 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
                 return;
             }
 
+            Throwable unwrapped = CompletableFutureExceptionUtils.unwrap(throwable);
+
+            /*
+             * 主动取消默认不触发 fallback。取消是调用方明确终止任务的控制语义，
+             * 不应被降级值重新转换成“成功”。
+             */
+            if (source.isCancelled()
+                    || unwrapped instanceof CancellationException
+                    || context.getRuntime().getStatus() == AsyncTaskStatus.CANCELLED) {
+                result.cancel(false);
+                return;
+            }
+
             AsyncError originalError = resolveOriginalError(context, throwable);
 
             context.getRuntime().markIntermediate(AsyncTaskStatus.FALLBACK);
@@ -313,6 +328,8 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
             );
         }
 
+        context.getRuntime().markFallbackRunning();
+
         try {
             T fallbackValue = context.getTask()
                     .getFallback()
@@ -339,6 +356,8 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
                     result,
                     "Fallback failed"
             );
+        } finally {
+            context.getRuntime().clearFallbackThread();
         }
     }
 
@@ -357,6 +376,12 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
             CompletableFuture<T> result,
             String message
     ) {
+        if (context.getRuntime().getStatus() == AsyncTaskStatus.CANCELLED
+                || result.isCancelled()) {
+            result.cancel(false);
+            return;
+        }
+
         AsyncError fallbackError = errorClassifier.classify(
                 context.getTask(),
                 fallbackThrowable,

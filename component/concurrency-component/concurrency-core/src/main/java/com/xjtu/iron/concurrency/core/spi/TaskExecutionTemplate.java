@@ -1,6 +1,7 @@
 package com.xjtu.iron.concurrency.core.spi;
 
 import com.xjtu.iron.concurrency.api.execution.task.AsyncTask;
+import com.xjtu.iron.concurrency.api.execution.task.TaskHandle;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -62,4 +63,13 @@ public interface TaskExecutionTemplate {
      * @return 结果 Future
      */
     <T> CompletableFuture<T> submit(AsyncTask<T> task);
+
+    /**
+     * 提交完整异步任务并返回可取消句柄。
+     *
+     * @param task 异步任务模型
+     * @param <T> 结果类型
+     * @return 任务句柄
+     */
+    <T> TaskHandle<T> submitHandle(AsyncTask<T> task);
 }

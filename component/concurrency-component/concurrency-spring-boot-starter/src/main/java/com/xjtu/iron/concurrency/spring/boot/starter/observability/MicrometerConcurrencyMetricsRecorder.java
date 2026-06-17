@@ -41,6 +41,11 @@ public final class MicrometerConcurrencyMetricsRecorder
     @Override
     public void recordStarted(TaskExecutionEvent event) {
         counter("xjtu.iron.concurrency.task.started", event).increment();
+
+        if (event.getExecutionMode()
+                == com.xjtu.iron.concurrency.api.task.TaskExecutionMode.CALLER_THREAD) {
+            counter("xjtu.iron.concurrency.task.caller.runs", event).increment();
+        }
     }
 
     @Override
@@ -140,7 +145,8 @@ public final class MicrometerConcurrencyMetricsRecorder
                 "component", "xjtu-iron-concurrency",
                 "executor", safe(event.getTask().getExecutorName()),
                 "task", safe(event.getTask().getTaskName()),
-                "status", event.getStatus().name()
+                "status", event.getStatus().name(),
+                "execution_mode", event.getExecutionMode().name()
         );
     }
 

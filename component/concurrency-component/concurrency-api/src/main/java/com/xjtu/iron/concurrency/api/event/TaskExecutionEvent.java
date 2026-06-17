@@ -2,12 +2,12 @@ package com.xjtu.iron.concurrency.api.event;
 
 import com.xjtu.iron.concurrency.api.enums.task.AsyncTaskStatus;
 import com.xjtu.iron.concurrency.api.error.AsyncError;
-
-import java.time.Instant;
+import com.xjtu.iron.concurrency.api.task.TaskExecutionMode;
 import com.xjtu.iron.concurrency.api.task.TaskMetadata;
 import com.xjtu.iron.concurrency.api.task.TaskResultMode;
 import com.xjtu.iron.concurrency.api.task.TaskTimingSnapshot;
 
+import java.time.Instant;
 
 /**
  * 任务执行事件。
@@ -35,6 +35,16 @@ public final class TaskExecutionEvent {
     private final TaskResultMode resultMode;
 
     /**
+     * 原始任务实际执行方式。
+     *
+     * <p>
+     * THREAD_POOL 表示线程池工作线程执行；CALLER_THREAD 表示 CALLER_RUNS 反压执行；
+     * 任务尚未运行时通常为 UNASSIGNED。
+     * </p>
+     */
+    private final TaskExecutionMode executionMode;
+
+    /**
      * 截止本次事件发生时的时间和耗时快照。
      */
     private final TaskTimingSnapshot timing;
@@ -42,9 +52,7 @@ public final class TaskExecutionEvent {
     /**
      * 结构化错误信息。
      *
-     * <p>
-     * 正常事件为 AsyncError.none()。
-     * </p>
+     * <p>正常事件使用 {@link AsyncError#none()}。</p>
      */
     private final AsyncError error;
 
@@ -62,6 +70,7 @@ public final class TaskExecutionEvent {
             TaskMetadata task,
             AsyncTaskStatus status,
             TaskResultMode resultMode,
+            TaskExecutionMode executionMode,
             TaskTimingSnapshot timing,
             AsyncError error,
             String message,
@@ -70,6 +79,9 @@ public final class TaskExecutionEvent {
         this.task = task;
         this.status = status;
         this.resultMode = resultMode;
+        this.executionMode = executionMode == null
+                ? TaskExecutionMode.UNASSIGNED
+                : executionMode;
         this.timing = timing == null
                 ? TaskTimingSnapshot.empty()
                 : timing;
@@ -82,11 +94,17 @@ public final class TaskExecutionEvent {
                 : occurredAt;
     }
 
+    /**
+     * 创建独立事件副本。
+     *
+     * @return 独立事件副本
+     */
     public TaskExecutionEvent copy() {
         return new TaskExecutionEvent(
                 task,
                 status,
                 resultMode,
+                executionMode,
                 timing,
                 error,
                 message,
@@ -106,6 +124,10 @@ public final class TaskExecutionEvent {
         return resultMode;
     }
 
+    public TaskExecutionMode getExecutionMode() {
+        return executionMode;
+    }
+
     public TaskTimingSnapshot getTiming() {
         return timing;
     }
@@ -120,5 +142,33 @@ public final class TaskExecutionEvent {
 
     public Instant getOccurredAt() {
         return occurredAt;
+    }
+
+    /**
+     * 便捷获取任务 ID。
+     */
+    public String getTaskId() {
+        return task == null ? null : task.getTaskId();
+    }
+
+    /**
+     * 便捷获取线程池名称。
+     */
+    public String getExecutorName() {
+        return task == null ? null : task.getExecutorName();
+    }
+
+    /**
+     * 便捷获取任务名称。
+     */
+    public String getTaskName() {
+        return task == null ? null : task.getTaskName();
+    }
+
+    /**
+     * 便捷获取业务标识。
+     */
+    public String getBizKey() {
+        return task == null ? null : task.getBizKey();
     }
 }

@@ -6,7 +6,13 @@ import com.xjtu.iron.concurrency.api.error.AsyncError;
 import com.xjtu.iron.concurrency.api.error.AsyncErrorClassifier;
 import com.xjtu.iron.concurrency.api.exception.ConcurrencyRejectedException;
 import com.xjtu.iron.concurrency.api.execution.task.AsyncTask;
+import com.xjtu.iron.concurrency.api.execution.task.TaskCancellationManager;
+import com.xjtu.iron.concurrency.api.execution.task.TaskHandle;
+import com.xjtu.iron.concurrency.api.listener.AsyncUncaughtExceptionHandler;
 import com.xjtu.iron.concurrency.api.task.TaskResultMode;
+import com.xjtu.iron.concurrency.core.control.DefaultTaskHandle;
+import com.xjtu.iron.concurrency.core.control.TaskControl;
+import com.xjtu.iron.concurrency.core.control.TaskControlRegistry;
 import com.xjtu.iron.concurrency.core.lifecycle.TaskLifecyclePublisher;
 import com.xjtu.iron.concurrency.core.pipeline.TaskResultPipeline;
 import com.xjtu.iron.concurrency.core.spi.TaskExecutionTemplate;
@@ -53,10 +59,14 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
      */
     private final AsyncErrorClassifier errorClassifier;
 
-    /**
-     * fire-and-forget 异常处理器。
-     */
-    private final com.xjtu.iron.concurrency.api.listener.AsyncUncaughtExceptionHandler uncaughtExceptionHandler;
+    /** fire-and-forget 异常处理器。 */
+    private final AsyncUncaughtExceptionHandler uncaughtExceptionHandler;
+
+    /** 当前节点运行任务控制注册表。 */
+    private final TaskControlRegistry taskControlRegistry;
+
+    /** 当前节点任务取消管理器。 */
+    private final TaskCancellationManager cancellationManager;
 
     public DefaultTaskExecutionTemplate(
             ThreadPoolRegistry threadPoolRegistry,
@@ -64,21 +74,50 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
             TaskLifecyclePublisher lifecyclePublisher,
             TaskResultPipeline resultPipeline,
             AsyncErrorClassifier errorClassifier,
-            com.xjtu.iron.concurrency.api.listener.AsyncUncaughtExceptionHandler uncaughtExceptionHandler
+            AsyncUncaughtExceptionHandler uncaughtExceptionHandler,
+            TaskControlRegistry taskControlRegistry,
+            TaskCancellationManager cancellationManager
     ) {
-        this.threadPoolRegistry = Objects.requireNonNull(threadPoolRegistry, "threadPoolRegistry must not be null");
-        this.taskDecorator = Objects.requireNonNull(taskDecorator, "taskDecorator must not be null");
-        this.lifecyclePublisher = Objects.requireNonNull(lifecyclePublisher, "lifecyclePublisher must not be null");
-        this.resultPipeline = Objects.requireNonNull(resultPipeline, "resultPipeline must not be null");
-        this.errorClassifier = Objects.requireNonNull(errorClassifier, "errorClassifier must not be null");
+        this.threadPoolRegistry = Objects.requireNonNull(
+                threadPoolRegistry,
+                "threadPoolRegistry must not be null"
+        );
+        this.taskDecorator = Objects.requireNonNull(
+                taskDecorator,
+                "taskDecorator must not be null"
+        );
+        this.lifecyclePublisher = Objects.requireNonNull(
+                lifecyclePublisher,
+                "lifecyclePublisher must not be null"
+        );
+        this.resultPipeline = Objects.requireNonNull(
+                resultPipeline,
+                "resultPipeline must not be null"
+        );
+        this.errorClassifier = Objects.requireNonNull(
+                errorClassifier,
+                "errorClassifier must not be null"
+        );
         this.uncaughtExceptionHandler = Objects.requireNonNull(
                 uncaughtExceptionHandler,
                 "uncaughtExceptionHandler must not be null"
         );
+        this.taskControlRegistry = Objects.requireNonNull(
+                taskControlRegistry,
+                "taskControlRegistry must not be null"
+        );
+        this.cancellationManager = Objects.requireNonNull(
+                cancellationManager,
+                "cancellationManager must not be null"
+        );
     }
 
     @Override
-    public void execute(String executorName, String taskName, Runnable runnable) {
+    public void execute(
+            String executorName,
+            String taskName,
+            Runnable runnable
+    ) {
         Objects.requireNonNull(runnable, "runnable must not be null");
         AsyncTask<Void> task = AsyncTask.of(executorName, taskName, () -> {
             runnable.run();
@@ -88,17 +127,34 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
     }
 
     @Override
-    public boolean tryExecute(String executorName, String taskName, Runnable runnable) {
+    public boolean tryExecute(
+            String executorName,
+            String taskName,
+            Runnable runnable
+    ) {
+        Objects.requireNonNull(runnable, "runnable must not be null");
+        AsyncTask<Void> task = AsyncTask.of(executorName, taskName, () -> {
+            runnable.run();
+            return null;
+        });
+
         try {
-            execute(executorName, taskName, runnable);
-            return true;
-        } catch (ConcurrencyRejectedException ex) {
+            Submission<Void> submission = submitInternal(
+                    task,
+                    TaskResultMode.FIRE_AND_FORGET
+            );
+            return !submission.command().isRejected();
+        } catch (ConcurrencyRejectedException rejected) {
             return false;
         }
     }
 
     @Override
-    public CompletableFuture<Void> run(String executorName, String taskName, Runnable runnable) {
+    public CompletableFuture<Void> run(
+            String executorName,
+            String taskName,
+            Runnable runnable
+    ) {
         Objects.requireNonNull(runnable, "runnable must not be null");
         return submit(AsyncTask.of(executorName, taskName, () -> {
             runnable.run();
@@ -117,20 +173,27 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
 
     @Override
     public <T> CompletableFuture<T> submit(AsyncTask<T> task) {
-        return submitInternal(task, TaskResultMode.RESULT_AWARE);
+        return submitHandle(task).getFuture();
+    }
+
+    @Override
+    public <T> TaskHandle<T> submitHandle(AsyncTask<T> task) {
+        return submitInternal(task, TaskResultMode.RESULT_AWARE).handle();
     }
 
     /**
      * 执行统一任务提交流程。
      */
-    private <T> CompletableFuture<T> submitInternal(
+    private <T> Submission<T> submitInternal(
             AsyncTask<T> task,
             TaskResultMode resultMode
     ) {
         Objects.requireNonNull(task, "task must not be null");
         task.validate();
 
-        ThreadPoolExecutor executor = threadPoolRegistry.getExecutor(task.getExecutorName());
+        ThreadPoolExecutor executor = threadPoolRegistry.getExecutor(
+                task.getExecutorName()
+        );
         CompletableFuture<T> baseFuture = new CompletableFuture<>();
         Supplier<T> executable = task.isContextPropagation()
                 ? taskDecorator.decorate(task.getOperation())
@@ -149,36 +212,60 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
                 uncaughtExceptionHandler
         );
 
+        CompletableFuture<T> finalFuture = resultMode == TaskResultMode.RESULT_AWARE
+                ? resultPipeline.apply(context, command)
+                : baseFuture;
+        TaskControl<T> control = new TaskControl<>(
+                executor,
+                command,
+                finalFuture
+        );
+        TaskHandle<T> handle = new DefaultTaskHandle<>(
+                task.getTaskId(),
+                finalFuture,
+                cancellationManager
+        );
+
+        taskControlRegistry.register(task.getTaskId(), control);
+        finalFuture.whenComplete((value, throwable) ->
+                taskControlRegistry.remove(task.getTaskId(), control)
+        );
+
         command.submitted();
 
         try {
             executor.execute(command);
-        } catch (RejectedExecutionException ex) {
+        } catch (RejectedExecutionException rejected) {
             /*
-             * 部分自定义拒绝策略会先调用 command.reject 再抛异常；
-             * TaskExecutionRuntime 的 CAS 会保证拒绝状态只记录一次。
+             * ABORT、BLOCKING_WAIT 和线程池关闭的 CALLER_RUNS 会同步抛异常。
+             * 自定义处理器通常已经先通知 command.reject；CAS 保证重复调用不会重复发布。
              */
-            command.reject(ex);
+            command.reject(rejected);
 
             if (resultMode == TaskResultMode.FIRE_AND_FORGET) {
                 AsyncError error = errorClassifier.classify(
                         task,
-                        ex,
+                        rejected,
                         AsyncErrorStage.SUBMIT
                 );
                 throw new ConcurrencyRejectedException(
                         task.getExecutorName(),
                         task.getTaskName(),
                         error,
-                        ex
+                        rejected
                 );
             }
         }
 
-        if (resultMode == TaskResultMode.FIRE_AND_FORGET) {
-            return baseFuture;
-        }
+        return new Submission<>(handle, command);
+    }
 
-        return resultPipeline.apply(context, command);
+    /**
+     * 内部提交结果，同时保留句柄和命令，供 tryExecute 判断同步拒绝。
+     */
+    private record Submission<T>(
+            TaskHandle<T> handle,
+            TaskCommand<T> command
+    ) {
     }
 }

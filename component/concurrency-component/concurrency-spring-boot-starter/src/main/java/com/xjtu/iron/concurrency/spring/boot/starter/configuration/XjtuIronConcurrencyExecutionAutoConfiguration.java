@@ -7,20 +7,25 @@ import com.xjtu.iron.concurrency.api.execution.executor.AsyncExecutor;
 import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolManager;
 import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolSpec;
 import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionRegistry;
+import com.xjtu.iron.concurrency.api.execution.task.TaskCancellationManager;
 import com.xjtu.iron.concurrency.api.execution.template.AsyncTemplate;
 import com.xjtu.iron.concurrency.api.listener.AsyncUncaughtExceptionHandler;
 import com.xjtu.iron.concurrency.api.listener.TaskExecutionListener;
 import com.xjtu.iron.concurrency.config.ThreadPoolSpecResolver;
 import com.xjtu.iron.concurrency.core.async.DefaultAsyncExecutor;
 import com.xjtu.iron.concurrency.core.async.DefaultAsyncTemplate;
+import com.xjtu.iron.concurrency.core.control.DefaultTaskCancellationManager;
+import com.xjtu.iron.concurrency.core.control.DefaultTaskControlRegistry;
+import com.xjtu.iron.concurrency.core.control.TaskControlRegistry;
 import com.xjtu.iron.concurrency.core.error.CompositeAsyncErrorClassifier;
 import com.xjtu.iron.concurrency.core.error.DefaultAsyncErrorClassifier;
 import com.xjtu.iron.concurrency.core.execution.*;
+import com.xjtu.iron.concurrency.core.rejection.AwareAbortRejectedExecutionHandler;
+import com.xjtu.iron.concurrency.core.rejection.CallerRunsRejectedExecutionHandler;
 import com.xjtu.iron.concurrency.core.lifecycle.DefaultTaskLifecyclePublisher;
 import com.xjtu.iron.concurrency.core.lifecycle.TaskLifecyclePublisher;
 import com.xjtu.iron.concurrency.core.listener.CompositeTaskExecutionListener;
 import com.xjtu.iron.concurrency.core.listener.NoopAsyncUncaughtExceptionHandler;
-import com.xjtu.iron.concurrency.core.listener.NoopTaskExecutionListener;
 import com.xjtu.iron.concurrency.core.metrics.ConcurrencyMetricsRecorder;
 import com.xjtu.iron.concurrency.core.pipeline.DefaultTaskResultPipeline;
 import com.xjtu.iron.concurrency.core.pipeline.TaskResultPipeline;
@@ -121,6 +126,24 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
         );
     }
 
+    /**
+     * 创建当前 JVM 运行任务控制注册表。
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public TaskControlRegistry taskControlRegistry() {
+        return new DefaultTaskControlRegistry();
+    }
+
+    /**
+     * 创建当前 JVM 任务取消管理器。
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public TaskCancellationManager taskCancellationManager(TaskControlRegistry taskControlRegistry) {
+        return new DefaultTaskCancellationManager(taskControlRegistry);
+    }
+
     @Bean
     @ConditionalOnMissingBean
     public AsyncTemplate asyncTemplate() {
@@ -180,15 +203,13 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
             ObjectProvider<TaskExecutionListener> listeners
     ) {
         /*
-         * 这里不能在 Bean 创建阶段直接调用 orderedStream().toList()。
-         * 直接解析会立即实例化所有业务监听器；如果某个监听器 Bean 所在类又依赖
-         * AsyncExecutor，就会形成：AsyncExecutor -> LifecyclePublisher -> CompositeListener
-         * -> 业务监听器 -> AsyncExecutor 的循环依赖。
-         *
-         * CompositeTaskExecutionListener 会在第一次任务事件到达时再解析并缓存监听器。
+         * 不在创建 AsyncExecutor 的阶段立即实例化全部业务监听器，
+         * 避免 Listener Bean 间接依赖 AsyncExecutor 时形成循环依赖。
          */
-        return new CompositeTaskExecutionListener(
-                () -> listeners.orderedStream().toList()
+        return new CompositeTaskExecutionListener(() ->
+                listeners.orderedStream()
+                        .filter(listener -> !(listener instanceof CompositeTaskExecutionListener))
+                        .toList()
         );
     }
 
@@ -234,49 +255,71 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
             destroyMethod = "shutdownNow"
     )
     @ConditionalOnMissingBean(name = "ironConcurrencyTimeoutScheduler")
-    public ScheduledExecutorService ironConcurrencyTimeoutScheduler() {
+    public ScheduledExecutorService ironConcurrencyTimeoutScheduler(
+            XjtuIronConcurrencyProperties properties
+    ) {
+        XjtuIronConcurrencyProperties.PipelineProperties pipeline =
+                properties.getPipeline();
+        pipeline.validate();
+
         ScheduledThreadPoolExecutor scheduler =
                 new ScheduledThreadPoolExecutor(
-                        1,
-                        new NamedThreadFactory("iron-concurrency-timeout-", true),
+                        pipeline.getTimeoutSchedulerSize(),
+                        new NamedThreadFactory(
+                                pipeline.getTimeoutThreadNamePrefix(),
+                                pipeline.isTimeoutDaemon()
+                        ),
                         new ThreadPoolExecutor.AbortPolicy()
                 );
 
         scheduler.setRemoveOnCancelPolicy(true);
         scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
         scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
-
         return scheduler;
     }
 
-    @Bean(name = "ironConcurrencyFallbackExecutor", destroyMethod = "shutdownNow")
+    /**
+     * 创建 fallback 专用执行器。
+     *
+     * <p>
+     * 仅允许 ABORT 或 CALLER_RUNS，避免 DISCARD 导致最终 Future 永远不完成，
+     * 也避免 BLOCKING_WAIT 阻塞完成上游 Future 的线程。
+     * </p>
+     */
+    @Bean(
+            name = "ironConcurrencyFallbackExecutor",
+            destroyMethod = "shutdownNow"
+    )
     @ConditionalOnMissingBean(name = "ironConcurrencyFallbackExecutor")
-    public Executor ironConcurrencyFallbackExecutor() {
-        int maximumPoolSize = Math.max(
-                2,
-                Math.min(
-                        8,
-                        Runtime.getRuntime().availableProcessors()
-                )
-        );
+    public Executor ironConcurrencyFallbackExecutor(
+            XjtuIronConcurrencyProperties properties
+    ) {
+        XjtuIronConcurrencyProperties.PipelineProperties pipeline =
+                properties.getPipeline();
+        pipeline.validate();
+
+        RejectedExecutionHandler rejectedExecutionHandler =
+                pipeline.getFallbackRejectionPolicy()
+                        == com.xjtu.iron.concurrency.api.enums.RejectionPolicy.CALLER_RUNS
+                        ? new CallerRunsRejectedExecutionHandler()
+                        : new AwareAbortRejectedExecutionHandler();
 
         ThreadPoolExecutor executor = new ThreadPoolExecutor(
-                2,
-                maximumPoolSize,
-                60L,
-                TimeUnit.SECONDS,
-                new ArrayBlockingQueue<>(1024),
+                pipeline.getFallbackCorePoolSize(),
+                pipeline.getFallbackMaxPoolSize(),
+                pipeline.getFallbackKeepAliveTime().toMillis(),
+                TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(pipeline.getFallbackQueueCapacity()),
                 new NamedThreadFactory(
-                        "iron-concurrency-fallback-",
-                        true
+                        pipeline.getFallbackThreadNamePrefix(),
+                        pipeline.isFallbackDaemon()
                 ),
-                new ThreadPoolExecutor.AbortPolicy()
+                rejectedExecutionHandler
         );
 
         executor.allowCoreThreadTimeOut(true);
         return executor;
     }
-
 
 
     @Bean
@@ -288,7 +331,9 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
             TaskResultPipeline taskResultPipeline,
             @Qualifier("ironAsyncErrorClassifier")
             AsyncErrorClassifier asyncErrorClassifier,
-            AsyncUncaughtExceptionHandler asyncUncaughtExceptionHandler
+            AsyncUncaughtExceptionHandler asyncUncaughtExceptionHandler,
+            TaskControlRegistry taskControlRegistry,
+            TaskCancellationManager taskCancellationManager
     ) {
         return new DefaultTaskExecutionTemplate(
                 threadPoolRegistry,
@@ -296,16 +341,22 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
                 taskLifecyclePublisher,
                 taskResultPipeline,
                 asyncErrorClassifier,
-                asyncUncaughtExceptionHandler
+                asyncUncaughtExceptionHandler,
+                taskControlRegistry,
+                taskCancellationManager
         );
     }
 
     @Bean
     @ConditionalOnMissingBean
     public AsyncExecutor asyncExecutor(
-            TaskExecutionTemplate taskExecutionTemplate
+            TaskExecutionTemplate taskExecutionTemplate,
+            TaskCancellationManager taskCancellationManager
     ) {
-        return new DefaultAsyncExecutor(taskExecutionTemplate);
+        return new DefaultAsyncExecutor(
+                taskExecutionTemplate,
+                taskCancellationManager
+        );
     }
 
     /**

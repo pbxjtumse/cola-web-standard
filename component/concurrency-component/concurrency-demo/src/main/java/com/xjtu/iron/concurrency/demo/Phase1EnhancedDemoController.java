@@ -7,10 +7,7 @@ import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionRegistry;
 import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionSnapshot;
 import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolManager;
 import com.xjtu.iron.concurrency.api.execution.pool.ThreadPoolSnapshot;
-import com.xjtu.iron.concurrency.api.event.TaskExecutionEvent;
-import com.xjtu.iron.concurrency.api.listener.TaskExecutionListener;
 import com.xjtu.iron.concurrency.api.retry.RetryPolicy;
-import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -104,21 +101,5 @@ public class Phase1EnhancedDemoController {
         return taskExecutionRegistry.recent(limit);
     }
 
-    /**
-     * 示例监听器：业务可以注册自己的监听器 Bean。
-     */
-    @Bean
-    public TaskExecutionListener demoTaskExecutionListener() {
-        return new TaskExecutionListener() {
-            @Override
-            public void onCompleted(TaskExecutionEvent event) {
-                System.out.println("[demo-listener] completed taskId=" + event.getTask().getTaskId()
-                        + ", taskName=" + event.getTask().getTaskName()
-                        + ", status=" + event.getStatus()
-                        + ", queueCost=" + event.getTiming().getQueueCostMillis()
-                        + ", runCost=" + event.getTiming().getRunCostMillis());
-            }
-        };
-    }
 
 }
