@@ -10,6 +10,7 @@ import com.xjtu.iron.concurrency.api.exception.ConcurrencyRejectedException;
 import com.xjtu.iron.concurrency.api.listener.AsyncUncaughtExceptionHandler;
 import com.xjtu.iron.concurrency.api.task.TaskExecutionMode;
 import com.xjtu.iron.concurrency.core.lifecycle.TaskLifecyclePublisher;
+import com.xjtu.iron.concurrency.core.spi.ShutdownAbortAware;
 
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
@@ -27,7 +28,7 @@ import java.util.concurrent.TimeoutException;
  * @param <T> 任务返回值类型
  */
 public final class TaskCommand<T>
-        implements Runnable, RejectedTaskAware, CallerRunsAware {
+        implements Runnable, RejectedTaskAware, CallerRunsAware, ShutdownAbortAware {
 
     /**
      * 本次任务执行上下文，是任务定义、装饰后执行逻辑、Future 和运行时状态的唯一数据来源。
@@ -231,29 +232,14 @@ public final class TaskCommand<T>
      * @param mayInterruptIfRunning 是否尽力中断运行线程
      * @return true 表示当前取消请求首次确定最终状态
      */
-    public boolean completeCancelled(
-            Throwable throwable,
-            boolean mayInterruptIfRunning
-    ) {
+    public boolean completeCancelled(Throwable throwable, boolean mayInterruptIfRunning) {
         TaskExecutionRuntime runtime = context.getRuntime();
         if (!runtime.tryCancel()) {
             return false;
         }
-
-        Throwable cancellation = throwable == null
-                ? new CancellationException("Task cancelled")
-                : throwable;
-        AsyncError error = errorClassifier.classify(
-                context.getTask(),
-                cancellation,
-                AsyncErrorStage.CANCEL
-        );
-        TaskExecutionEvent event = context.event(
-                AsyncTaskStatus.CANCELLED,
-                error,
-                "Task cancelled"
-        );
-
+        Throwable cancellation = throwable == null ? new CancellationException("Task cancelled") : throwable;
+        AsyncError error = errorClassifier.classify(context.getTask(), cancellation, AsyncErrorStage.CANCEL);
+        TaskExecutionEvent event = context.event(AsyncTaskStatus.CANCELLED, error, "Task cancelled");
         runtime.interruptIfNecessary(mayInterruptIfRunning);
         lifecyclePublisher.publish(event);
         lifecyclePublisher.publishCompleted(event);
@@ -362,4 +348,10 @@ public final class TaskCommand<T>
             lifecyclePublisher.publishCompleted(finalEvent);
         }
     }
+
+    @Override
+    public void abortOnShutdown(Throwable cause) {
+        completeCancelled(cause, false);
+    }
 }
+

@@ -51,6 +51,11 @@ public enum AsyncErrorReason {
     EXECUTOR_NOT_FOUND,
 
     /**
+     * 任务被执行关闭
+     */
+    EXECUTOR_SHUTDOWN,
+
+    /**
      * 未知原因。
      */
     UNKNOWN

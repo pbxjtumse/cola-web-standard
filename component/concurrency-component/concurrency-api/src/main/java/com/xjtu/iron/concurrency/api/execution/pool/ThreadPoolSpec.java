@@ -80,23 +80,61 @@ public class ThreadPoolSpec {
         }
 
         if (corePoolSize <= 0) {
-            throw new IllegalArgumentException("corePoolSize must be positive");
+            throw new IllegalArgumentException("corePoolSize must be greater than zero");
         }
 
         if (maxPoolSize < corePoolSize) {
             throw new IllegalArgumentException("maxPoolSize must be >= corePoolSize");
         }
 
-        if (queueCapacity < 0) {
-            throw new IllegalArgumentException("queueCapacity must be >= 0");
+        if (queueType == null) {
+            throw new IllegalArgumentException("queueType must not be null");
+        }
+
+        if (queueType == QueueType.DIRECT_HANDOFF) {
+            /*
+             * SynchronousQueue 不保存元素，容量字段不生效。
+             */
+            if (queueCapacity < 0) {
+                throw new IllegalArgumentException("queueCapacity must be >= 0 for DIRECT_HANDOFF");
+            }
+        } else if (queueCapacity <= 0) {
+            throw new IllegalArgumentException("queueCapacity must be greater than zero "
+                            + "for bounded queue type "
+                            + queueType
+            );
+        }
+
+        if (keepAliveTime == null || keepAliveTime.isNegative()) {
+            throw new IllegalArgumentException("keepAliveTime must not be null or negative");
+        }
+
+        if (allowCoreThreadTimeout && (keepAliveTime.isZero() || keepAliveTime.isNegative())) {
+            throw new IllegalArgumentException("keepAliveTime must be greater than zero when allowCoreThreadTimeout=true");
+        }
+
+        if (rejectionPolicy == null) {
+            rejectionPolicy = RejectionPolicy.ABORT;
+        }
+
+        if (rejectionPolicy == RejectionPolicy.BLOCKING_WAIT) {
+            if (rejectionWaitTime == null || rejectionWaitTime.isZero() || rejectionWaitTime.isNegative()) {
+                throw new IllegalArgumentException(
+                        "rejectionWaitTime must be greater than zero when rejectionPolicy=BLOCKING_WAIT");
+            }
+        }
+
+        if (waitForTasksToCompleteOnShutdown) {
+            if (awaitTermination == null || awaitTermination.isZero() || awaitTermination.isNegative()) {
+                throw new IllegalArgumentException(
+                        "awaitTermination must be greater than zero "
+                                + "when waitForTasksToCompleteOnShutdown=true"
+                );
+            }
         }
 
         if (threadNamePrefix == null || threadNamePrefix.isBlank()) {
             threadNamePrefix = "xjtu-iron-" + name + "-";
-        }
-
-        if (rejectionWaitTime == null || rejectionWaitTime.isNegative()) {
-            rejectionWaitTime = Duration.ofMillis(100);
         }
     }
 

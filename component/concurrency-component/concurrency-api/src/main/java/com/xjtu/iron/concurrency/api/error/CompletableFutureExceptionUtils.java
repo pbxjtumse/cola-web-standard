@@ -30,8 +30,7 @@ public final class CompletableFutureExceptionUtils {
 
         Throwable current = throwable;
 
-        while (current instanceof CompletionException
-                || current instanceof ExecutionException) {
+        while (current instanceof CompletionException || current instanceof ExecutionException) {
             if (current.getCause() == null) {
                 return current;
             }

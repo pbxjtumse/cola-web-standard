@@ -1,5 +1,6 @@
 package com.xjtu.iron.concurrency.core.async;
 
+import com.xjtu.iron.concurrency.api.error.CompletableFutureExceptionUtils;
 import com.xjtu.iron.concurrency.api.execution.template.AsyncBatchResult;
 import com.xjtu.iron.concurrency.api.execution.template.AsyncTaskOutcome;
 import com.xjtu.iron.concurrency.api.execution.template.AsyncTemplate;
@@ -10,7 +11,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 
 /**
@@ -59,7 +62,6 @@ public class DefaultAsyncTemplate implements AsyncTemplate {
             future.whenComplete((value, error) -> {
                 if (error != null && !result.isDone()) {
                     result.completeExceptionally(unwrap(error));
-
                     /*
                      * 注意：
                      * cancel(true) 对 CompletableFuture.supplyAsync 提交的任务不一定能中断底层线程。
@@ -139,22 +141,40 @@ public class DefaultAsyncTemplate implements AsyncTemplate {
     }
 
     @Override
-    public <T> CompletableFuture<T> withTimeout(
-            CompletableFuture<T> future,
-            Duration timeout
-    ) {
+    public <T> CompletableFuture<T> withTimeout(CompletableFuture<T> source, Duration timeout) {
         if (timeout == null || timeout.isZero() || timeout.isNegative()) {
-            return future;
+            return source;
         }
 
-        return future.orTimeout(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        CompletableFuture<T> result = new CompletableFuture<>();
+
+        ScheduledFuture<?> timeoutFuture = timeoutScheduler.schedule(() -> result.completeExceptionally(
+                                new TimeoutException("Future timeout after " + timeout.toMillis() + " ms")),
+                        timeout.toMillis(),
+                        TimeUnit.MILLISECONDS
+                );
+
+        source.whenComplete((value, throwable) -> {
+            boolean won;
+
+            if (throwable == null) {
+                won = result.complete(value);
+            } else {
+                won = result.completeExceptionally(
+                        CompletableFutureExceptionUtils.unwrap(throwable)
+                );
+            }
+
+            if (won) {
+                timeoutFuture.cancel(false);
+            }
+        });
+
+        return result;
     }
 
     @Override
-    public <T> CompletableFuture<T> withFallback(
-            CompletableFuture<T> future,
-            Function<Throwable, T> fallback
-    ) {
+    public <T> CompletableFuture<T> withFallback(CompletableFuture<T> future, Function<Throwable, T> fallback) {
         if (fallback == null) {
             return future;
         }

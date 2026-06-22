@@ -41,26 +41,27 @@ public final class DiscardOldestRejectedExecutionHandler implements RejectedExec
         /*
          * 直接向队列 offer，避免再次调用 executor.execute 导致同一拒绝策略递归。
          */
-        boolean accepted = queue.offer(runnable);
+        boolean offered = queue.offer(runnable);
 
         /*
          * 在 poll 与 offer 之间可能有其他生产者抢占队列空位。
          */
-        if (!accepted) {
+        if (!offered) {
             /*
              * 旧任务被移除后的空位又被其他并发提交者抢走，
              * 当前任务也必须明确拒绝。
              */
             throw RejectedTaskSupport.reject(runnable, "Current task rejected after discarding oldest task");
         }
-
         /*
-         * executor 可能在 offer 后并发关闭。若能够从队列移除当前任务，则明确标记拒绝；
-         * 若任务已被工作线程取走，则由工作线程正常执行。
+         * offer 成功不等于一定合法。
+         * 等待期间线程池可能已经关闭。
          */
-        if (executor.isShutdown() && queue.remove(runnable)) {
-            throw RejectedTaskSupport.reject(runnable, "Executor shutdown while enqueuing replacement task");
-        }
+        RejectedTaskSupport.rejectIfShutdownAfterEnqueue(
+                runnable,
+                executor,
+                "Executor shutdown while enqueuing replacement task"
+        );
     }
 }
 

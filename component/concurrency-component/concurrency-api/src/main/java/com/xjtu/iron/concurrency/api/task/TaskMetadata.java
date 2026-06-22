@@ -54,9 +54,7 @@ public final class TaskMetadata {
         this.taskName = taskName;
         this.bizKey = bizKey;
         this.description = description;
-        this.tags = tags == null
-                ? Collections.emptyMap()
-                : Collections.unmodifiableMap(new LinkedHashMap<>(tags));
+        this.tags = tags == null ? Collections.emptyMap() : Collections.unmodifiableMap(new LinkedHashMap<>(tags));
     }
 
     public String getTaskId() {

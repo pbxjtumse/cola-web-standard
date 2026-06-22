@@ -74,29 +74,16 @@ public final class TaskExecutionContext<T> {
      * @param baseFuture 原始任务结果 Future
      * @param runtime 动态运行时状态
      */
-    public TaskExecutionContext(
-            AsyncTask<T> task,
+    public TaskExecutionContext(AsyncTask<T> task,
             Supplier<T> executable,
             CompletableFuture<T> baseFuture,
             TaskExecutionRuntime runtime
     ) {
         this.task = Objects.requireNonNull(task, "task must not be null");
-        this.metadata = Objects.requireNonNull(
-                task.metadata(),
-                "task metadata must not be null"
-        );
-        this.executable = Objects.requireNonNull(
-                executable,
-                "executable must not be null"
-        );
-        this.baseFuture = Objects.requireNonNull(
-                baseFuture,
-                "baseFuture must not be null"
-        );
-        this.runtime = Objects.requireNonNull(
-                runtime,
-                "runtime must not be null"
-        );
+        this.metadata = Objects.requireNonNull(task.metadata(), "task metadata must not be null");
+        this.executable = Objects.requireNonNull(executable, "executable must not be null");
+        this.baseFuture = Objects.requireNonNull(baseFuture, "baseFuture must not be null");
+        this.runtime = Objects.requireNonNull(runtime, "runtime must not be null");
     }
 
     /**
@@ -107,11 +94,7 @@ public final class TaskExecutionContext<T> {
      * @param message 事件说明
      * @return 只读任务事件
      */
-    public TaskExecutionEvent event(
-            AsyncTaskStatus status,
-            AsyncError error,
-            String message
-    ) {
+    public TaskExecutionEvent event(AsyncTaskStatus status, AsyncError error, String message) {
         return new TaskExecutionEvent(
                 metadata,
                 status,

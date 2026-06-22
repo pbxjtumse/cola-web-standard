@@ -113,11 +113,7 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
     }
 
     @Override
-    public void execute(
-            String executorName,
-            String taskName,
-            Runnable runnable
-    ) {
+    public void execute(String executorName, String taskName, Runnable runnable) {
         Objects.requireNonNull(runnable, "runnable must not be null");
         AsyncTask<Void> task = AsyncTask.of(executorName, taskName, () -> {
             runnable.run();
@@ -127,11 +123,7 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
     }
 
     @Override
-    public boolean tryExecute(
-            String executorName,
-            String taskName,
-            Runnable runnable
-    ) {
+    public boolean tryExecute(String executorName, String taskName, Runnable runnable) {
         Objects.requireNonNull(runnable, "runnable must not be null");
         AsyncTask<Void> task = AsyncTask.of(executorName, taskName, () -> {
             runnable.run();
@@ -139,10 +131,7 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
         });
 
         try {
-            Submission<Void> submission = submitInternal(
-                    task,
-                    TaskResultMode.FIRE_AND_FORGET
-            );
+            Submission<Void> submission = submitInternal(task, TaskResultMode.FIRE_AND_FORGET);
             return !submission.command().isRejected();
         } catch (ConcurrencyRejectedException rejected) {
             return false;
@@ -150,11 +139,7 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
     }
 
     @Override
-    public CompletableFuture<Void> run(
-            String executorName,
-            String taskName,
-            Runnable runnable
-    ) {
+    public CompletableFuture<Void> run(String executorName, String taskName, Runnable runnable) {
         Objects.requireNonNull(runnable, "runnable must not be null");
         return submit(AsyncTask.of(executorName, taskName, () -> {
             runnable.run();
@@ -163,11 +148,7 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
     }
 
     @Override
-    public <T> CompletableFuture<T> supply(
-            String executorName,
-            String taskName,
-            Supplier<T> supplier
-    ) {
+    public <T> CompletableFuture<T> supply(String executorName, String taskName, Supplier<T> supplier) {
         return submit(AsyncTask.of(executorName, taskName, supplier));
     }
 
@@ -184,55 +165,27 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
     /**
      * 执行统一任务提交流程。
      */
-    private <T> Submission<T> submitInternal(
-            AsyncTask<T> task,
-            TaskResultMode resultMode
-    ) {
+    private <T> Submission<T> submitInternal(AsyncTask<T> task, TaskResultMode resultMode) {
         Objects.requireNonNull(task, "task must not be null");
         task.validate();
-
-        ThreadPoolExecutor executor = threadPoolRegistry.getExecutor(
-                task.getExecutorName()
-        );
+        TaskDefinition<T> definition = TaskDefinition.from(task);
+        ThreadPoolExecutor executor = threadPoolRegistry.getExecutor(task.getExecutorName());
         CompletableFuture<T> baseFuture = new CompletableFuture<>();
         Supplier<T> executable = task.isContextPropagation()
                 ? taskDecorator.decorate(task.getOperation())
                 : task.getOperation();
         TaskExecutionRuntime runtime = new TaskExecutionRuntime(resultMode);
-        TaskExecutionContext<T> context = new TaskExecutionContext<>(
-                task,
-                executable,
-                baseFuture,
-                runtime
-        );
-        TaskCommand<T> command = new TaskCommand<>(
-                context,
-                lifecyclePublisher,
-                errorClassifier,
-                uncaughtExceptionHandler
-        );
+        TaskExecutionContext<T> context = new TaskExecutionContext<>(task, executable, baseFuture, runtime);
+        TaskCommand<T> command = new TaskCommand<>(context, lifecyclePublisher, errorClassifier, uncaughtExceptionHandler);
 
         CompletableFuture<T> finalFuture = resultMode == TaskResultMode.RESULT_AWARE
                 ? resultPipeline.apply(context, command)
                 : baseFuture;
-        TaskControl<T> control = new TaskControl<>(
-                executor,
-                command,
-                finalFuture
-        );
-        TaskHandle<T> handle = new DefaultTaskHandle<>(
-                task.getTaskId(),
-                finalFuture,
-                cancellationManager
-        );
-
+        TaskControl<T> control = new TaskControl<>(executor, command, finalFuture);
+        TaskHandle<T> handle = new DefaultTaskHandle<>(task.getTaskId(), finalFuture, cancellationManager);
         taskControlRegistry.register(task.getTaskId(), control);
-        finalFuture.whenComplete((value, throwable) ->
-                taskControlRegistry.remove(task.getTaskId(), control)
-        );
-
+        finalFuture.whenComplete((value, throwable) -> taskControlRegistry.remove(task.getTaskId(), control));
         command.submitted();
-
         try {
             executor.execute(command);
         } catch (RejectedExecutionException rejected) {
@@ -243,17 +196,8 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
             command.reject(rejected);
 
             if (resultMode == TaskResultMode.FIRE_AND_FORGET) {
-                AsyncError error = errorClassifier.classify(
-                        task,
-                        rejected,
-                        AsyncErrorStage.SUBMIT
-                );
-                throw new ConcurrencyRejectedException(
-                        task.getExecutorName(),
-                        task.getTaskName(),
-                        error,
-                        rejected
-                );
+                AsyncError error = errorClassifier.classify(task, rejected, AsyncErrorStage.SUBMIT);
+                throw new ConcurrencyRejectedException(task.getExecutorName(), task.getTaskName(), error, rejected);
             }
         }
 
@@ -263,9 +207,6 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
     /**
      * 内部提交结果，同时保留句柄和命令，供 tryExecute 判断同步拒绝。
      */
-    private record Submission<T>(
-            TaskHandle<T> handle,
-            TaskCommand<T> command
-    ) {
+    private record Submission<T>(TaskHandle<T> handle, TaskCommand<T> command) {
     }
 }

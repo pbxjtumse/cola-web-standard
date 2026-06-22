@@ -34,4 +34,12 @@ public interface ThreadPoolRegistry {
      * @return 线程池注册表快照
      */
     Map<String, ThreadPoolExecutor> snapshot();
+
+    /**
+     * 动态替换线程池
+     * @param name
+     * @param expectedOld
+     * @param newExecutor
+     */
+    void replace(String name, ThreadPoolExecutor expectedOld, ThreadPoolExecutor newExecutor);
 }

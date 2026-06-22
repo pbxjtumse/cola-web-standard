@@ -58,6 +58,11 @@ public enum AsyncErrorStage {
 
     /**
      * 任务取消阶段。
+     *
      */
-    CANCEL
+    CANCEL,
+    /**
+     * 任务执行关闭阶段。
+     */
+    SHUTDOWN
 }

@@ -5,6 +5,7 @@ import com.xjtu.iron.concurrency.core.spi.ThreadPoolRegistry;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadPoolExecutor;
 
@@ -26,11 +27,25 @@ public class DefaultThreadPoolRegistry implements ThreadPoolRegistry {
 
     @Override
     public void register(String executorName, ThreadPoolExecutor executor) {
-        executors.put(executorName, executor);
+        Objects.requireNonNull(executorName, "executorName must not be null");
+        Objects.requireNonNull(executor, "executor must not be null");
+        ThreadPoolExecutor existing = executors.putIfAbsent(executorName, executor);
+        if (existing != null && existing != executor) {
+            throw new IllegalStateException("Thread pool already registered: " + executorName);
+        }
     }
 
     @Override
     public Map<String, ThreadPoolExecutor> snapshot() {
-        return Collections.unmodifiableMap(executors);
+        //使用copy 返回真正的时点快照，而不是使用  return Map.copyOf(executors);
+        return Map.copyOf(executors);
+    }
+
+    @Override
+    public void replace(String name, ThreadPoolExecutor expectedOld, ThreadPoolExecutor newExecutor) {
+//        CAS 替换 Registry
+//        旧池停止接收任务
+//        旧池优雅关闭
+//         新池开始服务
     }
 }

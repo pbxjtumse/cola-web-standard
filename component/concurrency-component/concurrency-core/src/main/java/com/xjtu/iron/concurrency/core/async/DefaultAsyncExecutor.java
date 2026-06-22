@@ -69,10 +69,7 @@ public final class DefaultAsyncExecutor implements AsyncExecutor {
     }
 
     @Override
-    public TaskCancelResult cancel(
-            String taskId,
-            boolean mayInterruptIfRunning
-    ) {
+    public TaskCancelResult cancel(String taskId, boolean mayInterruptIfRunning) {
         return cancellationManager.cancel(taskId, mayInterruptIfRunning);
     }
 }

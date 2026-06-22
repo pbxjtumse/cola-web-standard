@@ -35,15 +35,9 @@ public final class BlockingWaitRejectedExecutionHandler
     }
 
     @Override
-    public void rejectedExecution(
-            Runnable runnable,
-            ThreadPoolExecutor executor
-    ) {
+    public void rejectedExecution(Runnable runnable, ThreadPoolExecutor executor) {
         if (executor.isShutdown()) {
-            throw RejectedTaskSupport.reject(
-                    runnable,
-                    "Executor already shutdown"
-            );
+            throw RejectedTaskSupport.reject(runnable, "Executor already shutdown");
         }
 
         try {
@@ -53,15 +47,24 @@ public final class BlockingWaitRejectedExecutionHandler
                     waitTime.toMillis(),
                     TimeUnit.MILLISECONDS
             );
-
+            //若是入队失败
             if (!offered) {
-                throw RejectedTaskSupport.reject(
-                        runnable,
+                throw RejectedTaskSupport.reject(runnable,
                         "Task rejected after waiting "
                                 + waitTime.toMillis()
                                 + " ms"
                 );
             }
+            /*
+             * offer 成功不等于一定合法。
+             * 等待期间线程池可能已经关闭。
+             */
+            RejectedTaskSupport.rejectIfShutdownAfterEnqueue(
+                    runnable,
+                    executor,
+                    "Executor shutdown while enqueuing replacement task"
+            );
+
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw RejectedTaskSupport.reject(

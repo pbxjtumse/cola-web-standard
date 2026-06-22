@@ -47,9 +47,7 @@ public interface AsyncTemplate {
      *
      * <p>适合部分成功场景。</p>
      */
-    <T> CompletableFuture<AsyncBatchResult<T>> allOfOutcome(
-            Collection<NamedFuture<T>> futures
-    );
+    <T> CompletableFuture<AsyncBatchResult<T>> allOfOutcome(Collection<NamedFuture<T>> futures);
 
     /**
      * fail-fast 聚合。
@@ -58,9 +56,7 @@ public interface AsyncTemplate {
      *
      * <p>注意：CompletableFuture 层面的 cancel 不一定能真正中断底层运行中的任务。</p>
      */
-    <T> CompletableFuture<List<T>> allOfFailFast(
-            Collection<CompletableFuture<T>> futures
-    );
+    <T> CompletableFuture<List<T>> allOfFailFast(Collection<CompletableFuture<T>> futures);
 
     /**
      * 谁先完成，就返回谁的结果。
@@ -81,16 +77,10 @@ public interface AsyncTemplate {
      *
      * <p>注意：它不保证强制中断底层正在执行的任务。</p>
      */
-    <T> CompletableFuture<T> withTimeout(
-            CompletableFuture<T> future,
-            Duration timeout
-    );
+    <T> CompletableFuture<T> withTimeout(CompletableFuture<T> future, Duration timeout);
 
     /**
      * 给 Future 增加 fallback。
      */
-    <T> CompletableFuture<T> withFallback(
-            CompletableFuture<T> future,
-            Function<Throwable, T> fallback
-    );
+    <T> CompletableFuture<T> withFallback(CompletableFuture<T> future, Function<Throwable, T> fallback);
 }

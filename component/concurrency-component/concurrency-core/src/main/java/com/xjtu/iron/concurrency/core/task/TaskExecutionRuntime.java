@@ -1,6 +1,7 @@
 package com.xjtu.iron.concurrency.core.task;
 
 import com.xjtu.iron.concurrency.api.enums.task.AsyncTaskStatus;
+import com.xjtu.iron.concurrency.api.error.AsyncError;
 import com.xjtu.iron.concurrency.api.task.TaskExecutionMode;
 import com.xjtu.iron.concurrency.api.task.TaskResultMode;
 import com.xjtu.iron.concurrency.api.task.TaskTimingSnapshot;
@@ -134,7 +135,15 @@ public final class TaskExecutionRuntime {
      * 标记任务已提交。
      */
     public void markSubmitted() {
-        status.set(AsyncTaskStatus.SUBMITTED);
+        if (!context.getRuntime().tryMarkSubmitted()) {
+            return;
+        }
+
+        lifecyclePublisher.publish(context.event(
+                AsyncTaskStatus.SUBMITTED,
+                AsyncError.none(),
+                "Task submitted"
+        ));
     }
 
     /**
@@ -354,6 +363,26 @@ public final class TaskExecutionRuntime {
                 nanosToMillis(runCostNanos),
                 nanosToMillis(totalCostNanos)
         );
+    }
+
+    /**
+     * 尝试把任务从 CREATED 转换为 SUBMITTED。
+     *
+     * @return true 表示转换成功；false 表示任务已经进入其他状态
+     */
+    public boolean tryMarkSubmitted() {
+        synchronized (stateLock) {
+            if (status.get() != AsyncTaskStatus.CREATED) {
+                return false;
+            }
+
+            if (baseOutcomeResolved.get() || finalOutcomeResolved.get()) {
+                return false;
+            }
+
+            status.set(AsyncTaskStatus.SUBMITTED);
+            return true;
+        }
     }
 
     /**
