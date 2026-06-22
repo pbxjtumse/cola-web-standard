@@ -169,6 +169,36 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
         Objects.requireNonNull(task, "task must not be null");
         task.validate();
         TaskDefinition<T> definition = TaskDefinition.from(task);
+
+        ThreadPoolExecutor executor = threadPoolRegistry.getExecutor(definition.getExecutorName());
+
+        CompletableFuture<T> baseFuture = new CompletableFuture<>();
+
+        Supplier<T> executable = definition.isContextPropagation()
+                ? taskDecorator.decorate(definition.getOperation())
+                : definition.getOperation();
+
+        TaskExecutionRuntime runtime =
+                new TaskExecutionRuntime(resultMode);
+
+        TaskExecutionContext<T> context =
+                new TaskExecutionContext<>(
+                        definition,
+                        executable,
+                        baseFuture,
+                        runtime
+                );
+
+        TaskCommand<T> command =
+                new TaskCommand<>(
+                        context,
+                        lifecyclePublisher,
+                        errorClassifier,
+                        uncaughtExceptionHandler
+                );
+
+
+
         ThreadPoolExecutor executor = threadPoolRegistry.getExecutor(task.getExecutorName());
         CompletableFuture<T> baseFuture = new CompletableFuture<>();
         Supplier<T> executable = task.isContextPropagation()
@@ -177,7 +207,6 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
         TaskExecutionRuntime runtime = new TaskExecutionRuntime(resultMode);
         TaskExecutionContext<T> context = new TaskExecutionContext<>(task, executable, baseFuture, runtime);
         TaskCommand<T> command = new TaskCommand<>(context, lifecyclePublisher, errorClassifier, uncaughtExceptionHandler);
-
         CompletableFuture<T> finalFuture = resultMode == TaskResultMode.RESULT_AWARE
                 ? resultPipeline.apply(context, command)
                 : baseFuture;
@@ -193,7 +222,14 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
              * ABORT、BLOCKING_WAIT 和线程池关闭的 CALLER_RUNS 会同步抛异常。
              * 自定义处理器通常已经先通知 command.reject；CAS 保证重复调用不会重复发布。
              */
-            command.reject(rejected);
+            /*
+             * 增强版拒绝策略通常已经通过 RejectedTaskSupport 通知了 TaskCommand。
+             * 如果使用的是未感知 TaskCommand 的原生/JDK/第三方拒绝策略，
+             * 这里作为最后兜底补充一次拒绝通知。
+             */
+            if (!command.isBaseOutcomeResolved()) {
+                command.reject(rejected);
+            }
 
             if (resultMode == TaskResultMode.FIRE_AND_FORGET) {
                 AsyncError error = errorClassifier.classify(task, rejected, AsyncErrorStage.SUBMIT);

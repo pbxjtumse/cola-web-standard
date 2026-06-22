@@ -285,10 +285,7 @@ public final class TaskCommand<T>
         }
 
         runtime.tryFinalize(AsyncTaskStatus.SUCCESS);
-        TaskExecutionEvent event = context.event(
-                AsyncTaskStatus.SUCCESS,
-                AsyncError.none(),
-                "Task success"
+        TaskExecutionEvent event = context.event(AsyncTaskStatus.SUCCESS, AsyncError.none(), "Task success"
         );
         lifecyclePublisher.publish(event);
         lifecyclePublisher.publishCompleted(event);
@@ -304,11 +301,7 @@ public final class TaskCommand<T>
             return;
         }
 
-        AsyncError error = errorClassifier.classify(
-                context.getTask(),
-                throwable,
-                AsyncErrorStage.RUN
-        );
+        AsyncError error = errorClassifier.classify(context.getTask(), throwable, AsyncErrorStage.RUN);
         AsyncTaskException taskException = new AsyncTaskException(
                 context.getTask().getExecutorName(),
                 context.getTask().getTaskName(),
@@ -316,11 +309,7 @@ public final class TaskCommand<T>
                 error,
                 throwable
         );
-        TaskExecutionEvent event = context.event(
-                AsyncTaskStatus.FAILED,
-                error,
-                "Task failed"
-        );
+        TaskExecutionEvent event = context.event(AsyncTaskStatus.FAILED, error, "Task failed");
 
         lifecyclePublisher.publish(event);
         finalizeWhenNoFallback(event);
@@ -352,6 +341,19 @@ public final class TaskCommand<T>
     @Override
     public void abortOnShutdown(Throwable cause) {
         completeCancelled(cause, false);
+    }
+
+    /**
+     * 判断原始任务结果是否已经确定。
+     *
+     * <p>
+     * 用于外层提交模板兜底判断是否还需要补充拒绝通知。
+     * </p>
+     *
+     * @return 原始任务结果是否已经确定
+     */
+    public boolean isBaseOutcomeResolved() {
+        return context.getRuntime().isBaseOutcomeResolved();
     }
 }
 

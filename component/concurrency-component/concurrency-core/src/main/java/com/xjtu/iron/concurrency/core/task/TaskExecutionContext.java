@@ -29,11 +29,11 @@ import java.util.function.Supplier;
 public final class TaskExecutionContext<T> {
 
     /**
-     * 用户提交的任务定义。
+     * 用户提交的任务快照。
      *
      * <p>用于读取 timeout、queueTimeout、fallback 等任务配置。</p>
      */
-    private final AsyncTask<T> task;
+    private final TaskDefinition<T> task;
 
     /**
      * 本次执行固定的只读任务元数据。
@@ -64,26 +64,12 @@ public final class TaskExecutionContext<T> {
      */
     private final TaskExecutionRuntime runtime;
 
-    /**
-     * 创建单次任务执行上下文。
-     *
-     * <p>调用前必须先执行 {@link AsyncTask#validate()}。</p>
-     *
-     * @param task 用户任务定义
-     * @param executable 装饰后的最终执行逻辑
-     * @param baseFuture 原始任务结果 Future
-     * @param runtime 动态运行时状态
-     */
-    public TaskExecutionContext(AsyncTask<T> task,
-            Supplier<T> executable,
-            CompletableFuture<T> baseFuture,
-            TaskExecutionRuntime runtime
-    ) {
-        this.task = Objects.requireNonNull(task, "task must not be null");
-        this.metadata = Objects.requireNonNull(task.metadata(), "task metadata must not be null");
-        this.executable = Objects.requireNonNull(executable, "executable must not be null");
-        this.baseFuture = Objects.requireNonNull(baseFuture, "baseFuture must not be null");
-        this.runtime = Objects.requireNonNull(runtime, "runtime must not be null");
+    public TaskExecutionContext(TaskDefinition<T> task, TaskMetadata metadata, Supplier<T> executable, CompletableFuture<T> baseFuture, TaskExecutionRuntime runtime) {
+        this.task = task;
+        this.metadata = metadata;
+        this.executable = executable;
+        this.baseFuture = baseFuture;
+        this.runtime = runtime;
     }
 
     /**
@@ -116,7 +102,7 @@ public final class TaskExecutionContext<T> {
         return task.getFallback() != null;
     }
 
-    public AsyncTask<T> getTask() {
+    public TaskDefinition<T> getTask() {
         return task;
     }
 

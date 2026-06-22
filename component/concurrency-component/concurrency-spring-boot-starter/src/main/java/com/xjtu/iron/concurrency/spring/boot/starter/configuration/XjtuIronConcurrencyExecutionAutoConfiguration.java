@@ -30,11 +30,9 @@ import com.xjtu.iron.concurrency.core.metrics.ConcurrencyMetricsRecorder;
 import com.xjtu.iron.concurrency.core.pipeline.DefaultTaskResultPipeline;
 import com.xjtu.iron.concurrency.core.pipeline.TaskResultPipeline;
 import com.xjtu.iron.concurrency.core.registry.DefaultTaskExecutionRegistry;
-import com.xjtu.iron.concurrency.core.spi.RejectedExecutionHandlerFactory;
-import com.xjtu.iron.concurrency.core.spi.TaskExecutionTemplate;
-import com.xjtu.iron.concurrency.core.spi.ThreadPoolFactory;
-import com.xjtu.iron.concurrency.core.spi.ThreadPoolRegistry;
+import com.xjtu.iron.concurrency.core.spi.*;
 import com.xjtu.iron.concurrency.core.task.DefaultTaskExecutionTemplate;
+import com.xjtu.iron.concurrency.core.task.RejectedTaskAware;
 import com.xjtu.iron.concurrency.spring.boot.starter.properties.XjtuIronConcurrencyProperties;
 import com.xjtu.iron.concurrency.spring.boot.starter.resolver.PropertiesThreadPoolSpecResolver;
 import org.springframework.beans.factory.DisposableBean;
@@ -199,9 +197,7 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
      */
     @Bean(name = "ironTaskExecutionListener")
     @ConditionalOnMissingBean(name = "ironTaskExecutionListener")
-    public TaskExecutionListener ironTaskExecutionListener(
-            ObjectProvider<TaskExecutionListener> listeners
-    ) {
+    public TaskExecutionListener ironTaskExecutionListener(ObjectProvider<TaskExecutionListener> listeners) {
         /*
          * 不在创建 AsyncExecutor 的阶段立即实例化全部业务监听器，
          * 避免 Listener Bean 间接依赖 AsyncExecutor 时形成循环依赖。
@@ -286,10 +282,7 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
      * 也避免 BLOCKING_WAIT 阻塞完成上游 Future 的线程。
      * </p>
      */
-    @Bean(
-            name = "ironConcurrencyFallbackExecutor",
-            destroyMethod = "shutdownNow"
-    )
+    @Bean(name = "ironConcurrencyFallbackExecutor", destroyMethod = "shutdownNow")
     @ConditionalOnMissingBean(name = "ironConcurrencyFallbackExecutor")
     public Executor ironConcurrencyFallbackExecutor(
             XjtuIronConcurrencyProperties properties
@@ -370,30 +363,65 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
         return () -> {
             Map<String, ThreadPoolSpec> specs = threadPoolSpecResolver.resolveAll();
 
-            for (Map.Entry<String, ThreadPoolExecutor> entry
-                    : threadPoolRegistry.snapshot().entrySet()) {
+            for (Map.Entry<String, ThreadPoolExecutor> entry : threadPoolRegistry.snapshot().entrySet()) {
                 String poolName = entry.getKey();
                 ThreadPoolExecutor executor = entry.getValue();
                 ThreadPoolSpec spec = specs.get(poolName);
 
                 if (spec == null || !spec.isWaitForTasksToCompleteOnShutdown()) {
-                    executor.shutdownNow();
+                    shutdownNowAndAbortPending(poolName, executor);
                     continue;
                 }
 
                 executor.shutdown();
                 try {
-                    if (!executor.awaitTermination(
-                            spec.getAwaitTermination().toMillis(),
-                            TimeUnit.MILLISECONDS
-                    )) {
-                        executor.shutdownNow();
+                    if (!executor.awaitTermination(spec.getAwaitTermination().toMillis(), TimeUnit.MILLISECONDS)) {
+                        shutdownNowAndAbortPending(poolName, executor);
                     }
                 } catch (InterruptedException ex) {
                     Thread.currentThread().interrupt();
-                    executor.shutdownNow();
+                    shutdownNowAndAbortPending(poolName, executor);
                 }
             }
         };
+    }
+
+
+    /**
+     * 立即关闭线程池，并通知尚未开始执行的任务。
+     *
+     * <p>
+     * ThreadPoolExecutor#shutdownNow() 会把队列中尚未开始执行的任务移除并返回。
+     * 如果直接忽略这些任务，对应的 CompletableFuture 可能永远不会完成。
+     * </p>
+     *
+     * @param poolName 线程池名称
+     * @param executor 线程池
+     */
+    private void shutdownNowAndAbortPending(String poolName, ThreadPoolExecutor executor) {
+        List<Runnable> pendingTasks = executor.shutdownNow();
+
+        RuntimeException cause = new RuntimeException(
+                "Executor shutdown before queued task started: " + poolName
+        );
+
+        for (Runnable runnable : pendingTasks) {
+            if (runnable instanceof ShutdownAbortAware abortAware) {
+                abortAware.abortOnShutdown(cause);
+            } else if (runnable instanceof RejectedTaskAware rejectedTaskAware) {
+                /*
+                 * 兼容兜底：
+                 * 如果不是 ShutdownAbortAware，但支持拒绝感知，至少让 Future 异常完成，
+                 * 避免任务永久挂起。
+                 */
+                rejectedTaskAware.reject(cause);
+            }
+        }
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AsyncTemplate asyncTemplate(@Qualifier("ironConcurrencyTimeoutScheduler") ScheduledExecutorService timeoutScheduler) {
+        return new DefaultAsyncTemplate(timeoutScheduler);
     }
 }

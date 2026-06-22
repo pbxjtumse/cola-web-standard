@@ -10,16 +10,27 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.Objects;
+import java.util.concurrent.*;
 import java.util.function.Function;
 
 /**
  * 默认 CompletableFuture 编排模板。
  */
 public class DefaultAsyncTemplate implements AsyncTemplate {
+
+    /**
+     * 通用 Future 超时调度器。
+     *
+     * <p>
+     * 只负责完成包装 Future 的超时结果，不负责执行业务逻辑。
+     * </p>
+     */
+    private final ScheduledExecutorService timeoutScheduler;
+
+    public DefaultAsyncTemplate(ScheduledExecutorService timeoutScheduler) {
+        this.timeoutScheduler = Objects.requireNonNull(timeoutScheduler, "timeoutScheduler must not be null");
+    }
 
     @Override
     public <T> CompletableFuture<List<T>> allOf(Collection<CompletableFuture<T>> futures) {
