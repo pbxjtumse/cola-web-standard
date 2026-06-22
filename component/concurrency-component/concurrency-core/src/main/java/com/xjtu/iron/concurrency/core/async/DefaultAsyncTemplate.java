@@ -50,7 +50,7 @@ public class DefaultAsyncTemplate implements AsyncTemplate {
             CompletableFuture<AsyncTaskOutcome<T>> outcomeFuture =
                     namedFuture.getFuture()
                             .thenApply(value -> AsyncTaskOutcome.success(namedFuture.getTaskName(), value))
-                            .exceptionally(ex -> AsyncTaskOutcome.failure(namedFuture.getTaskName(), unwrap(ex)));
+                            .exceptionally(ex -> AsyncTaskOutcome.failure(namedFuture.getTaskName(), CompletableFutureExceptionUtils.unwrap(ex)));
             wrapped.add(outcomeFuture);
         }
 
@@ -72,7 +72,7 @@ public class DefaultAsyncTemplate implements AsyncTemplate {
         for (CompletableFuture<T> future : futures) {
             future.whenComplete((value, error) -> {
                 if (error != null && !result.isDone()) {
-                    result.completeExceptionally(unwrap(error));
+                    result.completeExceptionally(CompletableFutureExceptionUtils.unwrap(error));
                     /*
                      * 注意：
                      * cancel(true) 对 CompletableFuture.supplyAsync 提交的任务不一定能中断底层线程。
@@ -91,7 +91,7 @@ public class DefaultAsyncTemplate implements AsyncTemplate {
                         .toList())
                 .whenComplete((values, error) -> {
                     if (error != null) {
-                        result.completeExceptionally(unwrap(error));
+                        result.completeExceptionally(CompletableFutureExceptionUtils.unwrap(error));
                     } else {
                         result.complete(values);
                     }
@@ -111,7 +111,7 @@ public class DefaultAsyncTemplate implements AsyncTemplate {
                 if (error == null) {
                     result.complete(value);
                 } else {
-                    result.completeExceptionally(unwrap(error));
+                    result.completeExceptionally(CompletableFutureExceptionUtils.unwrap(error));
                 }
             });
         }
@@ -137,7 +137,7 @@ public class DefaultAsyncTemplate implements AsyncTemplate {
                     return;
                 }
 
-                errors.add(unwrap(error));
+                errors.add(CompletableFutureExceptionUtils.unwrap(error));
                 if (failureCount.incrementAndGet() == total) {
                     RuntimeException allFailed = new RuntimeException("All futures failed");
                     for (Throwable throwable : errors) {
@@ -190,18 +190,7 @@ public class DefaultAsyncTemplate implements AsyncTemplate {
             return future;
         }
 
-        return future.exceptionally(error -> fallback.apply(unwrap(error)));
+        return future.exceptionally(error -> fallback.apply(CompletableFutureExceptionUtils.unwrap(error)));
     }
 
-    private Throwable unwrap(Throwable error) {
-        if (error == null) {
-            return null;
-        }
-
-        if (error.getCause() != null) {
-            return error.getCause();
-        }
-
-        return error;
-    }
 }

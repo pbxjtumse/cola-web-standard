@@ -1,12 +1,9 @@
 package com.xjtu.iron.concurrency.core.error;
 
-import com.xjtu.iron.concurrency.api.enums.error.AsyncErrorStage;
 import com.xjtu.iron.concurrency.api.error.AsyncError;
 import com.xjtu.iron.concurrency.api.error.AsyncErrorClassificationContext;
 import com.xjtu.iron.concurrency.api.error.AsyncErrorClassificationRule;
 import com.xjtu.iron.concurrency.api.error.AsyncErrorClassifier;
-import com.xjtu.iron.concurrency.api.error.CompletableFutureExceptionUtils;
-import com.xjtu.iron.concurrency.api.execution.task.AsyncTask;
 
 import java.util.Comparator;
 import java.util.List;
@@ -60,26 +57,9 @@ public final class CompositeAsyncErrorClassifier implements AsyncErrorClassifier
         );
     }
 
-    /**
-     * 按规则链分类异常。
-     *
-     * @param task 异步任务
-     * @param throwable 原始异常
-     * @param stage 异常发生阶段
-     * @return 结构化错误
-     */
     @Override
-    public AsyncError classify(
-            AsyncTask<?> task,
-            Throwable throwable,
-            AsyncErrorStage stage
-    ) {
-        AsyncErrorClassificationContext context = new AsyncErrorClassificationContext(
-                task,
-                throwable,
-                CompletableFutureExceptionUtils.rootCause(throwable),
-                stage
-        );
+    public AsyncError classify(AsyncErrorClassificationContext context) {
+        Objects.requireNonNull(context, "context must not be null");
 
         for (AsyncErrorClassificationRule rule : rules) {
             try {
@@ -91,21 +71,20 @@ public final class CompositeAsyncErrorClassifier implements AsyncErrorClassifier
                 if (error != null) {
                     return error;
                 }
-            } catch (Throwable ignored) {
+            } catch (RuntimeException ruleError) {
                 /*
-                 * 错误分类属于旁路诊断能力，单条业务规则异常不能覆盖原始任务异常。
-                 * 当前无日志依赖，直接继续尝试后续规则，最终由默认分类器兜底。
+                 * 分类规则属于旁路诊断能力，单条业务规则异常不能覆盖原始任务异常。
+                 * 一期先继续尝试后续规则，后续再接入内部诊断日志/指标。
+                 * 注意：不捕获 Error，避免吞掉 JVM 级严重错误。
                  */
             }
         }
 
-        return fallbackClassifier.classify(task, throwable, stage);
+        return fallbackClassifier.classify(context);
     }
 
     /**
      * 获取已装配的规则数量，便于诊断和测试。
-     *
-     * @return 规则数量
      */
     public int ruleCount() {
         return rules.size();

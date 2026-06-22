@@ -1,7 +1,6 @@
 package com.xjtu.iron.concurrency.core.task;
 
 import com.xjtu.iron.concurrency.api.enums.task.AsyncTaskStatus;
-import com.xjtu.iron.concurrency.api.error.AsyncError;
 import com.xjtu.iron.concurrency.api.task.TaskExecutionMode;
 import com.xjtu.iron.concurrency.api.task.TaskResultMode;
 import com.xjtu.iron.concurrency.api.task.TaskTimingSnapshot;
@@ -129,21 +128,6 @@ public final class TaskExecutionRuntime {
         this.resultMode = resultMode == null ? TaskResultMode.RESULT_AWARE : resultMode;
         this.submitTimeMillis = System.currentTimeMillis();
         this.submitNanoTime = System.nanoTime();
-    }
-
-    /**
-     * 标记任务已提交。
-     */
-    public void markSubmitted() {
-        if (!context.getRuntime().tryMarkSubmitted()) {
-            return;
-        }
-
-        lifecyclePublisher.publish(context.event(
-                AsyncTaskStatus.SUBMITTED,
-                AsyncError.none(),
-                "Task submitted"
-        ));
     }
 
     /**

@@ -75,7 +75,9 @@ public final class TaskCommand<T>
      * 发布任务已提交事件。
      */
     public void submitted() {
-        context.getRuntime().markSubmitted();
+        if (!context.getRuntime().tryMarkSubmitted()) {
+            return;
+        }
         lifecyclePublisher.publish(context.event(
                 AsyncTaskStatus.SUBMITTED,
                 AsyncError.none(),
@@ -157,7 +159,7 @@ public final class TaskCommand<T>
                 ? throwable
                 : new RejectedExecutionException("Task rejected", throwable);
         AsyncError error = errorClassifier.classify(
-                context.getTask(),
+                context.getMetadata(),
                 rejectedCause,
                 AsyncErrorStage.SUBMIT
         );
@@ -195,7 +197,7 @@ public final class TaskCommand<T>
                 ? AsyncErrorStage.WAIT_RESULT
                 : stage;
         AsyncError error = errorClassifier.classify(
-                context.getTask(),
+                context.getMetadata(),
                 throwable,
                 actualStage
         );
@@ -238,7 +240,7 @@ public final class TaskCommand<T>
             return false;
         }
         Throwable cancellation = throwable == null ? new CancellationException("Task cancelled") : throwable;
-        AsyncError error = errorClassifier.classify(context.getTask(), cancellation, AsyncErrorStage.CANCEL);
+        AsyncError error = errorClassifier.classify(context.getMetadata(), cancellation, AsyncErrorStage.CANCEL);
         TaskExecutionEvent event = context.event(AsyncTaskStatus.CANCELLED, error, "Task cancelled");
         runtime.interruptIfNecessary(mayInterruptIfRunning);
         lifecyclePublisher.publish(event);
@@ -301,7 +303,7 @@ public final class TaskCommand<T>
             return;
         }
 
-        AsyncError error = errorClassifier.classify(context.getTask(), throwable, AsyncErrorStage.RUN);
+        AsyncError error = errorClassifier.classify(context.getMetadata(), throwable, AsyncErrorStage.RUN);
         AsyncTaskException taskException = new AsyncTaskException(
                 context.getTask().getExecutorName(),
                 context.getTask().getTaskName(),

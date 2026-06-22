@@ -144,12 +144,6 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AsyncTemplate asyncTemplate() {
-        return new DefaultAsyncTemplate();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
     public AsyncUncaughtExceptionHandler asyncUncaughtExceptionHandler() {
         return new NoopAsyncUncaughtExceptionHandler();
     }

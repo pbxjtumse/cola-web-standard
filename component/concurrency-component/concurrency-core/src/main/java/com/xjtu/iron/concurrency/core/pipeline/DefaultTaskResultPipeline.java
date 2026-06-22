@@ -383,7 +383,7 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
         }
 
         AsyncError fallbackError = errorClassifier.classify(
-                context.getTask(),
+                context.getMetadata(),
                 fallbackThrowable,
                 AsyncErrorStage.FALLBACK
         );
@@ -436,7 +436,7 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
         }
 
         return errorClassifier.classify(
-                context.getTask(),
+                context.getMetadata(),
                 throwable,
                 originalErrorStage(context)
         );

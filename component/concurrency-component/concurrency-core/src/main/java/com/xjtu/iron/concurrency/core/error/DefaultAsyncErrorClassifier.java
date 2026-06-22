@@ -7,15 +7,15 @@ import com.xjtu.iron.concurrency.api.enums.error.AsyncRecoveryAction;
 import com.xjtu.iron.concurrency.api.error.ApplicationErrorInfo;
 import com.xjtu.iron.concurrency.api.error.AsyncError;
 import com.xjtu.iron.concurrency.api.error.AsyncErrorClassification;
+import com.xjtu.iron.concurrency.api.error.AsyncErrorClassificationContext;
 import com.xjtu.iron.concurrency.api.error.AsyncErrorClassifier;
-import com.xjtu.iron.concurrency.api.error.CompletableFutureExceptionUtils;
 import com.xjtu.iron.concurrency.api.error.ExceptionInfo;
 import com.xjtu.iron.concurrency.api.error.RecoveryHint;
 import com.xjtu.iron.concurrency.api.exception.ConcurrencyException;
 import com.xjtu.iron.concurrency.api.exception.ConcurrencyRejectedException;
 import com.xjtu.iron.concurrency.api.exception.ThreadPoolNotFoundException;
-import com.xjtu.iron.concurrency.api.execution.task.AsyncTask;
 
+import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeoutException;
@@ -31,13 +31,14 @@ import java.util.concurrent.TimeoutException;
 public final class DefaultAsyncErrorClassifier implements AsyncErrorClassifier {
 
     @Override
-    public AsyncError classify(
-            AsyncTask<?> task,
-            Throwable throwable,
-            AsyncErrorStage stage
-    ) {
-        Throwable root = CompletableFutureExceptionUtils.rootCause(throwable);
-        AsyncErrorStage actualStage = stage == null ? AsyncErrorStage.NONE : stage;
+    public AsyncError classify(AsyncErrorClassificationContext context) {
+        Objects.requireNonNull(context, "context must not be null");
+
+        Throwable root = context.getRootCause();
+        Throwable throwable = context.getThrowable();
+        AsyncErrorStage actualStage = context.getStage() == null
+                ? AsyncErrorStage.NONE
+                : context.getStage();
 
         if (root == null) {
             return AsyncError.none();
