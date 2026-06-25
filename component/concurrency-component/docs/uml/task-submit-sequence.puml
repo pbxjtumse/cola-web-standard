@@ -1,0 +1,19 @@
+@startuml
+actor Business
+participant AsyncExecutor
+participant TaskExecutionTemplate
+participant TaskCommand
+participant ThreadPoolExecutor
+participant TaskLifecyclePublisher
+
+Business -> AsyncExecutor : submit(task)
+AsyncExecutor -> TaskExecutionTemplate : submitInternal(task)
+TaskExecutionTemplate -> TaskExecutionTemplate : validate + TaskDefinition.from
+TaskExecutionTemplate -> TaskCommand : submitted()
+TaskCommand -> TaskLifecyclePublisher : SUBMITTED
+TaskExecutionTemplate -> ThreadPoolExecutor : execute(command)
+ThreadPoolExecutor -> TaskCommand : run()
+TaskCommand -> TaskLifecyclePublisher : RUNNING
+TaskCommand -> TaskCommand : operation.get()
+TaskCommand -> TaskLifecyclePublisher : SUCCESS / FAILED
+@enduml

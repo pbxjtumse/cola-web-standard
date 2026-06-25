@@ -1,0 +1,16 @@
+@startuml
+participant TaskCommand
+participant baseFuture
+participant TaskResultPipeline
+participant fallbackExecutor
+participant finalFuture
+participant TaskLifecyclePublisher
+
+TaskCommand -> baseFuture : completeExceptionally
+baseFuture -> TaskResultPipeline : failed
+TaskResultPipeline -> TaskLifecyclePublisher : FALLBACK
+TaskResultPipeline -> fallbackExecutor : execute(FallbackTask)
+fallbackExecutor -> TaskResultPipeline : fallback result
+TaskResultPipeline -> TaskLifecyclePublisher : FALLBACK_SUCCESS / FALLBACK_FAILED
+TaskResultPipeline -> finalFuture : complete / completeExceptionally
+@enduml
