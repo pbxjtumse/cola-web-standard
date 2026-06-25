@@ -13,8 +13,7 @@ public final class DefaultTaskControlRegistry
     /**
      * taskId 到运行控制对象的映射。
      */
-    private final ConcurrentMap<String, CancellableTask> controls =
-            new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, CancellableTask> controls = new ConcurrentHashMap<>();
 
     @Override
     public void register(String taskId, CancellableTask task) {
@@ -24,9 +23,7 @@ public final class DefaultTaskControlRegistry
 
         CancellableTask previous = controls.putIfAbsent(taskId, task);
         if (previous != null) {
-            throw new IllegalStateException(
-                    "Running taskId already exists: " + taskId
-            );
+            throw new IllegalStateException("Running taskId already exists: " + taskId);
         }
     }
 

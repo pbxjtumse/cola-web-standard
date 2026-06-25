@@ -240,10 +240,7 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
 
 
 
-    @Bean(
-            name = "ironConcurrencyTimeoutScheduler",
-            destroyMethod = "shutdownNow"
-    )
+    @Bean(name = "ironConcurrencyTimeoutScheduler")
     @ConditionalOnMissingBean(name = "ironConcurrencyTimeoutScheduler")
     public ScheduledExecutorService ironConcurrencyTimeoutScheduler(
             XjtuIronConcurrencyProperties properties
@@ -276,9 +273,9 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
      * 也避免 BLOCKING_WAIT 阻塞完成上游 Future 的线程。
      * </p>
      */
-    @Bean(name = "ironConcurrencyFallbackExecutor", destroyMethod = "shutdownNow")
+    @Bean(name = "ironConcurrencyFallbackExecutor")
     @ConditionalOnMissingBean(name = "ironConcurrencyFallbackExecutor")
-    public Executor ironConcurrencyFallbackExecutor(
+    public ThreadPoolExecutor ironConcurrencyFallbackExecutor(
             XjtuIronConcurrencyProperties properties
     ) {
         XjtuIronConcurrencyProperties.PipelineProperties pipeline =
@@ -411,6 +408,74 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
                 rejectedTaskAware.reject(cause);
             }
         }
+    }
+
+    /**
+     * 应用关闭时优雅停止 fallback 执行器。
+     *
+     * <p>
+     * fallback 队列中保存的是最终 Future 的恢复任务。如果直接 destroyMethod=shutdownNow，
+     * Spring 会丢弃 shutdownNow() 返回的未执行任务，导致最终 Future 可能永远不完成。
+     * 因此这里显式处理 pending Runnable，并通知 ShutdownAbortAware。
+     * </p>
+     */
+    @Bean
+    public DisposableBean fallbackExecutorShutdownHook(
+            @Qualifier("ironConcurrencyFallbackExecutor") Executor fallbackExecutor,
+            XjtuIronConcurrencyProperties properties
+    ) {
+        return () -> {
+            if (!(fallbackExecutor instanceof ThreadPoolExecutor executor)) {
+                return;
+            }
+
+            XjtuIronConcurrencyProperties.PipelineProperties pipeline = properties.getPipeline();
+            pipeline.validate();
+
+            executor.shutdown();
+            try {
+                if (!executor.awaitTermination(
+                        pipeline.getFallbackAwaitTermination().toMillis(),
+                        TimeUnit.MILLISECONDS
+                )) {
+                    shutdownNowAndAbortPendingFallback(executor);
+                }
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                shutdownNowAndAbortPendingFallback(executor);
+            }
+        };
+    }
+
+    /**
+     * 关闭 fallback 执行器，并通知尚未开始执行的 fallback 任务。
+     */
+    private void shutdownNowAndAbortPendingFallback(ThreadPoolExecutor executor) {
+        List<Runnable> pendingTasks = executor.shutdownNow();
+        RuntimeException cause = new RuntimeException(
+                "Fallback executor shutdown before queued fallback task started"
+        );
+
+        for (Runnable runnable : pendingTasks) {
+            if (runnable instanceof ShutdownAbortAware abortAware) {
+                abortAware.abortOnShutdown(cause);
+            }
+        }
+    }
+
+    /**
+     * 关闭结果层超时调度器。
+     *
+     * <p>
+     * 超时调度器只负责触发 timeout 检查。关闭时丢弃未触发的 timeout 检查，
+     * 不会像 fallback 一样导致最终 Future 必然挂起；原始任务仍可自行成功、失败或取消。
+     * </p>
+     */
+    @Bean
+    public DisposableBean timeoutSchedulerShutdownHook(
+            @Qualifier("ironConcurrencyTimeoutScheduler") ScheduledExecutorService timeoutScheduler
+    ) {
+        return timeoutScheduler::shutdownNow;
     }
 
     @Bean

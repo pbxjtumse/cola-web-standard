@@ -47,9 +47,9 @@ public final class TaskDefinition<T> {
     private final boolean cancelOnTimeout;
 
     /**
-     * 超时取消时是否尝试中断运行线程。
+     * 结果超时触发取消时是否尝试中断运行线程。
      */
-    private final boolean interruptOnCancel;
+    private final boolean interruptOnTimeout;
 
     /**
      * 原始任务失败、拒绝或超时后的 fallback 逻辑。
@@ -77,7 +77,7 @@ public final class TaskDefinition<T> {
             Duration timeout,
             Duration queueTimeout,
             boolean cancelOnTimeout,
-            boolean interruptOnCancel,
+            boolean interruptOnTimeout,
             Function<Throwable, T> fallback,
             boolean contextPropagation,
             RetryPolicy retryPolicy
@@ -87,7 +87,7 @@ public final class TaskDefinition<T> {
         this.timeout = timeout;
         this.queueTimeout = queueTimeout;
         this.cancelOnTimeout = cancelOnTimeout;
-        this.interruptOnCancel = interruptOnCancel;
+        this.interruptOnTimeout = interruptOnTimeout;
         this.fallback = fallback;
         this.contextPropagation = contextPropagation;
         this.retryPolicy = retryPolicy == null ? RetryPolicy.none() : retryPolicy;
@@ -113,7 +113,7 @@ public final class TaskDefinition<T> {
                 task.getTimeout(),
                 task.getQueueTimeout(),
                 task.isCancelOnTimeout(),
-                task.isInterruptOnCancel(),
+                task.isInterruptOnTimeout(),
                 task.getFallback(),
                 task.isContextPropagation(),
                 task.getRetryPolicy()
@@ -156,8 +156,16 @@ public final class TaskDefinition<T> {
         return cancelOnTimeout;
     }
 
+    public boolean isInterruptOnTimeout() {
+        return interruptOnTimeout;
+    }
+
+    /**
+     * 兼容旧命名：该字段实际表示结果超时触发取消时是否中断运行线程。
+     */
+    @Deprecated
     public boolean isInterruptOnCancel() {
-        return interruptOnCancel;
+        return interruptOnTimeout;
     }
 
     public Function<Throwable, T> getFallback() {

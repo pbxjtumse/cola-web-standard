@@ -130,14 +130,12 @@ public final class TaskExecutionRuntime {
         this.submitNanoTime = System.nanoTime();
     }
 
+
     /**
      * 在 CallerRuns 拒绝处理器执行任务之前标记调用方线程执行模式。
      */
     public void markCallerThreadExecution() {
-        executionMode.compareAndSet(
-                TaskExecutionMode.UNASSIGNED,
-                TaskExecutionMode.CALLER_THREAD
-        );
+        executionMode.compareAndSet(TaskExecutionMode.UNASSIGNED, TaskExecutionMode.CALLER_THREAD);
     }
 
     /**
@@ -154,11 +152,7 @@ public final class TaskExecutionRuntime {
             if (baseOutcomeResolved.get() || finalOutcomeResolved.get()) {
                 return false;
             }
-
-            executionMode.compareAndSet(
-                    TaskExecutionMode.UNASSIGNED,
-                    TaskExecutionMode.THREAD_POOL
-            );
+            executionMode.compareAndSet(TaskExecutionMode.UNASSIGNED, TaskExecutionMode.THREAD_POOL);
             startTimeMillis = System.currentTimeMillis();
             startNanoTime = System.nanoTime();
             runningThread.set(Thread.currentThread());

@@ -11,6 +11,7 @@ import com.xjtu.iron.concurrency.api.exception.ConcurrencyException;
 import com.xjtu.iron.concurrency.core.lifecycle.TaskLifecyclePublisher;
 import com.xjtu.iron.concurrency.core.task.TaskCommand;
 import com.xjtu.iron.concurrency.core.task.TaskExecutionContext;
+import com.xjtu.iron.concurrency.core.spi.ShutdownAbortAware;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -230,7 +231,7 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
 
         if (timeoutWon && context.getTask().isCancelOnTimeout()) {
             command.interruptRunningIfNecessary(
-                    context.getTask().isInterruptOnCancel()
+                    context.getTask().isInterruptOnTimeout()
             );
         }
     }
@@ -284,7 +285,7 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
             ));
 
             try {
-                fallbackExecutor.execute(() -> executeFallback(
+                fallbackExecutor.execute(new FallbackTask<>(
                         context,
                         throwable,
                         originalError,
@@ -301,6 +302,59 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
         });
 
         return result;
+    }
+
+
+    /**
+     * fallback 执行任务。
+     *
+     * <p>
+     * 不能使用裸 lambda，因为 fallbackExecutor 在应用关闭时可能调用 shutdownNow()，
+     * 线程池会把尚未执行的 Runnable 从队列中移出并返回。只有实现 ShutdownAbortAware，
+     * 关闭钩子才能通知它完成最终 Future，避免调用方永久等待。
+     * </p>
+     */
+    private final class FallbackTask<T> implements Runnable, ShutdownAbortAware {
+
+        private final TaskExecutionContext<T> context;
+
+        private final Throwable originalThrowable;
+
+        private final AsyncError originalError;
+
+        private final CompletableFuture<T> result;
+
+        private FallbackTask(
+                TaskExecutionContext<T> context,
+                Throwable originalThrowable,
+                AsyncError originalError,
+                CompletableFuture<T> result
+        ) {
+            this.context = context;
+            this.originalThrowable = originalThrowable;
+            this.originalError = originalError;
+            this.result = result;
+        }
+
+        @Override
+        public void run() {
+            executeFallback(
+                    context,
+                    originalThrowable,
+                    originalError,
+                    result
+            );
+        }
+
+        @Override
+        public void abortOnShutdown(Throwable cause) {
+            completeFallbackFailure(
+                    context,
+                    cause,
+                    result,
+                    "Fallback aborted because fallback executor shutdown"
+            );
+        }
     }
 
     /**

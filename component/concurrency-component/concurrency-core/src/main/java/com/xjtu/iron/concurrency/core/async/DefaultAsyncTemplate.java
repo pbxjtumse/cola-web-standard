@@ -185,7 +185,10 @@ public class DefaultAsyncTemplate implements AsyncTemplate {
     }
 
     @Override
-    public <T> CompletableFuture<T> withFallback(CompletableFuture<T> future, Function<Throwable, T> fallback) {
+    public <T> CompletableFuture<T> withFallback(
+            CompletableFuture<T> future,
+            Function<Throwable, T> fallback
+    ) {
         if (fallback == null) {
             return future;
         }

@@ -29,15 +29,7 @@ public interface AsyncErrorClassifier {
      * @param stage 异常发生阶段
      * @return 异步错误描述
      */
-    default AsyncError classify(
-            TaskMetadata task,
-            Throwable throwable,
-            AsyncErrorStage stage
-    ) {
-        return classify(AsyncErrorClassificationContext.of(
-                task,
-                throwable,
-                stage
-        ));
+    default AsyncError classify(TaskMetadata task, Throwable throwable, AsyncErrorStage stage) {
+        return classify(AsyncErrorClassificationContext.of(task, throwable, stage));
     }
 }

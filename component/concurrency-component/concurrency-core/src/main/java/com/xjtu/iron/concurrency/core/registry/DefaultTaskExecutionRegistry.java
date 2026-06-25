@@ -4,13 +4,11 @@ import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionRegistry;
 import com.xjtu.iron.concurrency.api.execution.registry.TaskExecutionSnapshot;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -59,11 +57,6 @@ public final class DefaultTaskExecutionRegistry
     private final AtomicLong indexSize = new AtomicLong();
 
     /**
-     * 防止多个线程同时执行索引压缩。
-     */
-    private final AtomicBoolean compacting = new AtomicBoolean(false);
-
-    /**
      * 最多保留的不同 taskId 数量。
      */
     private final int maxSize;
@@ -94,7 +87,7 @@ public final class DefaultTaskExecutionRegistry
         indexSize.incrementAndGet();
 
         evictIfNecessary();
-        compactIndexIfNecessary();
+        cleanupStaleTail(16);
     }
 
     @Override
@@ -160,33 +153,33 @@ public final class DefaultTaskExecutionRegistry
     }
 
     /**
-     * 当旧版本索引数量明显膨胀时，使用当前最新快照重建顺序索引。
+     * 从队尾有限量清理已经失效的旧版本索引。
      *
      * <p>
-     * 该操作不是每次 update 都执行，只在索引长度超过 maxSize 的四倍时尝试，
-     * 从而避免原实现每次超容都复制并排序全部快照。
+     * 这里刻意不再使用 updateOrder.clear() + addAll(...) 做全量压缩。
+     * 原来的全量压缩会和并发 update 交错，可能清掉刚刚 addFirst 的最新索引，
+     * 导致 Map 中存在最新快照，但 recent() 因顺序索引丢失而查不到。
      * </p>
+     *
+     * @param maxCleanup 单次最多清理多少个旧尾节点
      */
-    private void compactIndexIfNecessary() {
-        if (indexSize.get() <= maxSize * 4L
-                || !compacting.compareAndSet(false, true)) {
-            return;
-        }
+    private void cleanupStaleTail(int maxCleanup) {
+        for (int i = 0; i < maxCleanup; i++) {
+            IndexEntry tail = updateOrder.peekLast();
+            if (tail == null) {
+                indexSize.set(0L);
+                return;
+            }
 
-        try {
-            List<IndexEntry> currentEntries = snapshots.entrySet().stream()
-                    .map(entry -> new IndexEntry(
-                            entry.getKey(),
-                            entry.getValue().version()
-                    ))
-                    .sorted(Comparator.comparingLong(IndexEntry::version).reversed())
-                    .toList();
+            VersionedSnapshot current = snapshots.get(tail.taskId());
+            boolean stale = current == null || current.version() != tail.version();
+            if (!stale) {
+                return;
+            }
 
-            updateOrder.clear();
-            updateOrder.addAll(currentEntries);
-            indexSize.set(currentEntries.size());
-        } finally {
-            compacting.set(false);
+            if (updateOrder.pollLast() != null) {
+                indexSize.decrementAndGet();
+            }
         }
     }
 

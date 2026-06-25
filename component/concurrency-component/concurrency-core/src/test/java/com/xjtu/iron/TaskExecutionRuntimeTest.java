@@ -17,7 +17,7 @@ public class TaskExecutionRuntimeTest extends TestCase {
     public void testCallerThreadModeIsPreservedWhenRunning() {
         TaskExecutionRuntime runtime = new TaskExecutionRuntime(TaskResultMode.RESULT_AWARE);
 
-        runtime.markSubmitted();
+        runtime.tryMarkSubmitted();
         runtime.markCallerThreadExecution();
 
         assertEquals(TaskExecutionMode.CALLER_THREAD, runtime.getExecutionMode());
@@ -31,7 +31,7 @@ public class TaskExecutionRuntimeTest extends TestCase {
     public void testPoolThreadModeIsAssignedWhenRunning() {
         TaskExecutionRuntime runtime = new TaskExecutionRuntime(TaskResultMode.RESULT_AWARE);
 
-        runtime.markSubmitted();
+        runtime.tryMarkSubmitted();
 
         assertEquals(TaskExecutionMode.UNASSIGNED, runtime.getExecutionMode());
         assertTrue(runtime.tryMarkRunning());

@@ -266,6 +266,11 @@ public class XjtuIronConcurrencyProperties {
         private Duration fallbackKeepAliveTime = Duration.ofSeconds(60);
 
         /**
+         * 应用关闭时等待 fallback 执行器处理已入队 fallback 任务的最长时间。
+         */
+        private Duration fallbackAwaitTermination = Duration.ofSeconds(5);
+
+        /**
          * fallback 线程名称前缀。
          */
         private String fallbackThreadNamePrefix = "iron-concurrency-fallback-";
@@ -341,6 +346,14 @@ public class XjtuIronConcurrencyProperties {
             this.fallbackKeepAliveTime = fallbackKeepAliveTime;
         }
 
+        public Duration getFallbackAwaitTermination() {
+            return fallbackAwaitTermination;
+        }
+
+        public void setFallbackAwaitTermination(Duration fallbackAwaitTermination) {
+            this.fallbackAwaitTermination = fallbackAwaitTermination;
+        }
+
         public String getFallbackThreadNamePrefix() {
             return fallbackThreadNamePrefix;
         }
@@ -388,6 +401,13 @@ public class XjtuIronConcurrencyProperties {
                     || fallbackKeepAliveTime.isNegative()) {
                 throw new IllegalArgumentException(
                         "pipeline.fallbackKeepAliveTime must be greater than 0"
+                );
+            }
+            if (fallbackAwaitTermination == null
+                    || fallbackAwaitTermination.isZero()
+                    || fallbackAwaitTermination.isNegative()) {
+                throw new IllegalArgumentException(
+                        "pipeline.fallbackAwaitTermination must be greater than 0"
                 );
             }
             if (fallbackRejectionPolicy != RejectionPolicy.ABORT

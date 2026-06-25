@@ -96,7 +96,7 @@ public class AsyncTask<T> {
      *
      * <p>Java 中断是协作式的，不是强制终止。</p>
      */
-    private boolean interruptOnCancel;
+    private boolean interruptOnTimeout;
 
     /**
      * 用户提交的原始业务执行逻辑。
@@ -242,7 +242,7 @@ public class AsyncTask<T> {
      * @return 当前任务定义
      */
     public AsyncTask<T> interruptOnCancel(boolean interruptOnCancel) {
-        this.interruptOnCancel = interruptOnCancel;
+        this.interruptOnTimeout = interruptOnCancel;
         return this;
     }
 
@@ -305,9 +305,9 @@ public class AsyncTask<T> {
             throw new IllegalArgumentException("queueTimeout must be greater than zero");
         }
 
-        if (interruptOnCancel && !cancelOnTimeout) {
+        if (interruptOnTimeout && !cancelOnTimeout) {
             throw new IllegalArgumentException(
-                    "interruptOnCancel requires cancelOnTimeout=true"
+                    "interruptOnTimeout requires cancelOnTimeout=true"
             );
         }
 
@@ -420,12 +420,12 @@ public class AsyncTask<T> {
         this.cancelOnTimeout = cancelOnTimeout;
     }
 
-    public boolean isInterruptOnCancel() {
-        return interruptOnCancel;
+    public boolean isInterruptOnTimeout() {
+        return interruptOnTimeout;
     }
 
-    public void setInterruptOnCancel(boolean interruptOnCancel) {
-        this.interruptOnCancel = interruptOnCancel;
+    public void setInterruptOnTimeout(boolean interruptOnTimeout) {
+        this.interruptOnTimeout = interruptOnTimeout;
     }
 
     public Supplier<T> getOperation() {

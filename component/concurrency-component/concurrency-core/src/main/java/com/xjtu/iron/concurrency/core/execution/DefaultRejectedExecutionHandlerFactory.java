@@ -19,25 +19,20 @@ import java.util.concurrent.RejectedExecutionHandler;
  * 工厂只负责根据配置选择处理器，具体行为由 execution.rejection 包中的独立类实现。
  * </p>
  */
-public final class DefaultRejectedExecutionHandlerFactory
-        implements RejectedExecutionHandlerFactory {
+public final class DefaultRejectedExecutionHandlerFactory implements RejectedExecutionHandlerFactory {
 
     @Override
     public RejectedExecutionHandler create(ThreadPoolSpec spec) {
         Objects.requireNonNull(spec, "spec must not be null");
 
-        RejectionPolicy policy = spec.getRejectionPolicy() == null
-                ? RejectionPolicy.ABORT
-                : spec.getRejectionPolicy();
+        RejectionPolicy policy = spec.getRejectionPolicy() == null ? RejectionPolicy.ABORT : spec.getRejectionPolicy();
 
         return switch (policy) {
             case ABORT -> new AwareAbortRejectedExecutionHandler();
             case CALLER_RUNS -> new CallerRunsRejectedExecutionHandler();
             case DISCARD -> new DiscardRejectedExecutionHandler();
             case DISCARD_OLDEST -> new DiscardOldestRejectedExecutionHandler();
-            case BLOCKING_WAIT -> new BlockingWaitRejectedExecutionHandler(
-                    spec.getRejectionWaitTime()
-            );
+            case BLOCKING_WAIT -> new BlockingWaitRejectedExecutionHandler(spec.getRejectionWaitTime());
         };
     }
 }

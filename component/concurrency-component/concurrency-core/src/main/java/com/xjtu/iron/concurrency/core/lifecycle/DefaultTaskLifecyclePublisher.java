@@ -57,8 +57,12 @@ public final class DefaultTaskLifecyclePublisher implements TaskLifecyclePublish
     public void publishCompleted(TaskExecutionEvent terminalEvent) {
         Objects.requireNonNull(terminalEvent, "terminalEvent must not be null");
 
+        /*
+         * completed 是终态旁路通知，不再重复写 Registry。
+         * 具体终态事件 SUCCESS / FAILED / FALLBACK_SUCCESS 等已经在 publish(event) 中
+         * 写入过快照；这里重复写会导致版本号和顺序索引无意义膨胀。
+         */
         metricsRecorder.recordCompleted(terminalEvent.copy());
-        taskExecutionRegistry.update(TaskExecutionSnapshot.from(terminalEvent));
         taskExecutionListener.onCompleted(terminalEvent.copy());
     }
 
