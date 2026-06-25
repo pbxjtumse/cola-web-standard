@@ -24,10 +24,7 @@ public final class DefaultAsyncExecutor implements AsyncExecutor {
     /** 当前节点任务取消管理器。 */
     private final TaskCancellationManager cancellationManager;
 
-    public DefaultAsyncExecutor(
-            TaskExecutionTemplate taskExecutionTemplate,
-            TaskCancellationManager cancellationManager
-    ) {
+    public DefaultAsyncExecutor(TaskExecutionTemplate taskExecutionTemplate, TaskCancellationManager cancellationManager) {
         this.taskExecutionTemplate = Objects.requireNonNull(
                 taskExecutionTemplate,
                 "taskExecutionTemplate must not be null"
