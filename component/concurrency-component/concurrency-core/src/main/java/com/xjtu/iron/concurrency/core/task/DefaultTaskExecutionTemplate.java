@@ -144,13 +144,10 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
     private <T> Submission<T> submitInternal(AsyncTask<T> task, TaskResultMode resultMode) {
         Objects.requireNonNull(task, "task must not be null");
         task.validate();
-
-        /*
-         * 关键点：从这里开始，主链路只读取 TaskDefinition，不再读取可变 AsyncTask。
-         */
+        //关键点：从这里开始，主链路只读取 TaskDefinition，不再读取可变 AsyncTask。
         TaskDefinition<T> definition = TaskDefinition.from(task);
         ThreadPoolExecutor executor = threadPoolRegistry.getExecutor(definition.getExecutorName());
-
+        //基础baseFuture
         CompletableFuture<T> baseFuture = new CompletableFuture<>();
         Supplier<T> executable = definition.isContextPropagation()
                 ? taskDecorator.decorate(definition.getOperation())
@@ -161,8 +158,7 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
                 definition,
                 executable,
                 baseFuture,
-                runtime
-        );
+                runtime);
         TaskCommand<T> command = new TaskCommand<>(
                 context,
                 lifecyclePublisher,

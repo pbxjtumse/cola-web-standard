@@ -131,11 +131,7 @@ public class AsyncTask<T> {
      * @param <T> 返回值类型
      * @return 异步任务定义
      */
-    public static <T> AsyncTask<T> of(
-            String executorName,
-            String taskName,
-            Supplier<T> operation
-    ) {
+    public static <T> AsyncTask<T> of(String executorName, String taskName, Supplier<T> operation) {
         AsyncTask<T> task = new AsyncTask<>();
         task.taskId = UUID.randomUUID().toString();
         task.executorName = executorName;

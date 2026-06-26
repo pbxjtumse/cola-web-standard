@@ -16,7 +16,7 @@
 - [8. 为什么需要 TaskDefinition](#8-为什么需要-taskdefinition)
 - [9. Listener 抛异常会不会导致任务失败](#9-listener-抛异常会不会导致任务失败)
 - [10. shutdownNow 为什么要处理返回值](#10-shutdownnow-为什么要处理返回值)
-
+- [11. TaskExecutionRuntime](#11-TaskExecutionRuntime-代表什么)
 ## 1. 为什么不用原生 CompletableFuture
 
 原生 `CompletableFuture` 能完成异步编排，但不负责：
@@ -157,3 +157,35 @@ Future 可能永远 pending
 ```
 
 所以必须遍历返回值并通知任务收口。
+
+
+## 11-几个核心Task类 -代表什么 有什么区别和联系
+### 11.1 TaskExecutionRuntime 
+`TaskExecutionRuntime` 的意义是：统一管理一次任务执行过程中的可变运行状态
+
+
+所以它主要负责这些东西：
+```text
+1. 当前任务状态
+2. 原始任务结果是否已经确定
+3. 最终任务结果是否已经确定
+4. 当前运行线程
+5. fallback 运行线程
+6. 执行模式：THREAD_POOL / CALLER_THREAD
+7. 时间信息：提交时间、开始时间、结束时间、耗时
+8. 是否已经进入 fallback
+9. 是否已经取消
+```
+TaskExecutionRuntime = 一次任务执行的“运行时仪表盘 + 状态机”
+### 11.2 AsyncTask 
+`AsyncTask` 描述“任务是什么”，但任务提交之后会不断变化
+
+这些状态不能随便 status.set(...)，否则会出现
+```text
+CANCELLED -> SUBMITTED
+TIMEOUT -> RUNNING
+SUCCESS -> FAILED
+REJECTED -> RUNNING
+```
+
+### 11.3 TaskDefinition 
