@@ -9,19 +9,18 @@ import java.util.concurrent.CompletableFuture;
  * 任务结果处理管道。
  *
  * <p>
- * 在原始任务 Future 之上附加 timeout、fallback 等结果层能力。
- * 原始任务执行仍由 TaskCommand 负责。
+ * 在原始任务 Future 之上附加 timeout、fallback 等结果层能力。把 baseFuture 转换成 finalFuture。
  * </p>
  */
 public interface TaskResultPipeline {
 
     /**
-     * 构建最终返回给调用方的 Future。
+     * 构建最终返回给调用方的 finalFuture。
      *
      * @param context 任务执行上下文
      * @param command 原始任务命令
      * @param <T> 任务结果类型
-     * @return 应用 timeout、fallback 后的最终 Future
+     * @return 应用 timeout、fallback 后的最终 finalFuture
      */
     <T> CompletableFuture<T> apply(TaskExecutionContext<T> context, TaskCommand<T> command);
 }

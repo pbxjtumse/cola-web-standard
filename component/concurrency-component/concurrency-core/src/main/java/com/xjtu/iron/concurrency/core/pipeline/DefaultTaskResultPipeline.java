@@ -155,10 +155,12 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
             CompletableFuture<T> source
     ) {
         Duration timeout = context.getTask().getTimeout();
+        //创建一个新的Future
         CompletableFuture<T> result = new CompletableFuture<>();
 
         final ScheduledFuture<?> timeoutFuture;
         try {
+            //1 启动另外的线程执行 ，注意可能会和 2 处存在并发情况 只有 timeout 真正抢到了原始任务结果，才能尝试中断底层线程。
             timeoutFuture = timeoutScheduler.schedule(
                     () -> handleTimeout(context, command, result, timeout),
                     timeout.toMillis(),
@@ -172,7 +174,7 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
              */
             return source;
         }
-
+        //2 原始任务等待之行
         source.whenComplete((value, throwable) -> {
             boolean completed;
 
@@ -206,8 +208,7 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
      * @param timeout 配置的超时时间
      * @param <T> 任务结果类型
      */
-    private <T> void handleTimeout(
-            TaskExecutionContext<T> context,
+    private <T> void handleTimeout(TaskExecutionContext<T> context,
             TaskCommand<T> command,
             CompletableFuture<T> result,
             Duration timeout
@@ -215,7 +216,7 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
         if (result.isDone()) {
             return;
         }
-
+        //设置超时时间
         TimeoutException timeoutException = new TimeoutException(
                 "Async task result timeout after " + timeout.toMillis() + " ms"
         );
@@ -228,11 +229,9 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
                 timeoutException,
                 AsyncErrorStage.WAIT_RESULT
         );
-
+        //若是发生超时 需要中断原始任务
         if (timeoutWon && context.getTask().isCancelOnTimeout()) {
-            command.interruptRunningIfNecessary(
-                    context.getTask().isInterruptOnTimeout()
-            );
+            command.interruptRunningIfNecessary(context.getTask().isInterruptOnTimeout());
         }
     }
 
@@ -250,10 +249,7 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
      * @param <T> 任务结果类型
      * @return 带 fallback 能力的新 Future
      */
-    private <T> CompletableFuture<T> applyFallback(
-            TaskExecutionContext<T> context,
-            CompletableFuture<T> source
-    ) {
+    private <T> CompletableFuture<T> applyFallback(TaskExecutionContext<T> context, CompletableFuture<T> source) {
         CompletableFuture<T> result = new CompletableFuture<>();
 
         source.whenComplete((value, throwable) -> {
@@ -278,26 +274,11 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
             AsyncError originalError = resolveOriginalError(context, throwable);
 
             context.getRuntime().markIntermediate(AsyncTaskStatus.FALLBACK);
-            lifecyclePublisher.publish(context.event(
-                    AsyncTaskStatus.FALLBACK,
-                    originalError,
-                    "Fallback triggered"
-            ));
-
+            lifecyclePublisher.publish(context.event(AsyncTaskStatus.FALLBACK, originalError, "Fallback triggered"));
             try {
-                fallbackExecutor.execute(new FallbackTask<>(
-                        context,
-                        throwable,
-                        originalError,
-                        result
-                ));
+                fallbackExecutor.execute(new FallbackTask<>(context, throwable, originalError, result));
             } catch (RejectedExecutionException fallbackRejected) {
-                completeFallbackFailure(
-                        context,
-                        fallbackRejected,
-                        result,
-                        "Fallback executor rejected task"
-                );
+                completeFallbackFailure(context, fallbackRejected, result, "Fallback executor rejected task");
             }
         });
 
@@ -338,22 +319,12 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
 
         @Override
         public void run() {
-            executeFallback(
-                    context,
-                    originalThrowable,
-                    originalError,
-                    result
-            );
+            executeFallback(context, originalThrowable, originalError, result);
         }
 
         @Override
         public void abortOnShutdown(Throwable cause) {
-            completeFallbackFailure(
-                    context,
-                    cause,
-                    result,
-                    "Fallback aborted because fallback executor shutdown"
-            );
+            completeFallbackFailure(context, cause, result, "Fallback aborted because fallback executor shutdown");
         }
     }
 
@@ -372,44 +343,28 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
             AsyncError originalError,
             CompletableFuture<T> result
     ) {
-        Throwable fallbackInput = CompletableFutureExceptionUtils.rootCause(
-                originalThrowable
-        );
+        Throwable fallbackInput = CompletableFutureExceptionUtils.rootCause(originalThrowable);
 
         if (fallbackInput == null) {
-            fallbackInput = CompletableFutureExceptionUtils.unwrap(
-                    originalThrowable
-            );
+            fallbackInput = CompletableFutureExceptionUtils.unwrap(originalThrowable);
         }
 
         context.getRuntime().markFallbackRunning();
 
         try {
-            T fallbackValue = context.getTask()
-                    .getFallback()
-                    .apply(fallbackInput);
+            T fallbackValue = context.getTask().getFallback().apply(fallbackInput);
 
-            if (context.getRuntime().tryFinalize(
-                    AsyncTaskStatus.FALLBACK_SUCCESS
-            )) {
-                TaskExecutionEvent successEvent = context.event(
-                        AsyncTaskStatus.FALLBACK_SUCCESS,
-                        originalError,
+            if (context.getRuntime().tryFinalize(AsyncTaskStatus.FALLBACK_SUCCESS)) {
+                TaskExecutionEvent successEvent = context.event(AsyncTaskStatus.FALLBACK_SUCCESS, originalError,
                         "Fallback success"
                 );
 
                 lifecyclePublisher.publish(successEvent);
                 lifecyclePublisher.publishCompleted(successEvent);
             }
-
             result.complete(fallbackValue);
         } catch (Throwable fallbackThrowable) {
-            completeFallbackFailure(
-                    context,
-                    fallbackThrowable,
-                    result,
-                    "Fallback failed"
-            );
+            completeFallbackFailure(context, fallbackThrowable, result, "Fallback failed");
         } finally {
             context.getRuntime().clearFallbackThread();
         }
@@ -478,10 +433,7 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
      * @param throwable 原始异常
      * @return 原始任务结构化错误
      */
-    private AsyncError resolveOriginalError(
-            TaskExecutionContext<?> context,
-            Throwable throwable
-    ) {
+    private AsyncError resolveOriginalError(TaskExecutionContext<?> context, Throwable throwable) {
         Throwable unwrapped = CompletableFutureExceptionUtils.unwrap(throwable);
 
         if (unwrapped instanceof ConcurrencyException concurrencyException
@@ -489,11 +441,7 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
             return concurrencyException.getError().copy();
         }
 
-        return errorClassifier.classify(
-                context.getMetadata(),
-                throwable,
-                originalErrorStage(context)
-        );
+        return errorClassifier.classify(context.getMetadata(), throwable, originalErrorStage(context));
     }
 
     /**

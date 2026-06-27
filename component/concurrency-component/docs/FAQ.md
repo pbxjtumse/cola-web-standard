@@ -157,3 +157,65 @@ Future 可能永远 pending
 ```
 
 所以必须遍历返回值并通知任务收口。
+## 11. Task多个类之间的关系
+![img.png](img/img.png)
+### 11.1 TaskExecutionRuntime 
+`TaskExecutionRuntime` 统一管理一次任务执行过程中的可变运行状态,一次任务执行的“运行时仪表盘 + 状态机” ,是一个汇集了多个结果的信息媒体
+主要负责如下
+```text
+1. 当前任务状态
+2. 原始任务结果是否已经确定
+3. 最终任务结果是否已经确定
+4. 当前运行线程
+5. fallback 运行线程
+6. 执行模式：THREAD_POOL / CALLER_THREAD
+7. 时间信息：提交时间、开始时间、结束时间、耗时
+8. 是否已经进入 fallback
+9. 是否已经取消
+```
+### 11.2 AsyncTask TaskDefinition 
+`AsyncTask` 描述“任务是什么”，但任务提交之后会一直变化
+`TaskDefinition` 
+
+### 11.3 TaskExecutionContext
+`TaskExecutionContext` 是执行上下文容器。它主要放“一次任务执行需要用到的对象”：
+把本次执行需要的东西装在一起，传给 TaskCommand / Pipeline 使用，基本上不变的
+
+```text
+TaskDefinition      任务定义快照
+Supplier<T>         真正要执行的逻辑
+baseFuture          原始任务结果 Future
+TaskExecutionRuntime 运行时状态
+```
+`TaskDefinition()`
+
+### 12 
+
+
+```mermaid
+sequenceDiagram
+    participant S as source Future
+    participant P as TaskResultPipeline
+    participant L as LifecyclePublisher
+    participant X as fallbackExecutor
+    participant F as FallbackTask
+    participant R as finalFuture
+
+    S->>P: 异常完成
+    P->>L: 发布 FALLBACK
+    P->>X: execute(FallbackTask)
+
+    alt fallback 成功
+        X->>F: run()
+        F->>F: fallback.apply(error)
+        F->>L: FALLBACK_SUCCESS
+        F->>L: publishCompleted
+        F->>R: complete(fallbackValue)
+    else fallback 失败
+        X->>F: run()
+        F->>F: fallback 抛异常
+        F->>L: FALLBACK_FAILED
+        F->>L: publishCompleted
+        F->>R: completeExceptionally
+    end
+```

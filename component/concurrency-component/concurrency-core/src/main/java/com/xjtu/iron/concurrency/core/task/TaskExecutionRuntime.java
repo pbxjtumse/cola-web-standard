@@ -96,17 +96,15 @@ public final class TaskExecutionRuntime {
     /**
      * 当前最新任务状态。
      */
-    private final AtomicReference<AsyncTaskStatus> status =
-            new AtomicReference<>(AsyncTaskStatus.CREATED);
+    private final AtomicReference<AsyncTaskStatus> status = new AtomicReference<>(AsyncTaskStatus.CREATED);
 
     /**
      * 原始任务实际执行方式。
      */
-    private final AtomicReference<TaskExecutionMode> executionMode =
-            new AtomicReference<>(TaskExecutionMode.UNASSIGNED);
+    private final AtomicReference<TaskExecutionMode> executionMode = new AtomicReference<>(TaskExecutionMode.UNASSIGNED);
 
     /**
-     * 原始任务结果是否已经确定。
+     * 【原始任务】结果是否已经确定。
      *
      * <p>
      * 用于解决结果超时与工作线程晚到成功之间的竞争，确保原始任务只记录一个结果。
@@ -115,10 +113,10 @@ public final class TaskExecutionRuntime {
     private final AtomicBoolean baseOutcomeResolved = new AtomicBoolean(false);
 
     /**
-     * 整个结果管道是否已经进入最终状态。
+     * 【整个结果】是否已经进入最终状态。
      *
      * <p>
-     * 原始任务失败但存在 fallback 时，baseOutcomeResolved 已经为 true，
+     * 原始任务失败 但存在 fallback 时，baseOutcomeResolved 已经为 true，
      * finalOutcomeResolved 要等到 FALLBACK_SUCCESS 或 FALLBACK_FAILED 后才变为 true。
      * </p>
      */
@@ -344,8 +342,9 @@ public final class TaskExecutionRuntime {
     }
 
     /**
-     * 尝试把任务从 CREATED 转换为 SUBMITTED。
-     *
+     * 尝试把任务从 CREATED 转换为 SUBMITTED。 只有当前还是 CREATED，且没有任何结果被确定时
+     * 1. 尝试转换，不保证成功。 如果成功 CREATED -> SUBMITTED  返回 true
+     * 2. 如果失败  说明任务已经被取消、拒绝、超时、完成，不能再提交  返回 false
      * @return true 表示转换成功；false 表示任务已经进入其他状态
      */
     public boolean tryMarkSubmitted() {

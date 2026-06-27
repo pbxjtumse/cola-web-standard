@@ -170,22 +170,16 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
                 uncaughtExceptionHandler
         );
 
-        /*
-         * SUBMITTED 必须早于 timeout/fallback 管道启动，否则极短 timeout 下可能出现
-         * TIMEOUT/FALLBACK 先于 SUBMITTED 的事件顺序。
-         */
+        // 1.设置提交状态
+        // SUBMITTED 必须早于 timeout/fallback 管道启动，否则极短 timeout 下可能出现 TIMEOUT/FALLBACK 先于 SUBMITTED 的事件顺序。
         command.submitted();
-
+        //2. 执行增强 time faallback 逻辑
         CompletableFuture<T> finalFuture = resultMode == TaskResultMode.RESULT_AWARE
                 ? resultPipeline.apply(context, command)
                 : baseFuture;
-
+        //3.
         TaskControl<T> control = new TaskControl<>(executor, command, finalFuture);
-        TaskHandle<T> handle = new DefaultTaskHandle<>(
-                definition.getTaskId(),
-                finalFuture,
-                cancellationManager
-        );
+        TaskHandle<T> handle = new DefaultTaskHandle<>(definition.getTaskId(), finalFuture, cancellationManager);
 
         taskControlRegistry.register(definition.getTaskId(), control);
         finalFuture.whenComplete((value, throwable) ->
