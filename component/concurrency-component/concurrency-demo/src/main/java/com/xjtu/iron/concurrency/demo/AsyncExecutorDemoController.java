@@ -108,11 +108,7 @@ public class AsyncExecutorDemoController {
      */
     @GetMapping("/supply")
     public Map<String, Object> supply() {
-        CompletableFuture<String> future = asyncExecutor.supply(
-                BIZ_QUERY_EXECUTOR,
-                "demoSupply",
-                () -> "user:10001"
-        );
+        CompletableFuture<String> future = asyncExecutor.supply(BIZ_QUERY_EXECUTOR, "demoSupply", () -> "user:10001");
 
         return response(
                 "api", "AsyncExecutor.supply",
