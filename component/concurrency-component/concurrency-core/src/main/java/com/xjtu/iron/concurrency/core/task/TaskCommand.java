@@ -189,6 +189,7 @@ public final class TaskCommand<T>
      */
     public boolean completeTimeout(Throwable throwable, AsyncErrorStage stage) {
         TaskExecutionRuntime runtime = context.getRuntime();
+        //排队节点获取等待结果
         if (!runtime.tryResolveBaseOutcome(AsyncTaskStatus.TIMEOUT)) {
             return false;
         }

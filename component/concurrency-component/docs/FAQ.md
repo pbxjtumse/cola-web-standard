@@ -16,7 +16,7 @@
 - [8. 为什么需要 TaskDefinition](#8-为什么需要-taskdefinition)
 - [9. Listener 抛异常会不会导致任务失败](#9-listener-抛异常会不会导致任务失败)
 - [10. shutdownNow 为什么要处理返回值](#10-shutdownnow-为什么要处理返回值)
-- [11. TaskExecutionRuntime](#11-TaskExecutionRuntime-代表什么)
+
 ## 1. 为什么不用原生 CompletableFuture
 
 原生 `CompletableFuture` 能完成异步编排，但不负责：
@@ -157,14 +157,11 @@ Future 可能永远 pending
 ```
 
 所以必须遍历返回值并通知任务收口。
-
-
-## 11-几个核心Task类 -代表什么 有什么区别和联系
+## 11. Task多个类之间的关系
+![img.png](img/img.png)
 ### 11.1 TaskExecutionRuntime 
-`TaskExecutionRuntime` 的意义是：统一管理一次任务执行过程中的可变运行状态
-
-
-所以它主要负责这些东西：
+`TaskExecutionRuntime` 统一管理一次任务执行过程中的可变运行状态,一次任务执行的“运行时仪表盘 + 状态机” ,是一个汇集了多个结果的信息媒体
+主要负责如下
 ```text
 1. 当前任务状态
 2. 原始任务结果是否已经确定
@@ -176,16 +173,49 @@ Future 可能永远 pending
 8. 是否已经进入 fallback
 9. 是否已经取消
 ```
-TaskExecutionRuntime = 一次任务执行的“运行时仪表盘 + 状态机”
-### 11.2 AsyncTask 
-`AsyncTask` 描述“任务是什么”，但任务提交之后会不断变化
+### 11.2 AsyncTask TaskDefinition 
+`AsyncTask` 描述“任务是什么”，但任务提交之后会一直变化
+`TaskDefinition` 
 
-这些状态不能随便 status.set(...)，否则会出现
+### 11.3 TaskExecutionContext
+`TaskExecutionContext` 是执行上下文容器。它主要放“一次任务执行需要用到的对象”：
+把本次执行需要的东西装在一起，传给 TaskCommand / Pipeline 使用，基本上不变的
+
 ```text
-CANCELLED -> SUBMITTED
-TIMEOUT -> RUNNING
-SUCCESS -> FAILED
-REJECTED -> RUNNING
+TaskDefinition      任务定义快照
+Supplier<T>         真正要执行的逻辑
+baseFuture          原始任务结果 Future
+TaskExecutionRuntime 运行时状态
 ```
+`TaskDefinition()`
 
-### 11.3 TaskDefinition 
+### 12 
+
+
+```mermaid
+sequenceDiagram
+    participant S as source Future
+    participant P as TaskResultPipeline
+    participant L as LifecyclePublisher
+    participant X as fallbackExecutor
+    participant F as FallbackTask
+    participant R as finalFuture
+
+    S->>P: 异常完成
+    P->>L: 发布 FALLBACK
+    P->>X: execute(FallbackTask)
+
+    alt fallback 成功
+        X->>F: run()
+        F->>F: fallback.apply(error)
+        F->>L: FALLBACK_SUCCESS
+        F->>L: publishCompleted
+        F->>R: complete(fallbackValue)
+    else fallback 失败
+        X->>F: run()
+        F->>F: fallback 抛异常
+        F->>L: FALLBACK_FAILED
+        F->>L: publishCompleted
+        F->>R: completeExceptionally
+    end
+```
