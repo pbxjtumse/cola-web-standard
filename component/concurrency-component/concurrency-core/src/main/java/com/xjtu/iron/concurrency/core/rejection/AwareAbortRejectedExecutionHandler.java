@@ -11,14 +11,10 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 使 CompletableFuture 和任务状态不会永久停留在未完成状态。
  * </p>
  */
-public final class AwareAbortRejectedExecutionHandler
-        implements RejectedExecutionHandler {
+public final class AwareAbortRejectedExecutionHandler implements RejectedExecutionHandler {
 
     @Override
-    public void rejectedExecution(
-            Runnable runnable,
-            ThreadPoolExecutor executor
-    ) {
+    public void rejectedExecution(Runnable runnable, ThreadPoolExecutor executor) {
         throw RejectedTaskSupport.reject(
                 runnable,
                 executor.isShutdown()

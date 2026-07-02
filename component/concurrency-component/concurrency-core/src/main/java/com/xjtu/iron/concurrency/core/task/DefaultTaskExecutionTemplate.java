@@ -147,42 +147,35 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
         //关键点：从这里开始，主链路只读取 TaskDefinition，不再读取可变 AsyncTask。
         TaskDefinition<T> definition = TaskDefinition.from(task);
         ThreadPoolExecutor executor = threadPoolRegistry.getExecutor(definition.getExecutorName());
-        //基础baseFuture
         CompletableFuture<T> baseFuture = new CompletableFuture<>();
-        Supplier<T> executable = definition.isContextPropagation()
-                ? taskDecorator.decorate(definition.getOperation())
-                : definition.getOperation();
-
+        //这里单独拿出来就是为了确定是否有增强
+        Supplier<T> executable = getExecutable(definition);
         TaskExecutionRuntime runtime = new TaskExecutionRuntime(resultMode);
-        TaskExecutionContext<T> context = new TaskExecutionContext<>(
-                definition,
-                executable,
-                baseFuture,
-                runtime);
-        TaskCommand<T> command = new TaskCommand<>(
-                context,
-                lifecyclePublisher,
-                errorClassifier,
-                uncaughtExceptionHandler
-        );
-
+        TaskExecutionContext<T> context = new TaskExecutionContext<>(definition, executable, baseFuture, runtime);
+        TaskCommand<T> command = new TaskCommand<>(context, lifecyclePublisher, errorClassifier, uncaughtExceptionHandler);
         // 1.设置提交状态
         // SUBMITTED 必须早于 timeout/fallback 管道启动，否则极短 timeout 下可能出现 TIMEOUT/FALLBACK 先于 SUBMITTED 的事件顺序。
         command.submitted();
-        //2. 执行增强 time faallback 逻辑
+        //2. 执行增强 time fallback 逻辑
         CompletableFuture<T> finalFuture = resultMode == TaskResultMode.RESULT_AWARE
                 ? resultPipeline.apply(context, command)
                 : baseFuture;
-        //3.
         TaskControl<T> control = new TaskControl<>(executor, command, finalFuture);
         TaskHandle<T> handle = new DefaultTaskHandle<>(definition.getTaskId(), finalFuture, cancellationManager);
-
         taskControlRegistry.register(definition.getTaskId(), control);
         finalFuture.whenComplete((value, throwable) ->
                 taskControlRegistry.remove(definition.getTaskId(), control)
         );
 
         try {
+            /*
+             * executor.execute 内部可能触发 ThreadPoolExecutor 的拒绝流程。
+             * 如果线程池无法接收任务，会回调当前配置的 RejectedExecutionHandler.rejectedExecution。
+             *
+             * 对增强版拒绝策略：
+             * - 如果策略成功补救，例如阻塞等待后重新入队，则 execute 正常返回；
+             * - 如果策略无法补救，会通过 RejectedTaskSupport 标记 TaskCommand 为 REJECTED，并抛出 RejectedExecutionException。
+             */
             executor.execute(command);
         } catch (RejectedExecutionException rejected) {
             /*
@@ -195,21 +188,19 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
             }
 
             if (resultMode == TaskResultMode.FIRE_AND_FORGET) {
-                AsyncError error = errorClassifier.classify(
-                        definition.getMetadata(),
-                        rejected,
-                        AsyncErrorStage.SUBMIT
-                );
-                throw new ConcurrencyRejectedException(
-                        definition.getExecutorName(),
-                        definition.getTaskName(),
-                        error,
-                        rejected
-                );
+                AsyncError error = errorClassifier.classify(definition.getMetadata(), rejected, AsyncErrorStage.SUBMIT);
+                throw new ConcurrencyRejectedException(definition.getExecutorName(), definition.getTaskName(), error, rejected);
             }
         }
 
         return new Submission<>(handle, command);
+    }
+
+    private <T> Supplier<T> getExecutable(TaskDefinition<T> definition) {
+        Supplier<T> executable = definition.isContextPropagation()
+                ? taskDecorator.decorate(definition.getOperation())
+                : definition.getOperation();
+        return executable;
     }
 
     /**

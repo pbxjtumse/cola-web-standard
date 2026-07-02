@@ -160,7 +160,7 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
 
         final ScheduledFuture<?> timeoutFuture;
         try {
-            //1 启动另外的线程执行 ，注意可能会和 2 处存在并发情况 只有 timeout 真正抢到了原始任务结果，才能尝试中断底层线程。
+            //1 此处存在并发情况 只有 timeout 真正抢到了原始任务结果，才能尝试中断底层线程。
             timeoutFuture = timeoutScheduler.schedule(
                     () -> handleTimeout(context, command, result, timeout),
                     timeout.toMillis(),
@@ -168,13 +168,12 @@ public final class DefaultTaskResultPipeline implements TaskResultPipeline {
             );
         } catch (RejectedExecutionException schedulerRejected) {
             /*
-             * 超时调度器通常只会在应用关闭阶段拒绝。此时不能把“调度器拒绝”
-             * 伪造成原始任务失败或触发 fallback，否则原始任务稍后成功时会出现
+             * 超时调度器通常只会在应用关闭阶段拒绝。此时不能把“调度器拒绝”伪造成原始任务失败或触发 fallback，否则原始任务稍后成功时会出现
              * 最终状态冲突。这里退化为直接返回 source，由原始任务结果决定最终状态。
              */
             return source;
         }
-        //2 原始任务等待之行
+        //2 这里并没有发生执行，只是定义了执行期间的动作
         source.whenComplete((value, throwable) -> {
             boolean completed;
 

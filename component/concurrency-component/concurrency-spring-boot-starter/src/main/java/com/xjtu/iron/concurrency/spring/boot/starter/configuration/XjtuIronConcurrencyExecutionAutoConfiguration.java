@@ -90,9 +90,7 @@ public class XjtuIronConcurrencyExecutionAutoConfiguration {
         Map<String, ThreadPoolSpec> specs = threadPoolSpecResolver.resolveAll();
 
         if (!specs.containsKey(properties.getDefaultExecutor())) {
-            throw new IllegalStateException(
-                    "Default executor [" + properties.getDefaultExecutor() + "] not found"
-            );
+            throw new IllegalStateException("Default executor [" + properties.getDefaultExecutor() + "] not found");
         }
 
         DefaultThreadPoolRegistry registry = new DefaultThreadPoolRegistry();

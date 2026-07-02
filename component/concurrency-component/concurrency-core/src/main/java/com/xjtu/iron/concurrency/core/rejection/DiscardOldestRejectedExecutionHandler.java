@@ -57,11 +57,7 @@ public final class DiscardOldestRejectedExecutionHandler implements RejectedExec
          * offer 成功不等于一定合法。
          * 等待期间线程池可能已经关闭。
          */
-        RejectedTaskSupport.rejectIfShutdownAfterEnqueue(
-                runnable,
-                executor,
-                "Executor shutdown while enqueuing replacement task"
-        );
+        RejectedTaskSupport.rejectIfShutdownAfterEnqueue(runnable, executor, "Executor shutdown while enqueuing replacement task");
     }
 }
 

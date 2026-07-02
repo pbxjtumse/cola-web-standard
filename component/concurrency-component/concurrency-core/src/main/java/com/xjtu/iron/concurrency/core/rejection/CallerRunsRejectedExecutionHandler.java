@@ -13,19 +13,12 @@ import com.xjtu.iron.concurrency.core.task.CallerRunsAware;
  * 并把执行方式记录为 CALLER_THREAD。线程池关闭后不再执行新任务，而是明确拒绝并抛异常。
  * </p>
  */
-public final class CallerRunsRejectedExecutionHandler
-        implements RejectedExecutionHandler {
+public final class CallerRunsRejectedExecutionHandler implements RejectedExecutionHandler {
 
     @Override
-    public void rejectedExecution(
-            Runnable runnable,
-            ThreadPoolExecutor executor
-    ) {
+    public void rejectedExecution(Runnable runnable, ThreadPoolExecutor executor) {
         if (executor.isShutdown()) {
-            throw RejectedTaskSupport.reject(
-                    runnable,
-                    "Executor already shutdown; CALLER_RUNS cannot accept new task"
-            );
+            throw RejectedTaskSupport.reject(runnable, "Executor already shutdown; CALLER_RUNS cannot accept new task");
         }
 
         if (runnable instanceof CallerRunsAware callerRunsAware) {

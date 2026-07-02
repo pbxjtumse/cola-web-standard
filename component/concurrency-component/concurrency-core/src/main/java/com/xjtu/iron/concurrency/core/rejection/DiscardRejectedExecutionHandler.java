@@ -19,8 +19,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 但指标、监听器和任务状态注册表能够感知该次丢弃。
  * </p>
  */
-public final class DiscardRejectedExecutionHandler
-        implements RejectedExecutionHandler {
+public final class DiscardRejectedExecutionHandler implements RejectedExecutionHandler {
 
     @Override
     public void rejectedExecution(

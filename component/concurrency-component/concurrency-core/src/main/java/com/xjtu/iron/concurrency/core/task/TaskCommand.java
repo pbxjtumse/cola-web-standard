@@ -57,18 +57,9 @@ public final class TaskCommand<T>
             AsyncUncaughtExceptionHandler uncaughtExceptionHandler
     ) {
         this.context = Objects.requireNonNull(context, "context must not be null");
-        this.lifecyclePublisher = Objects.requireNonNull(
-                lifecyclePublisher,
-                "lifecyclePublisher must not be null"
-        );
-        this.errorClassifier = Objects.requireNonNull(
-                errorClassifier,
-                "errorClassifier must not be null"
-        );
-        this.uncaughtExceptionHandler = Objects.requireNonNull(
-                uncaughtExceptionHandler,
-                "uncaughtExceptionHandler must not be null"
-        );
+        this.lifecyclePublisher = Objects.requireNonNull(lifecyclePublisher, "lifecyclePublisher must not be null");
+        this.errorClassifier = Objects.requireNonNull(errorClassifier, "errorClassifier must not be null");
+        this.uncaughtExceptionHandler = Objects.requireNonNull(uncaughtExceptionHandler, "uncaughtExceptionHandler must not be null");
     }
 
     /**
@@ -78,11 +69,7 @@ public final class TaskCommand<T>
         if (!context.getRuntime().tryMarkSubmitted()) {
             return;
         }
-        lifecyclePublisher.publish(context.event(
-                AsyncTaskStatus.SUBMITTED,
-                AsyncError.none(),
-                "Task submitted"
-        ));
+        lifecyclePublisher.publish(context.event(AsyncTaskStatus.SUBMITTED, AsyncError.none(), "Task submitted"));
     }
 
     /**
@@ -96,11 +83,7 @@ public final class TaskCommand<T>
     @Override
     public void run() {
         TaskExecutionRuntime runtime = context.getRuntime();
-
-        /*
-         * 结果层超时或主动取消可能在线程真正从队列取出任务前已经确定结果。
-         * 此时不应该继续执行用户 operation。
-         */
+        //结果层超时或主动取消可能在线程真正从队列取出任务前已经确定结果。此时不应该继续执行用户 operation。
         if (runtime.isBaseOutcomeResolved() || runtime.isFinalOutcomeResolved()) {
             return;
         }
@@ -111,10 +94,7 @@ public final class TaskCommand<T>
             return;
         }
 
-        /*
-         * 工作线程开始运行与结果层超时、取消可能并发发生。
-         * tryMarkRunning 与终态方法使用同一状态锁，避免终态被 RUNNING 覆盖。
-         */
+        //工作线程开始运行与结果层超时、取消可能并发发生。 tryMarkRunning 与终态方法使用同一状态锁，避免终态被 RUNNING 覆盖。
         if (!runtime.tryMarkRunning()) {
             return;
         }
@@ -154,15 +134,10 @@ public final class TaskCommand<T>
         if (!runtime.tryResolveBaseOutcome(AsyncTaskStatus.REJECTED)) {
             return;
         }
-
         Throwable rejectedCause = throwable instanceof RejectedExecutionException
                 ? throwable
                 : new RejectedExecutionException("Task rejected", throwable);
-        AsyncError error = errorClassifier.classify(
-                context.getMetadata(),
-                rejectedCause,
-                AsyncErrorStage.SUBMIT
-        );
+        AsyncError error = errorClassifier.classify(context.getMetadata(), rejectedCause, AsyncErrorStage.SUBMIT);
         ConcurrencyRejectedException rejectedException = new ConcurrencyRejectedException(
                 context.getTask().getExecutorName(),
                 context.getTask().getTaskName(),
@@ -170,11 +145,7 @@ public final class TaskCommand<T>
                 rejectedCause
         );
 
-        TaskExecutionEvent event = context.event(
-                AsyncTaskStatus.REJECTED,
-                error,
-                "Task rejected"
-        );
+        TaskExecutionEvent event = context.event(AsyncTaskStatus.REJECTED, error, "Task rejected");
         lifecyclePublisher.publish(event);
         finalizeWhenNoFallback(event);
         context.getBaseFuture().completeExceptionally(rejectedException);
@@ -193,15 +164,8 @@ public final class TaskCommand<T>
         if (!runtime.tryResolveBaseOutcome(AsyncTaskStatus.TIMEOUT)) {
             return false;
         }
-
-        AsyncErrorStage actualStage = stage == null
-                ? AsyncErrorStage.WAIT_RESULT
-                : stage;
-        AsyncError error = errorClassifier.classify(
-                context.getMetadata(),
-                throwable,
-                actualStage
-        );
+        AsyncErrorStage actualStage = stage == null ? AsyncErrorStage.WAIT_RESULT : stage;
+        AsyncError error = errorClassifier.classify(context.getMetadata(), throwable, actualStage);
         AsyncTaskException timeoutException = new AsyncTaskException(
                 context.getTask().getExecutorName(),
                 context.getTask().getTaskName(),

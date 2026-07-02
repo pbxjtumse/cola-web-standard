@@ -22,8 +22,7 @@ import java.util.concurrent.TimeUnit;
  * 通知任务进入 REJECTED 并向提交方抛出拒绝异常。
  * </p>
  */
-public final class BlockingWaitRejectedExecutionHandler
-        implements RejectedExecutionHandler {
+public final class BlockingWaitRejectedExecutionHandler implements RejectedExecutionHandler {
 
     /**
      * 提交线程最多等待队列空位的时间。
@@ -42,36 +41,16 @@ public final class BlockingWaitRejectedExecutionHandler
 
         try {
             BlockingQueue<Runnable> queue = executor.getQueue();
-            boolean offered = queue.offer(
-                    runnable,
-                    waitTime.toMillis(),
-                    TimeUnit.MILLISECONDS
-            );
+            boolean offered = queue.offer(runnable, waitTime.toMillis(), TimeUnit.MILLISECONDS);
             //若是入队失败
             if (!offered) {
-                throw RejectedTaskSupport.reject(runnable,
-                        "Task rejected after waiting "
-                                + waitTime.toMillis()
-                                + " ms"
-                );
+                throw RejectedTaskSupport.reject(runnable, "Task rejected after waiting " + waitTime.toMillis() + " ms");
             }
-            /*
-             * offer 成功不等于一定合法。
-             * 等待期间线程池可能已经关闭。
-             */
-            RejectedTaskSupport.rejectIfShutdownAfterEnqueue(
-                    runnable,
-                    executor,
-                    "Executor shutdown while enqueuing replacement task"
-            );
-
+            //offer 成功不等于一定合法。等待期间线程池可能已经关闭。
+            RejectedTaskSupport.rejectIfShutdownAfterEnqueue(runnable, executor, "Executor shutdown while enqueuing replacement task");
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            throw RejectedTaskSupport.reject(
-                    runnable,
-                    "Interrupted while waiting to enqueue task",
-                    interrupted
-            );
+            throw RejectedTaskSupport.reject(runnable, "Interrupted while waiting to enqueue task", interrupted);
         }
     }
 }

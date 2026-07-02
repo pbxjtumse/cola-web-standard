@@ -15,6 +15,7 @@ import java.util.function.Supplier;
  * <p>
  * AsyncTask 是用户提交时使用的可变任务定义；
  * TaskDefinition 是任务提交之后在 core 内部使用的不可变快照。
+ * TaskDefinition 能冻结 AsyncTask 上的字段选择 但不能冻结业务 lambda 内部捕获的外部可变对象
  * </p>
  *
  * @param <T> 任务返回值类型
