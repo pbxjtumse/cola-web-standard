@@ -84,7 +84,7 @@ class Phase1TaskDefinitionSnapshotAdditionalTest {
     void fromShouldCopyFallback() {
         Function<Throwable, String> fallback = error -> "fallback";
 
-        AsyncTask<String> task = TestTaskFactory.task(
+        AsyncTask<String> task = TestTaskFactory.<String>task(
                         "task-005",
                         () -> {
                             throw new RuntimeException("boom");
