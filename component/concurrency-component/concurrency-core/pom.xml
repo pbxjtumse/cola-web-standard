@@ -19,6 +19,7 @@
     </properties>
 
     <dependencies>
+        <!-- JUnit 5 -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -30,13 +31,6 @@
             <version>1.0.0-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>
-        <!-- JUnit 5 -->
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-
         <!-- AssertJ：比原生 assertEquals 好读很多 -->
         <dependency>
             <groupId>org.assertj</groupId>
@@ -55,11 +49,6 @@
         <dependency>
             <groupId>org.awaitility</groupId>
             <artifactId>awaitility</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.assertj</groupId>
-            <artifactId>assertj-core</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
