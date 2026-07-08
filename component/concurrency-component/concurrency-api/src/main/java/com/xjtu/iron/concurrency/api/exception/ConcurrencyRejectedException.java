@@ -7,8 +7,7 @@ import com.xjtu.iron.concurrency.api.error.AsyncError;
  * 并行任务拒绝异常。
  *
  * <p>
- * 当线程池队列满、线程数达到上限，或者拒绝策略主动拒绝任务时，
- * 并行组件会使用该异常表示任务未能成功提交执行。
+ * 当线程池队列满、线程数达到上限，或者拒绝策略主动拒绝任务时，并行组件会使用该异常表示任务未能成功提交执行。
  * </p>
  */
 public class ConcurrencyRejectedException extends ConcurrencyException {
@@ -23,12 +22,7 @@ public class ConcurrencyRejectedException extends ConcurrencyException {
      */
     private final String taskName;
 
-    public ConcurrencyRejectedException(
-            String executorName,
-            String taskName,
-            AsyncError error,
-            Throwable cause
-    ) {
+    public ConcurrencyRejectedException(String executorName, String taskName, AsyncError error, Throwable cause) {
         super("Async task rejected: executor=" + executorName + ", task=" + taskName,
                 error,
                 cause);

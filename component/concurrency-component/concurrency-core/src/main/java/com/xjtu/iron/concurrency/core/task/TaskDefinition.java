@@ -66,8 +66,7 @@ public final class TaskDefinition<T> {
      * 重试策略快照。
      *
      * <p>
-     * 当前 RetryPolicy 仍然是可变对象，后续建议增加 RetryPolicy.copy()。
-     * 一期先保存引用，但约定提交后不再修改 RetryPolicy。
+     * 当前 RetryPolicy 仍然是可变对象，后续建议增加 RetryPolicy.copy()。一期先保存引用，但约定提交后不再修改 RetryPolicy。
      * </p>
      */
     private final RetryPolicy retryPolicy;

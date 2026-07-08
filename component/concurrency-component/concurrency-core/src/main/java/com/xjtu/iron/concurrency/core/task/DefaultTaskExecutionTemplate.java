@@ -140,33 +140,41 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
 
     /**
      * 执行统一任务提交流程。
+     * @param task 业务传入的任务定义
+     * @param resultMode 当前任务是否关心最终结果
+     *                    RESULT_AWARE 业务关心最终 Future
+     *                    FIRE_AND_FORGET 业务不关心最终结果。
+     * @return 结果 T
      */
     private <T> Submission<T> submitInternal(AsyncTask<T> task, TaskResultMode resultMode) {
         Objects.requireNonNull(task, "task must not be null");
         task.validate();
-        //关键点：从这里开始，主链路只读取 TaskDefinition，不再读取可变 AsyncTask。
+        //1. 创建不可变快照
         TaskDefinition<T> definition = TaskDefinition.from(task);
+        //2.获取具体执行executor
         ThreadPoolExecutor executor = threadPoolRegistry.getExecutor(definition.getExecutorName());
+        //3.创建 executable 决定是否做上下文传播
         CompletableFuture<T> baseFuture = new CompletableFuture<>();
-        //这里单独拿出来就是为了确定是否有增强
         Supplier<T> executable = getExecutable(definition);
+        //4. 创建本次任务的运行时状态机
         TaskExecutionRuntime runtime = new TaskExecutionRuntime(resultMode);
+        //5.本次执行需要的东西装起来，后续 TaskCommand、TaskResultPipeline 都通过 context 获取
         TaskExecutionContext<T> context = new TaskExecutionContext<>(definition, executable, baseFuture, runtime);
+        //6.创建 TaskCommand 是真正提交给线程池的 Runnable
         TaskCommand<T> command = new TaskCommand<>(context, lifecyclePublisher, errorClassifier, uncaughtExceptionHandler);
-        // 1.设置提交状态
-        // SUBMITTED 必须早于 timeout/fallback 管道启动，否则极短 timeout 下可能出现 TIMEOUT/FALLBACK 先于 SUBMITTED 的事件顺序。
+        //7.设置提交状态
         command.submitted();
-        //2. 执行增强 time fallback 逻辑
+        //6. 执行增强 time fallback 逻辑
         CompletableFuture<T> finalFuture = resultMode == TaskResultMode.RESULT_AWARE
                 ? resultPipeline.apply(context, command)
                 : baseFuture;
+        //7.初始化
         TaskControl<T> control = new TaskControl<>(executor, command, finalFuture);
         TaskHandle<T> handle = new DefaultTaskHandle<>(definition.getTaskId(), finalFuture, cancellationManager);
+        //9 注册 TaskControl 这一步让外部可以通过 taskId 找到任务控制对象
         taskControlRegistry.register(definition.getTaskId(), control);
         finalFuture.whenComplete((value, throwable) ->
-                taskControlRegistry.remove(definition.getTaskId(), control)
-        );
-
+                taskControlRegistry.remove(definition.getTaskId(), control));
         try {
             /*
              * executor.execute 内部可能触发 ThreadPoolExecutor 的拒绝流程。
@@ -186,10 +194,14 @@ public final class DefaultTaskExecutionTemplate implements TaskExecutionTemplate
             if (!command.isBaseOutcomeResolved()) {
                 command.reject(rejected);
             }
-
             if (resultMode == TaskResultMode.FIRE_AND_FORGET) {
                 AsyncError error = errorClassifier.classify(definition.getMetadata(), rejected, AsyncErrorStage.SUBMIT);
-                throw new ConcurrencyRejectedException(definition.getExecutorName(), definition.getTaskName(), error, rejected);
+                throw new ConcurrencyRejectedException(
+                        definition.getExecutorName(),
+                        definition.getTaskName(),
+                        error,
+                        rejected
+                );
             }
         }
 

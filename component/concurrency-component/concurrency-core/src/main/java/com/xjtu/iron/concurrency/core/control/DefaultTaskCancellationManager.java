@@ -26,10 +26,7 @@ public final class DefaultTaskCancellationManager
     }
 
     @Override
-    public TaskCancelResult cancel(
-            String taskId,
-            boolean mayInterruptIfRunning
-    ) {
+    public TaskCancelResult cancel(String taskId, boolean mayInterruptIfRunning) {
         return controlRegistry.get(taskId)
                 .map(task -> task.cancel(mayInterruptIfRunning))
                 .orElse(TaskCancelResult.NOT_FOUND);
