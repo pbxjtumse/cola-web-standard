@@ -8,7 +8,7 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>concurrency-spring-boot-starter</artifactId>
+    <artifactId>concurrency-starter</artifactId>
     <packaging>jar</packaging>
 
     <name>concurrency-spring-boot-starter</name>

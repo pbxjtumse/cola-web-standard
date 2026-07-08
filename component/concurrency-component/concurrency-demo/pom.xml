@@ -33,7 +33,7 @@
         </dependency>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
-            <artifactId>concurrency-spring-boot-starter</artifactId>
+            <artifactId>concurrency-starter</artifactId>
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
         <dependency>

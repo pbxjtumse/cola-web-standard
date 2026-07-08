@@ -3,23 +3,17 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.xjtu.iron</groupId>
-        <artifactId>component</artifactId>
+        <artifactId>distributed-lock-component</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>concurrency-component</artifactId>
+    <artifactId>distributed-lock-provider</artifactId>
     <packaging>pom</packaging>
 
-    <name>concurrency-component</name>
+    <name>distributed-lock-provider</name>
     <url>http://maven.apache.org</url>
     <modules>
-        <module>concurrency-api</module>
-        <module>concurrency-config</module>
-        <module>concurrency-core</module>
-        <module>concurrency-integrations</module>
-        <module>concurrency-provider</module>
-        <module>concurrency-starter</module>
-        <module>concurrency-demo</module>
+        <module>distributed-lock-provider-redis</module>
     </modules>
 
     <properties>

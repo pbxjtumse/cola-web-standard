@@ -20,6 +20,7 @@
         <module>governance-component</module>
         <module>cache-component</module>
         <module>concurrency-component</module>
+        <module>distributed-lock-component</module>
     </modules>
 
     <properties>
