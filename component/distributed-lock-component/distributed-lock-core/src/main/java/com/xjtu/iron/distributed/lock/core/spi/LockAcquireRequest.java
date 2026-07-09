@@ -2,72 +2,45 @@ package com.xjtu.iron.distributed.lock.core.spi;
 
 import com.xjtu.iron.distributed.lock.api.LockOptions;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
- * 底层 Provider 加锁请求。
+ * Provider 加锁请求。
+ *
+ * <p>该请求只包含 Provider 通用信息，不包含 Redis lockKey、fencingKey、ZK path 这类底层物理标识。
+ * 物理 key/path 应由具体 Provider 自己构造，避免 Redis 细节污染通用 SPI。</p>
  */
 public final class LockAcquireRequest {
 
-    /**
-     * 业务锁名称。
-     */
+
+    /** 业务锁名称。 */
     private final String lockName;
 
-    /**
-     * 底层真实锁 key。
-     */
-    private final String lockKey;
-
-    /**
-     * fencing token 使用的底层 key。
-     *
-     * <p>Redis Provider 中通常为 {@code lockKey + ":fence"}，用于 INCR 生成单调递增版本号。
-     * 如果不需要 fencing，可以为空。</p>
-     */
-    private final String fencingKey;
-
-    /**
-     * 本次加锁请求生成的 ownerToken。
-     *
-     * <p>该 token 在加锁前由 core 层生成，Provider 加锁成功后应把它写入底层锁记录。</p>
-     */
+    /** 本次加锁请求生成的 ownerToken。 */
     private final String ownerToken;
 
-    /**
-     * 锁选项。
-     */
+    /** 锁选项。 */
     private final LockOptions options;
+
+    /** 扩展属性。 */
+    private final Map<String, String> attributes;
 
     private LockAcquireRequest(Builder builder) {
         this.lockName = requireText(builder.lockName, "lockName");
-        this.lockKey = requireText(builder.lockKey, "lockKey");
-        this.fencingKey = builder.fencingKey;
         this.ownerToken = requireText(builder.ownerToken, "ownerToken");
         this.options = Objects.requireNonNull(builder.options, "options must not be null");
+        this.attributes = Collections.unmodifiableMap(new LinkedHashMap<>(builder.attributes));
     }
 
     public static Builder builder() {
         return new Builder();
     }
 
-    private static String requireText(String value, String name) {
-        if (value == null || value.trim().isEmpty()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
-        return value;
-    }
-
     public String getLockName() {
         return lockName;
-    }
-
-    public String getLockKey() {
-        return lockKey;
-    }
-
-    public String getFencingKey() {
-        return fencingKey;
     }
 
     public String getOwnerToken() {
@@ -78,32 +51,34 @@ public final class LockAcquireRequest {
         return options;
     }
 
-    /**
-     * LockAcquireRequest 构造器。
-     */
-    public static final class Builder {
+    public String getNamespace() {
+        return options.getNamespace();
+    }
 
+    public Map<String, String> getAttributes() {
+        return attributes;
+    }
+
+    private static String requireText(String value, String fieldName) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        return value.trim();
+    }
+
+    /** LockAcquireRequest 构造器。 */
+    public static final class Builder {
         private String lockName;
-        private String lockKey;
-        private String fencingKey;
         private String ownerToken;
         private LockOptions options;
+        private Map<String, String> attributes = new LinkedHashMap<>();
 
         private Builder() {
         }
 
+
         public Builder lockName(String lockName) {
             this.lockName = lockName;
-            return this;
-        }
-
-        public Builder lockKey(String lockKey) {
-            this.lockKey = lockKey;
-            return this;
-        }
-
-        public Builder fencingKey(String fencingKey) {
-            this.fencingKey = fencingKey;
             return this;
         }
 
@@ -114,6 +89,18 @@ public final class LockAcquireRequest {
 
         public Builder options(LockOptions options) {
             this.options = options;
+            return this;
+        }
+
+        public Builder attribute(String key, String value) {
+            if (key != null && value != null) {
+                this.attributes.put(key, value);
+            }
+            return this;
+        }
+
+        public Builder attributes(Map<String, String> attributes) {
+            this.attributes = attributes == null ? new LinkedHashMap<>() : new LinkedHashMap<>(attributes);
             return this;
         }
 

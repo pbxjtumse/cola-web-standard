@@ -1,0 +1,42 @@
+@startuml
+title Distributed Lock Auto Renew Lost / Fencing Rejected Flow
+
+participant "业务代码" as Biz
+participant "DistributedLockClient" as Client
+participant "LockWatchdog" as Watchdog
+participant "RedisLockProvider" as Provider
+participant "Redis" as Redis
+participant "LockHandle" as Handle
+participant "业务数据库" as DB
+
+Biz ->> Client: execute(lockName, autoRenew=true, callback)
+
+Client ->> Provider: acquire()
+Provider ->> Redis: EVAL acquire.lua
+Redis -->> Provider: acquired, fencingToken=100
+
+Client ->> Watchdog: start(handle)
+
+note over Client, Watchdog
+JVM 长 GC 或网络抖动，续期错过
+end note
+
+Watchdog ->> Provider: renew(handle)
+Provider ->> Redis: EVAL renew.lua
+Redis -->> Provider: NOT_FOUND or NOT_OWNER
+Provider -->> Watchdog: renew failed
+
+Watchdog ->> Handle: markLostOnce()
+
+Biz ->> Handle: assertHeld()
+Handle -->> Biz: throws LockLostException
+
+alt 业务没有提前 assertHeld
+    Biz ->> DB: update with fencingToken=100
+    DB -->> Biz: update count = 0
+    Biz -->> Client: throw FencingTokenRejectedException
+end
+
+Client -->> Biz: LockResult(LOCK_LOST or FENCING_REJECTED, acquired=true)
+
+@enduml

@@ -1,0 +1,20 @@
+iron:
+  distributed-lock:
+    enabled: true
+    default-provider: redis
+    namespace: default
+
+    redis:
+      enabled: true
+      key-prefix: iron:lock
+      release-channel-prefix: iron:lock:release
+      fencing-key-suffix: fence
+
+    defaults:
+      lease-time: 30s
+      wait-time: 0s
+      wait-strategy: no_wait
+      auto-renew: false
+      renew-interval: 10s
+      max-renew-time: 10m
+      fencing-required: false

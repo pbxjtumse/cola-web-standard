@@ -1,0 +1,48 @@
+@startuml
+title Distributed Lock Execute Flow
+
+participant "业务代码" as Biz
+participant "DistributedLockClient" as Client
+participant "OwnerTokenGenerator" as Token
+participant "LockWaiter" as Waiter
+participant "RedisLockProvider" as Provider
+participant "Redis" as Redis
+participant "LockWatchdog" as Watchdog
+participant "LockCallback" as Callback
+participant "LockHandle" as Handle
+
+Biz -> Client: execute(lockName, options, callback)
+Client -> Client: validate lockName/options
+
+Client -> Token: generate(namespace, lockName)
+Token --> Client: ownerToken
+
+Client -> Waiter: waitForLock(request, provider)
+Waiter -> Provider: acquire(request)
+Provider -> Redis: EVAL acquire.lua
+Redis --> Provider: acquired + fencingToken
+Provider --> Waiter: LockAcquireResponse(acquired)
+Waiter --> Client: LockAcquireResponse(acquired)
+
+Client -> Handle: create LockHandle(lease, runtimeState)
+
+alt autoRenew = true
+    Client -> Watchdog: start(handle)
+end
+
+Client -> Callback: doWithLock(handle)
+Callback --> Client: business result
+
+Client -> Handle: unlock()
+Handle -> Provider: release(request)
+Provider -> Redis: EVAL release.lua
+Redis --> Provider: released
+Provider --> Handle: LockReleaseResponse(RELEASED)
+
+alt autoRenew = true
+    Client -> Watchdog: stop(handle)
+end
+
+Client --> Biz: LockResult(SUCCESS, acquired=true)
+
+@enduml

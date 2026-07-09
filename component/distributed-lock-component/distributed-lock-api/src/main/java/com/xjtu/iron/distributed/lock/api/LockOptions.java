@@ -19,30 +19,22 @@ import java.util.Objects;
  */
 public final class LockOptions {
 
-    /**
-     * 默认命名空间。
-     */
+    /** 默认命名空间。 */
     public static final String DEFAULT_NAMESPACE = "default";
 
-    /**
-     * 默认租约时间。
-     */
+    /** 默认锁租约时间。 */
     public static final Duration DEFAULT_LEASE_TIME = Duration.ofSeconds(30);
 
-    /**
-     * 默认续期间隔。
-     */
+    /** 默认续期间隔。 */
     public static final Duration DEFAULT_RENEW_INTERVAL = Duration.ofSeconds(10);
 
-    /**
-     * 默认最大自动续期时间。
-     */
+    /** 默认最大自动续期时间。 */
     public static final Duration DEFAULT_MAX_RENEW_TIME = Duration.ofMinutes(10);
 
     /**
      * 命名空间。
      *
-     * <p>用于隔离不同系统或不同环境中的锁 key，避免 lockName 相同导致冲突。例如 {@code marketing}、
+     * <p>用于隔离不同系统或不同环境中的锁，避免 lockName 相同导致冲突。例如 {@code marketing}、
      * {@code settle}、{@code default}。</p>
      */
     private final String namespace;
@@ -65,93 +57,90 @@ public final class LockOptions {
     /**
      * 等待策略。
      *
-     * <p>用于决定首次加锁失败后如何等待和重试。</p>
+     * <p>如果 Builder 中未显式设置该字段，build 时会根据 waitTime 自动推导：waitTime 为 0 使用 NO_WAIT，
+     * waitTime 大于 0 使用 BACKOFF。</p>
      */
     private final LockWaitStrategy waitStrategy;
 
     /**
-     * 是否开启 watchdog 自动续期。
+     * 是否开启自动续期。
      *
-     * <p>开启后，组件会在锁过期前定期校验 ownerToken 并刷新 TTL。该能力适合执行时间不确定的长任务，
-     * 不建议普通短请求默认开启。</p>
+     * <p>自动续期用于执行时间不确定的任务。开启后，watchdog 会定期执行安全续期脚本；如果续期失败，
+     * 当前 handle 会被标记为 lost。</p>
      */
     private final boolean autoRenew;
 
     /**
-     * watchdog 续期间隔。
+     * 自动续期间隔。
      *
-     * <p>通常建议为 leaseTime 的 1/3，例如 leaseTime 为 30 秒，则 renewInterval 为 10 秒。</p>
+     * <p>建议为 leaseTime 的 1/3，例如 leaseTime=30s，renewInterval=10s。</p>
      */
     private final Duration renewInterval;
 
     /**
      * 最大自动续期时间。
      *
-     * <p>用于防止业务线程卡死后 watchdog 无限续期，导致锁长期不释放。超过该时间后组件应停止续期，
-     * 让锁自然过期。</p>
+     * <p>用于防止任务卡死后 watchdog 一直续期，导致锁长期不释放。</p>
      */
     private final Duration maxRenewTime;
 
     /**
-     * 是否强制要求 fencing token。
+     * 是否要求 fencing token。
      *
-     * <p>如果为 true，但当前 Provider 不支持 fencing token，应在加锁前快速失败。fencing token 用于业务资源写入保护，
-     * 可以防止旧 owner 在锁过期后恢复执行并覆盖新 owner 结果。</p>
+     * <p>如果为 true，则一次加锁成功必须返回 fencing token；如果当前 Provider 或指定的
+     * FencingTokenProvider 不支持，应在加锁前 fail fast。</p>
      */
     private final boolean fencingRequired;
 
     /**
-     * 失锁后模板是否以 LOCK_LOST 失败。
+     * 失锁后模板是否返回 LOCK_LOST。
      *
-     * <p>如果业务执行过程中组件发现锁已丢失，且该字段为 true，execute 模板应返回或抛出 LOCK_LOST。
-     * 但该配置不能替代业务侧 fencing token 校验。</p>
+     * <p>该字段用于 execute 模板：如果执行期间 watchdog 或显式检查发现失锁，模板最终可以把结果标记为
+     * LOCK_LOST。即使该字段为 true，业务核心写入仍需要依赖 fencing token + DB 条件更新。</p>
      */
     private final boolean failOnLockLost;
 
     /**
-     * 指定 Provider 名称。
+     * 指定底层锁 Provider 名称。
      *
-     * <p>为空时使用默认 Provider。非空时可以指定 {@code redis}、{@code redisson}、{@code zookeeper}、
-     * {@code etcd}、{@code jdbc} 等具体实现。</p>
+     * <p>为空时使用组件默认 Provider；非空时从 LockProviderRegistry 中按名称选择 Provider。
+     * 例如 {@code redis}、{@code redisson}、{@code zookeeper}。</p>
      */
     private final String providerName;
 
     /**
-     * 退避重试配置。
+     * 指定 fencing token Provider 名称。
      *
-     * <p>仅在 waitStrategy 为 {@link LockWaitStrategy#BACKOFF} 或 {@link LockWaitStrategy#PUBSUB_BACKOFF}
-     * 时生效。</p>
+     * <p>为空时优先使用 LockProvider 原生 fencing 能力；非空时使用指定 FencingTokenProvider。
+     * 这个字段是为了支持“Redis 做锁、DB sequence 做 fencing token”的场景。</p>
+     */
+    private final String fencingTokenProviderName;
+
+    /**
+     * 退避等待配置。
+     *
+     * <p>仅当 waitStrategy 为 BACKOFF 或 PUBSUB_BACKOFF 时生效。</p>
      */
     private final RetryBackoffSpec backoffSpec;
 
-    /**
-     * 解锁失败时是否抛出异常。
-     *
-     * <p>默认 false。一般来说业务异常不应该被 unlock 异常覆盖，因此默认只记录事件和指标。对于测试或强感知场景，
-     * 可以打开该开关。</p>
-     */
-    private final boolean throwOnReleaseFailure;
-
     private LockOptions(Builder builder) {
-        this.namespace = builder.namespace;
-        this.waitTime = builder.waitTime;
-        this.leaseTime = builder.leaseTime;
-        this.waitStrategy = builder.waitStrategy;
+        this.namespace = normalizeNamespace(builder.namespace);
+        this.waitTime = builder.waitTime == null ? Duration.ZERO : builder.waitTime;
+        this.leaseTime = builder.leaseTime == null ? DEFAULT_LEASE_TIME : builder.leaseTime;
+        this.waitStrategy = inferWaitStrategy(builder.waitStrategy, this.waitTime);
         this.autoRenew = builder.autoRenew;
-        this.renewInterval = builder.renewInterval;
-        this.maxRenewTime = builder.maxRenewTime;
+        this.renewInterval = builder.renewInterval == null ? defaultRenewInterval(this.leaseTime) : builder.renewInterval;
+        this.maxRenewTime = builder.maxRenewTime == null ? DEFAULT_MAX_RENEW_TIME : builder.maxRenewTime;
         this.fencingRequired = builder.fencingRequired;
         this.failOnLockLost = builder.failOnLockLost;
-        this.providerName = builder.providerName;
-        this.backoffSpec = builder.backoffSpec;
-        this.throwOnReleaseFailure = builder.throwOnReleaseFailure;
+        this.providerName = normalizeNullable(builder.providerName);
+        this.fencingTokenProviderName = normalizeNullable(builder.fencingTokenProviderName);
+        this.backoffSpec = builder.backoffSpec == null ? RetryBackoffSpec.defaults() : builder.backoffSpec;
         validate();
     }
 
     /**
-     * 返回默认锁选项。
-     *
-     * <p>默认：namespace=default、waitTime=0、leaseTime=30s、NO_WAIT、不自动续期、不要求 fencing token。</p>
+     * 创建默认选项。
      *
      * @return 默认锁选项。
      */
@@ -160,48 +149,34 @@ public final class LockOptions {
     }
 
     /**
-     * 创建构造器。
+     * 创建 Builder。
      *
-     * @return 构造器。
+     * @return Builder。
      */
     public static Builder builder() {
         return new Builder();
     }
 
     /**
-     * 校验配置合法性。
+     * 校验锁选项是否合法。
      */
     public void validate() {
-        if (namespace == null || namespace.trim().isEmpty()) {
-            throw new IllegalArgumentException("namespace must not be blank");
-        }
-        Objects.requireNonNull(waitTime, "waitTime must not be null");
-        Objects.requireNonNull(leaseTime, "leaseTime must not be null");
+        requireNonNegative(waitTime, "waitTime");
+        requirePositive(leaseTime, "leaseTime");
+        requirePositive(renewInterval, "renewInterval");
+        requirePositive(maxRenewTime, "maxRenewTime");
         Objects.requireNonNull(waitStrategy, "waitStrategy must not be null");
-        Objects.requireNonNull(renewInterval, "renewInterval must not be null");
-        Objects.requireNonNull(maxRenewTime, "maxRenewTime must not be null");
         Objects.requireNonNull(backoffSpec, "backoffSpec must not be null");
+        backoffSpec.validate();
 
-        if (waitTime.isNegative()) {
-            throw new IllegalArgumentException("waitTime must not be negative");
+        if (waitTime.isZero() && waitStrategy != LockWaitStrategy.NO_WAIT) {
+            throw new IllegalArgumentException("waitTime is zero, waitStrategy must be NO_WAIT");
         }
-        if (leaseTime.isNegative() || leaseTime.isZero()) {
-            throw new IllegalArgumentException("leaseTime must be positive");
-        }
-        if (renewInterval.isNegative() || renewInterval.isZero()) {
-            throw new IllegalArgumentException("renewInterval must be positive");
-        }
-        if (maxRenewTime.isNegative() || maxRenewTime.isZero()) {
-            throw new IllegalArgumentException("maxRenewTime must be positive");
-        }
-        if (autoRenew && renewInterval.compareTo(leaseTime) >= 0) {
-            throw new IllegalArgumentException("renewInterval must be less than leaseTime when autoRenew is enabled");
+        if (!waitTime.isZero() && waitStrategy == LockWaitStrategy.NO_WAIT) {
+            throw new IllegalArgumentException("waitTime is greater than zero, waitStrategy must not be NO_WAIT");
         }
         if (autoRenew && maxRenewTime.compareTo(leaseTime) < 0) {
             throw new IllegalArgumentException("maxRenewTime must be greater than or equal to leaseTime when autoRenew is enabled");
-        }
-        if (waitTime.isZero() && waitStrategy != LockWaitStrategy.NO_WAIT) {
-            throw new IllegalArgumentException("waitStrategy must be NO_WAIT when waitTime is zero");
         }
     }
 
@@ -245,12 +220,45 @@ public final class LockOptions {
         return providerName;
     }
 
+    public String getFencingTokenProviderName() {
+        return fencingTokenProviderName;
+    }
+
     public RetryBackoffSpec getBackoffSpec() {
         return backoffSpec;
     }
 
-    public boolean isThrowOnReleaseFailure() {
-        return throwOnReleaseFailure;
+    private static LockWaitStrategy inferWaitStrategy(LockWaitStrategy configured, Duration waitTime) {
+        if (configured != null) {
+            return configured;
+        }
+        return waitTime == null || waitTime.isZero() ? LockWaitStrategy.NO_WAIT : LockWaitStrategy.BACKOFF;
+    }
+
+    private static Duration defaultRenewInterval(Duration leaseTime) {
+        long millis = Math.max(1L, leaseTime.toMillis() / 3L);
+        return Duration.ofMillis(millis);
+    }
+
+    private static String normalizeNamespace(String namespace) {
+        String value = namespace == null || namespace.trim().isEmpty() ? DEFAULT_NAMESPACE : namespace.trim();
+        return value;
+    }
+
+    private static String normalizeNullable(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    private static void requirePositive(Duration duration, String fieldName) {
+        if (duration == null || duration.isZero() || duration.isNegative()) {
+            throw new IllegalArgumentException(fieldName + " must be positive");
+        }
+    }
+
+    private static void requireNonNegative(Duration duration, String fieldName) {
+        if (duration == null || duration.isNegative()) {
+            throw new IllegalArgumentException(fieldName + " must not be negative");
+        }
     }
 
     /**
@@ -258,18 +266,41 @@ public final class LockOptions {
      */
     public static final class Builder {
 
+        /** 命名空间。 */
         private String namespace = DEFAULT_NAMESPACE;
+
+        /** 最长等待时间。 */
         private Duration waitTime = Duration.ZERO;
+
+        /** 锁租约时间。 */
         private Duration leaseTime = DEFAULT_LEASE_TIME;
-        private LockWaitStrategy waitStrategy = LockWaitStrategy.NO_WAIT;
-        private boolean autoRenew = false;
-        private Duration renewInterval = DEFAULT_RENEW_INTERVAL;
+
+        /** 等待策略。为空时根据 waitTime 自动推导。 */
+        private LockWaitStrategy waitStrategy;
+
+        /** 是否自动续期。 */
+        private boolean autoRenew;
+
+        /** 自动续期间隔。 */
+        private Duration renewInterval;
+
+        /** 最大自动续期时间。 */
         private Duration maxRenewTime = DEFAULT_MAX_RENEW_TIME;
-        private boolean fencingRequired = false;
-        private boolean failOnLockLost = true;
+
+        /** 是否必须返回 fencing token。 */
+        private boolean fencingRequired;
+
+        /** 失锁后模板是否返回 LOCK_LOST。 */
+        private boolean failOnLockLost;
+
+        /** 指定底层锁 Provider。 */
         private String providerName;
+
+        /** 指定 fencing token Provider。 */
+        private String fencingTokenProviderName;
+
+        /** 退避等待配置。 */
         private RetryBackoffSpec backoffSpec = RetryBackoffSpec.defaults();
-        private boolean throwOnReleaseFailure = false;
 
         private Builder() {
         }
@@ -299,6 +330,18 @@ public final class LockOptions {
             return this;
         }
 
+        /**
+         * 开启自动续期，并设置最大自动续期时间。
+         *
+         * @param maxRenewTime 最大自动续期时间。
+         * @return 当前 Builder。
+         */
+        public Builder autoRenew(Duration maxRenewTime) {
+            this.autoRenew = true;
+            this.maxRenewTime = maxRenewTime;
+            return this;
+        }
+
         public Builder renewInterval(Duration renewInterval) {
             this.renewInterval = renewInterval;
             return this;
@@ -324,13 +367,13 @@ public final class LockOptions {
             return this;
         }
 
-        public Builder backoffSpec(RetryBackoffSpec backoffSpec) {
-            this.backoffSpec = backoffSpec;
+        public Builder fencingTokenProviderName(String fencingTokenProviderName) {
+            this.fencingTokenProviderName = fencingTokenProviderName;
             return this;
         }
 
-        public Builder throwOnReleaseFailure(boolean throwOnReleaseFailure) {
-            this.throwOnReleaseFailure = throwOnReleaseFailure;
+        public Builder backoffSpec(RetryBackoffSpec backoffSpec) {
+            this.backoffSpec = backoffSpec;
             return this;
         }
 

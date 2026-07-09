@@ -1,21 +1,20 @@
 package com.xjtu.iron.distributed.lock.api;
 
-import java.time.Duration;
 import java.util.Objects;
 
 /**
  * 分布式锁客户端。
- *
- * <p>这是业务方使用分布式锁组件的统一入口。业务代码不应该直接依赖 Redis、Zookeeper、Etcd、
- * JDBC 等底层实现，而应该通过本接口完成加锁、执行、续期、释放和持锁状态检查。</p>
+ * 负责创建锁租约，提供模板执行入口
+ * <p>这是业务方使用分布式锁组件的统一入口。业务代码不应该直接依赖 Redis、Zookeeper、Etcd、JDBC
+ * 等底层实现，而应该通过本接口完成加锁、执行、续期、释放和持锁状态检查。</p>
  *
  * <p>本组件采用“租约模型”，不是 Java 本地锁的“线程持有模型”。一次加锁成功后会返回
- * {@link LockHandle}，其中的 {@code ownerToken} 才是证明本次锁租约归属的凭证，而不是
- * {@code Thread.currentThread()}。</p>
+ * {@link LockHandle}，其中的 {@code ownerToken} 才是证明本次锁租约归属的凭证，组件不会把
+ * {@code Thread.currentThread()} 作为分布式锁 owner。</p>
  *
- * <p>使用建议：业务优先使用 {@link #execute(String, LockOptions, LockCallback)}，让组件统一处理
- * 加锁、释放、异常、指标和事件；只有在确实需要跨方法或跨线程传递锁凭证时，再直接使用
- * {@link #tryLock(String, LockOptions)}。</p>
+ * <p>使用建议：业务优先使用 {@link #execute(String, LockOptions, LockCallback)} 或
+ * {@link #execute(String, LockOptions, LockRunnable)}，让组件统一处理加锁、释放、异常、指标和事件；
+ * 只有在确实需要跨方法或跨线程传递锁凭证时，再直接使用 {@link #tryLock(String, LockOptions)}。</p>
  */
 public interface DistributedLockClient {
 
@@ -44,7 +43,7 @@ public interface DistributedLockClient {
     }
 
     /**
-     * 在分布式锁保护下执行业务逻辑。
+     * 在分布式锁保护下执行业务逻辑，并返回业务结果。
      *
      * <p>模板流程为：尝试加锁 -> 成功后执行业务 callback -> finally 中安全释放锁 -> 返回执行结果。
      * 该方法会把 {@link LockHandle} 传入 callback，业务可以从中获取 ownerToken、fencingToken，
@@ -62,7 +61,7 @@ public interface DistributedLockClient {
     <T> LockResult<T> execute(String lockName, LockOptions options, LockCallback<T> callback);
 
     /**
-     * 使用默认选项在分布式锁保护下执行业务逻辑。
+     * 使用默认选项在分布式锁保护下执行业务逻辑，并返回业务结果。
      *
      * @param lockName 业务锁名称。不能为空。
      * @param callback 持锁后执行的业务逻辑。不能为空。
@@ -74,51 +73,33 @@ public interface DistributedLockClient {
     }
 
     /**
-     * 检查某个锁句柄是否仍然持有锁。
+     * 在分布式锁保护下执行无返回值业务逻辑。
      *
-     * <p>对 Redis Provider 来说，通常会校验 Redis 当前 value 是否仍然等于 handle 中的 ownerToken。
-     * 该方法只能作为“当前时刻”的探测结果，不能保证下一毫秒仍然持有锁。</p>
+     * <p>这是 {@link #execute(String, LockOptions, LockCallback)} 的便捷版本，避免业务方为了无返回值场景
+     * 手写 {@code return null}。</p>
      *
-     * @param handle 锁句柄。不能为空。
-     * @return 当前时刻仍然持有锁返回 {@code true}，否则返回 {@code false}。
+     * @param lockName 业务锁名称。不能为空。
+     * @param options  锁选项。不能为空。
+     * @param runnable 持锁后执行的业务逻辑。不能为空。
+     * @return 锁模板执行结果。
      */
-    boolean isHeld(LockHandle handle);
-
-    /**
-     * 安全释放锁。
-     *
-     * <p>释放锁必须校验 ownerToken，只有底层锁记录仍然属于本 handle 时才允许释放。
-     * 这可以避免旧 owner 在锁过期后误删新 owner 的锁。</p>
-     *
-     * @param handle 锁句柄。不能为空。
-     * @return 释放成功返回 {@code true}；锁已过期、已释放、或已不属于当前 owner 时返回 {@code false}。
-     */
-    boolean unlock(LockHandle handle);
-
-    /**
-     * 安全续期锁。
-     *
-     * <p>续期必须校验 ownerToken，只有底层锁记录仍然属于本 handle 时才允许刷新 TTL。</p>
-     *
-     * @param handle 锁句柄。不能为空。
-     * @return 续期成功返回 {@code true}；锁已丢失或 Provider 异常时返回 {@code false}。
-     */
-    boolean renew(LockHandle handle);
-
-    /**
-     * 构造一个常用的短等待选项。
-     *
-     * @param waitTime  最长等待时间。
-     * @param leaseTime 锁租约时间。
-     * @return 锁选项。
-     */
-    static LockOptions shortWaitOptions(Duration waitTime, Duration leaseTime) {
-        Objects.requireNonNull(waitTime, "waitTime must not be null");
-        Objects.requireNonNull(leaseTime, "leaseTime must not be null");
-        return LockOptions.builder()
-                .waitTime(waitTime)
-                .leaseTime(leaseTime)
-                .waitStrategy(waitTime.isZero() ? LockWaitStrategy.NO_WAIT : LockWaitStrategy.BACKOFF)
-                .build();
+    default LockResult<Void> execute(String lockName, LockOptions options, LockRunnable runnable) {
+        Objects.requireNonNull(runnable, "runnable must not be null");
+        return execute(lockName, options, handle -> {
+            runnable.runWithLock(handle);
+            return null;
+        });
     }
+
+    /**
+     * 使用默认选项在分布式锁保护下执行无返回值业务逻辑。
+     *
+     * @param lockName 业务锁名称。不能为空。
+     * @param runnable 持锁后执行的业务逻辑。不能为空。
+     * @return 锁模板执行结果。
+     */
+    default LockResult<Void> execute(String lockName, LockRunnable runnable) {
+        return execute(lockName, LockOptions.defaults(), runnable);
+    }
+
 }

@@ -2,117 +2,68 @@ package com.xjtu.iron.distributed.lock.core.spi;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Objects;
 import java.util.OptionalLong;
 
 /**
- * Core 层内部锁租约。
+ * 锁租约数据快照。
  *
- * <p>LockLease 是 Provider 与 core 之间传递的内部对象，表示一次加锁成功后的底层租约。
- * API 层暴露给业务的是 {@code LockHandle}，不是本类。</p>
+ * <p>该对象表示一次成功加锁后，Provider 返回的不可变租约信息。它只描述“锁是谁、什么时候拿到、租约多久、
+ * 底层 key/path 是什么”，不保存 lost/released 等运行时状态。</p>
+ *
+ * <p>lost/released 是客户端运行态，后续应放在 DefaultLockHandle 或 LockRuntimeState 中，并使用 AtomicBoolean
+ * 保护并发释放和失锁标记。</p>
  */
 public final class LockLease {
 
-    /**
-     * Provider 名称。
-     */
+    /** Provider 名称。 */
     private final String providerName;
 
-    /**
-     * 业务锁名称。
-     */
+    /** 锁命名空间。 */
+    private final String namespace;
+
+    /** 业务锁名称。 */
     private final String lockName;
 
-    /**
-     * 底层真实锁 key。
-     */
+    /** Provider 真实锁 key 或路径。 */
     private final String lockKey;
 
-    /**
-     * 本次租约 ownerToken。
-     */
+    /** ownerToken。 */
     private final String ownerToken;
 
-    /**
-     * 本次租约 fencingToken。
-     */
+    /** fencingToken，可为空。 */
     private final Long fencingToken;
 
-    /**
-     * 租约时长。
-     */
+    /** 租约时间。 */
     private final Duration leaseTime;
 
-    /**
-     * 加锁成功时间。
-     */
+    /** 加锁成功时间。 */
     private final Instant acquiredAt;
 
-    /**
-     * 本地估算过期时间。
-     */
+    /** 本地估算过期时间。 */
     private final Instant expireAt;
-
-    /**
-     * 是否已经判定失锁。
-     */
-    private volatile boolean lost;
-
-    /**
-     * 是否已经释放。
-     */
-    private volatile boolean released;
 
     private LockLease(Builder builder) {
         this.providerName = requireText(builder.providerName, "providerName");
+        this.namespace = requireText(builder.namespace, "namespace");
         this.lockName = requireText(builder.lockName, "lockName");
         this.lockKey = requireText(builder.lockKey, "lockKey");
         this.ownerToken = requireText(builder.ownerToken, "ownerToken");
         this.fencingToken = builder.fencingToken;
-        this.leaseTime = Objects.requireNonNull(builder.leaseTime, "leaseTime must not be null");
+        this.leaseTime = requirePositive(builder.leaseTime, "leaseTime");
         this.acquiredAt = builder.acquiredAt == null ? Instant.now() : builder.acquiredAt;
         this.expireAt = builder.expireAt == null ? this.acquiredAt.plus(this.leaseTime) : builder.expireAt;
-        if (leaseTime.isZero() || leaseTime.isNegative()) {
-            throw new IllegalArgumentException("leaseTime must be positive");
-        }
     }
 
     public static Builder builder() {
         return new Builder();
     }
 
-    private static String requireText(String value, String name) {
-        if (value == null || value.trim().isEmpty()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
-        return value;
-    }
-
-    /**
-     * 标记租约已经失锁。
-     */
-    public void markLost() {
-        this.lost = true;
-    }
-
-    /**
-     * 标记租约已经释放。
-     */
-    public void markReleased() {
-        this.released = true;
-    }
-
-    /**
-     * 根据本地时间估算租约是否已过期。
-     *
-     * @return 当前时间晚于 expireAt 返回 true。
-     */
-    public boolean isExpiredLocally() {
-        return Instant.now().isAfter(expireAt);
-    }
-
     public String getProviderName() {
         return providerName;
+    }
+
+    public String getNamespace() {
+        return namespace;
     }
 
     public String getLockName() {
@@ -127,7 +78,7 @@ public final class LockLease {
         return ownerToken;
     }
 
-    public OptionalLong getFencingToken() {
+    public OptionalLong fencingToken() {
         return fencingToken == null ? OptionalLong.empty() : OptionalLong.of(fencingToken);
     }
 
@@ -143,20 +94,25 @@ public final class LockLease {
         return expireAt;
     }
 
-    public boolean isLost() {
-        return lost;
+    private static String requireText(String value, String fieldName) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        return value.trim();
     }
 
-    public boolean isReleased() {
-        return released;
+    private static Duration requirePositive(Duration value, String fieldName) {
+        if (value == null || value.isZero() || value.isNegative()) {
+            throw new IllegalArgumentException(fieldName + " must be positive");
+        }
+        return value;
     }
 
-    /**
-     * LockLease 构造器。
-     */
+    /** LockLease 构造器。 */
     public static final class Builder {
 
         private String providerName;
+        private String namespace;
         private String lockName;
         private String lockKey;
         private String ownerToken;
@@ -170,6 +126,11 @@ public final class LockLease {
 
         public Builder providerName(String providerName) {
             this.providerName = providerName;
+            return this;
+        }
+
+        public Builder namespace(String namespace) {
+            this.namespace = namespace;
             return this;
         }
 

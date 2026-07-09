@@ -1,7 +1,7 @@
 package com.xjtu.iron.distributed.lock.api;
 
 /**
- * 持锁业务回调。
+ * 有返回值的持锁业务回调。
  *
  * <p>{@link DistributedLockClient#execute(String, LockOptions, LockCallback)} 在成功获取锁之后会执行本回调，
  * 并把本次加锁成功产生的 {@link LockHandle} 传入业务方。</p>

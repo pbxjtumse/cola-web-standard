@@ -1,0 +1,27 @@
+@startuml
+title Distributed Lock TryLock Timeout Flow
+
+participant "业务代码" as Biz
+participant "DistributedLockClient" as Client
+participant "LockWaiter" as Waiter
+participant "RedisLockProvider" as Provider
+participant "Redis" as Redis
+
+Biz ->> Client: tryLock(lockName, options)
+Client ->> Waiter: waitForLock(request, provider)
+
+loop until waitTime timeout
+    Waiter ->> Provider: acquire(request)
+    Provider ->> Redis: EVAL acquire.lua
+    Redis -->> Provider: not acquired + pttl
+    Provider -->> Waiter: LockAcquireResponse(notAcquired)
+
+    alt waitStrategy = BACKOFF
+        Waiter ->> Waiter: sleep backoff + jitter
+    end
+end
+
+Waiter -->> Client: notAcquired
+Client -->> Biz: LockResult(NOT_ACQUIRED, acquired=false)
+
+@enduml

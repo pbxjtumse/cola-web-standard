@@ -1,31 +1,22 @@
 package com.xjtu.iron.distributed.lock.core.spi;
 
-import java.time.Duration;
-
 /**
- * 分布式锁底层实现 SPI。
+ * 分布式锁底层 Provider SPI。
  *
- * <p>Provider 负责对接具体存储或协调系统，例如 Redis、Redisson、Zookeeper、Etcd、JDBC。
- * 上层 {@code DistributedLockClient} 不直接感知具体实现，只依赖本接口完成加锁、释放、续期和持锁检查。</p>
- *
- * <p>Provider 只负责底层原子语义，不负责业务执行模板、指标、事件、等待策略和 watchdog 调度。
- * 这些通用能力应放在 core 层。</p>
+ * <p>Provider 只负责底层存储的一次性原子操作，例如 Redis 的 Lua acquire/release/renew/check，ZK 的节点创建和
+ * 删除，Etcd 的事务写入和 lease 续期。等待策略、watchdog、事件、指标、执行模板不应该塞进 Provider。</p>
  */
 public interface LockProvider {
 
     /**
      * Provider 名称。
      *
-     * <p>例如 {@code redis}、{@code redisson}、{@code zookeeper}、{@code etcd}、{@code jdbc}。</p>
-     *
-     * @return Provider 名称。
+     * @return Provider 名称，例如 {@code redis}、{@code redisson}、{@code zookeeper}。
      */
     String providerName();
 
     /**
      * 尝试获取锁。
-     *
-     * <p>该方法只做一次底层加锁尝试，不应该在 Provider 内部做长时间等待。等待策略由 core 层的 LockWaiter 负责。</p>
      *
      * @param request 加锁请求。
      * @return 加锁响应。
@@ -33,33 +24,32 @@ public interface LockProvider {
     LockAcquireResponse acquire(LockAcquireRequest request);
 
     /**
-     * 安全释放锁。
+     * 释放锁。
      *
-     * <p>Provider 必须校验 {@link LockLease#getOwnerToken()}，只有底层锁仍然属于当前 ownerToken 时才允许释放。</p>
+     * <p>释放必须校验 ownerToken，不能直接删除底层锁记录。</p>
      *
-     * @param lease 锁租约。
-     * @return 释放响应。
+     * @param request 解锁请求。
+     * @return 解锁响应。
      */
-    LockReleaseResponse release(LockLease lease);
+    LockReleaseResponse release(LockReleaseRequest request);
 
     /**
-     * 安全续期锁。
+     * 续期锁。
      *
-     * <p>Provider 必须校验 ownerToken，只有底层锁仍然属于当前 ownerToken 时才允许刷新 TTL。</p>
+     * <p>续期必须校验 ownerToken，不能给其他 owner 的锁续期。</p>
      *
-     * @param lease     锁租约。
-     * @param leaseTime 新租约时间。
+     * @param request 续期请求。
      * @return 续期响应。
      */
-    LockRenewResponse renew(LockLease lease, Duration leaseTime);
+    LockRenewResponse renew(LockRenewRequest request);
 
     /**
-     * 检查当前租约是否仍然持有锁。
+     * 检查当前 ownerToken 是否仍然持有锁。
      *
-     * @param lease 锁租约。
-     * @return 当前 ownerToken 仍然持有锁返回 {@code true}。
+     * @param request 检查请求。
+     * @return 检查响应。
      */
-    boolean isHeld(LockLease lease);
+    LockCheckResponse check(LockCheckRequest request);
 
     /**
      * Provider 能力描述。

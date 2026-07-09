@@ -17,6 +17,7 @@
         <module>distributed-lock-core</module>
         <module>distributed-lock-provider</module>
         <module>distributed-lock-starter</module>
+        <module>distributed-lock-demo</module>
     </modules>
 
     <properties>

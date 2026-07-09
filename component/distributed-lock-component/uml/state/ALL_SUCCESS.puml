@@ -1,0 +1,83 @@
+@startuml
+title DistributedLock execute 正向/逆向完整状态机
+
+[*] --> INIT
+
+INIT --> VALIDATING : execute(lockName, options)
+VALIDATING --> INVALID_OPTIONS : lockName/options invalid\nstatus=INVALID_OPTIONS\nstage=VALIDATE
+VALIDATING --> PREPARE_REQUEST : valid
+
+PREPARE_REQUEST --> ACQUIRING : generate ownerToken\nbuild acquire request
+
+ACQUIRING --> ACQUIRED : provider.acquire success\nstatus=ACQUIRED\nstage=ACQUIRE\nacquired=true
+ACQUIRING --> WAITING : lock held by others\nwaitTime > 0
+ACQUIRING --> NOT_ACQUIRED : lock held by others\nwaitTime = 0\nstatus=NOT_ACQUIRED\nstage=WAIT
+ACQUIRING --> PROVIDER_ERROR : Redis/Lua/provider error\nstatus=PROVIDER_ERROR\nstage=ACQUIRE
+
+WAITING --> ACQUIRING : backoff + jitter retry
+WAITING --> NOT_ACQUIRED : waitTime timeout\nstatus=NOT_ACQUIRED\nstage=WAIT
+WAITING --> PROVIDER_ERROR : provider error during retry\nstatus=PROVIDER_ERROR\nstage=ACQUIRE
+
+ACQUIRED --> START_WATCHDOG : autoRenew=true
+ACQUIRED --> EXECUTING : autoRenew=false
+
+START_WATCHDOG --> EXECUTING : watchdog started
+
+EXECUTING --> BUSINESS_SUCCESS : callback returns normally
+EXECUTING --> EXECUTION_FAILED : callback throws ordinary exception\nstatus=EXECUTION_FAILED\nstage=EXECUTE
+EXECUTING --> FENCING_REJECTED : callback throws FencingTokenRejectedException\nstatus=FENCING_REJECTED\nstage=FENCING
+EXECUTING --> LOCK_LOST : callback throws LockLostException\nstatus=LOCK_LOST\nstage=CHECK
+
+state EXECUTING {
+    [*] --> HELD_DURING_EXECUTION
+
+    HELD_DURING_EXECUTION --> HELD_DURING_EXECUTION : watchdog renew success\nrenewStatus=RENEWED
+
+    HELD_DURING_EXECUTION --> LOST_DURING_EXECUTION : watchdog renew NOT_FOUND\nstatus=LOCK_LOST\nstage=RENEW
+    HELD_DURING_EXECUTION --> LOST_DURING_EXECUTION : watchdog renew NOT_OWNER\nstatus=LOCK_LOST\nstage=RENEW
+    HELD_DURING_EXECUTION --> RENEW_PROVIDER_ERROR : watchdog renew provider error\nstatus=PROVIDER_ERROR\nstage=RENEW
+
+    LOST_DURING_EXECUTION --> [*] : runtimeState.markLostOnce()
+    RENEW_PROVIDER_ERROR --> [*] : publish RENEW_FAILED
+}
+
+BUSINESS_SUCCESS --> CHECK_LOST_AFTER_EXECUTE : callback finished
+
+CHECK_LOST_AFTER_EXECUTE --> LOCK_LOST : runtimeState.lost=true\nfailOnLockLost=true\nstatus=LOCK_LOST\nstage=RENEW
+CHECK_LOST_AFTER_EXECUTE --> RELEASING : not lost or failOnLockLost=false
+
+RELEASING --> RELEASED : release success\nreleaseStatus=RELEASED
+RELEASING --> RELEASE_NOT_OWNER : release NOT_OWNER\nstage=RELEASE\nmarkLost
+RELEASING --> RELEASE_NOT_FOUND : release NOT_FOUND\nstage=RELEASE\nmarkLost
+RELEASING --> RELEASE_FAILED : release provider error\nstatus=RELEASE_FAILED\nstage=RELEASE
+
+RELEASE_NOT_OWNER --> LOCK_LOST : failOnLockLost=true\nstatus=LOCK_LOST\nstage=RELEASE
+RELEASE_NOT_OWNER --> RELEASED_WITH_LOST_EVENT : failOnLockLost=false\nstatus=SUCCESS\nstage=EXECUTE\npublish LOCK_LOST
+
+RELEASE_NOT_FOUND --> LOCK_LOST : failOnLockLost=true\nstatus=LOCK_LOST\nstage=RELEASE
+RELEASE_NOT_FOUND --> RELEASED_WITH_LOST_EVENT : failOnLockLost=false\nstatus=SUCCESS\nstage=EXECUTE\npublish LOCK_LOST
+
+RELEASED --> SUCCESS : status=SUCCESS\nstage=EXECUTE
+RELEASED_WITH_LOST_EVENT --> SUCCESS
+
+SUCCESS --> STOP_WATCHDOG
+EXECUTION_FAILED --> STOP_WATCHDOG
+FENCING_REJECTED --> STOP_WATCHDOG
+LOCK_LOST --> STOP_WATCHDOG
+RELEASE_FAILED --> STOP_WATCHDOG
+PROVIDER_ERROR --> STOP_WATCHDOG
+NOT_ACQUIRED --> [*]
+INVALID_OPTIONS --> [*]
+
+STOP_WATCHDOG --> [*]
+
+SUCCESS : terminal\nLockResult(status=SUCCESS, acquired=true)
+NOT_ACQUIRED : terminal\nLockResult(status=NOT_ACQUIRED, acquired=false)
+INVALID_OPTIONS : terminal\nLockResult(status=INVALID_OPTIONS, acquired=false)
+EXECUTION_FAILED : terminal\nLockResult(status=EXECUTION_FAILED, acquired=true)
+FENCING_REJECTED : terminal\nLockResult(status=FENCING_REJECTED, acquired=true)
+LOCK_LOST : terminal\nLockResult(status=LOCK_LOST, acquired=true)
+RELEASE_FAILED : terminal\nLockResult(status=RELEASE_FAILED, acquired=true)
+PROVIDER_ERROR : terminal\nLockResult(status=PROVIDER_ERROR)
+
+@enduml

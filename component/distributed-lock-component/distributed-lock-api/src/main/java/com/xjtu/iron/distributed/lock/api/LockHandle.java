@@ -6,7 +6,7 @@ import java.util.OptionalLong;
 
 /**
  * 锁句柄，表示“一次成功加锁后的租约凭证”。
- *
+ * 负责本次锁租约的续期、释放、检查、断言 ,注意和  DistributedLockClient 其作用  负责创建锁租约，提供模板执行入口 不同
  * <p>它不是锁定义本身，而是某次加锁成功后返回给业务方的持锁证明。业务方后续解锁、续期、失锁检查，
  * 都应该围绕本对象完成。</p>
  *
@@ -25,19 +25,17 @@ public interface LockHandle extends AutoCloseable {
     /**
      * 业务锁名称。
      *
-     * <p>这是业务方传入的逻辑名称，例如 {@code settle:batch:20260708}。</p>
-     *
-     * @return 业务锁名称。
+     * @return 业务方传入的逻辑名称，例如 {@code settle:batch:20260708}。
      */
     String lockName();
 
     /**
-     * 底层存储使用的真实锁 key。
+     * 底层 Provider 使用的真实锁 key 或路径。
      *
-     * <p>通常由 namespace、provider 前缀、lockName 归一化后生成。例如 Redis 中可能是
-     * {@code iron:lock:default:settle:batch:20260708}。</p>
+     * <p>Redis Provider 中可能是 Redis key；ZK Provider 中可能是 ZNode path；Etcd Provider 中可能是 KV key。
+     * API 层不要求业务理解该字段，主要用于日志、排查和指标。</p>
      *
-     * @return 底层锁 key。
+     * @return Provider 真实锁标识。
      */
     String lockKey();
 
@@ -122,7 +120,7 @@ public interface LockHandle extends AutoCloseable {
      *
      * @return 当前时刻仍持有锁返回 {@code true}。
      */
-    boolean isHeld();
+    boolean checkHeld();
 
     /**
      * 使用原 leaseTime 安全续期。

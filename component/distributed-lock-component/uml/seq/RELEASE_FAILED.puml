@@ -1,0 +1,34 @@
+@startuml
+title Distributed Lock Release Failed Flow
+
+participant "DistributedLockClient" as Client
+participant "LockCallback" as Callback
+participant "LockHandle" as Handle
+participant "RedisLockProvider" as Provider
+participant "Redis" as Redis
+
+Client ->> Callback: doWithLock(handle)
+Callback -->> Client: success
+
+Client ->> Handle: unlock()
+Handle ->> Handle: markReleasedOnce()
+Handle ->> Provider: release(request)
+Provider ->> Redis: EVAL release.lua
+
+alt key not found
+    Redis -->> Provider: -1
+    Provider -->> Handle: NOT_FOUND
+    Handle ->> Handle: markLostOnce()
+    Client ->> Client: record RELEASE_FAILED or event only
+else owner not matched
+    Redis -->> Provider: 0
+    Provider -->> Handle: NOT_OWNER
+    Handle ->> Handle: markLostOnce()
+    Client ->> Client: record LOCK_LOST / RELEASE_FAILED
+else provider error
+    Redis -->> Provider: error
+    Provider -->> Handle: PROVIDER_ERROR
+    Client ->> Client: record RELEASE_FAILED
+end
+
+@enduml

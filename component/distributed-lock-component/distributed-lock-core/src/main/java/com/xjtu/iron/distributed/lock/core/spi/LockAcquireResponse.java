@@ -1,38 +1,25 @@
 package com.xjtu.iron.distributed.lock.core.spi;
 
 import java.time.Duration;
-import java.util.Objects;
 
 /**
  * Provider 加锁响应。
  */
 public final class LockAcquireResponse {
 
-    /**
-     * 是否成功获取锁。
-     */
+    /** 是否加锁成功。 */
     private final boolean acquired;
 
-    /**
-     * 加锁成功后的锁租约。
-     */
+    /** 加锁成功后的租约。 */
     private final LockLease lease;
 
-    /**
-     * 加锁失败时底层锁剩余 TTL。
-     *
-     * <p>Redis Provider 可从 PTTL 获取。无法获取时为空。</p>
-     */
+    /** 加锁失败时底层锁剩余 TTL，Provider 不支持时为空。 */
     private final Duration remainingTtl;
 
-    /**
-     * Provider 异常。
-     */
+    /** Provider 异常。 */
     private final Throwable error;
 
-    /**
-     * Provider 额外消息。
-     */
+    /** Provider 额外消息。 */
     private final String message;
 
     private LockAcquireResponse(Builder builder) {
@@ -51,7 +38,7 @@ public final class LockAcquireResponse {
     }
 
     public static LockAcquireResponse acquired(LockLease lease) {
-        return builder().acquired(true).lease(Objects.requireNonNull(lease, "lease must not be null")).build();
+        return builder().acquired(true).lease(lease).build();
     }
 
     public static LockAcquireResponse notAcquired(Duration remainingTtl) {
@@ -59,7 +46,7 @@ public final class LockAcquireResponse {
     }
 
     public static LockAcquireResponse failed(Throwable error) {
-        return builder().acquired(false).error(error).build();
+        return builder().acquired(false).error(error).message(error == null ? null : error.getMessage()).build();
     }
 
     public boolean isAcquired() {
@@ -86,9 +73,7 @@ public final class LockAcquireResponse {
         return error != null;
     }
 
-    /**
-     * LockAcquireResponse 构造器。
-     */
+    /** LockAcquireResponse 构造器。 */
     public static final class Builder {
 
         private boolean acquired;
