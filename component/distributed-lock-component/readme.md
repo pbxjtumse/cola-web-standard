@@ -62,3 +62,63 @@ status = SUCCESS
 acquired = true
 记录 LOCK_LOST / RELEASE_FAILED 事件
 因为 NOT_FOUND / NOT_OWNER 很可能只是锁已过期，不一定代表业务失败。真正业务正确性靠 fencing token。
+
+
+Client 负责拿锁和模板执行；Handle 负责本次租约生命周期；Provider 负责底层原子操作；Waiter 负责等待；Watchdog 负责续期；FencingTokenProvider 负责生成业务写入版本号
+
+
+Acquire 阶段 发生的事情
+
+| Provider 结果        | API status     | stage   | acquired |
+| ------------------ | -------------- | ------- | -------- |
+| ACQUIRED           | ACQUIRED       | ACQUIRE | true     |
+| NOT_ACQUIRED，且不再等待 | NOT_ACQUIRED   | WAIT    | false    |
+| PROVIDER_ERROR     | PROVIDER_ERROR | ACQUIRE | false    |
+
+Renew 阶段 
+
+| Renew 结果       | API status     | stage | runtime                  |
+| -------------- | -------------- | ----- | ------------------------ |
+| RENEWED        | 不改变当前主流程状态     | RENEW | HELD                     |
+| NOT_FOUND      | LOCK_LOST      | RENEW | LOST                     |
+| NOT_OWNER      | LOCK_LOST      | RENEW | LOST                     |
+| PROVIDER_ERROR | PROVIDER_ERROR | RENEW | UNKNOWN / HELD_UNCERTAIN |
+这里要注意： NOT_FOUND / NOT_OWNER 是确定性失锁。 PROVIDER_ERROR 是不确定性异常。
+Redis 超时不一定代表锁没了，只代表这次续期操作失败了。所以不能直接等价成 LOCK_LOST。更严谨是 续期返回 NOT_FOUND / NOT_OWNER -> LOCK_LOST
+续期发生 Redis 异常 -> PROVIDER_ERROR，stage=RENEW
+
+Release 阶段
+
+| Release 结果     | API status               | stage   | runtime         |
+| -------------- | ------------------------ | ------- | --------------- |
+| RELEASED       | SUCCESS 或 ACQUIRED 后释放成功 | RELEASE | RELEASED        |
+| NOT_FOUND      | LOCK_LOST 或 SUCCESS+事件   | RELEASE | LOST            |
+| NOT_OWNER      | LOCK_LOST 或 SUCCESS+事件   | RELEASE | LOST            |
+| PROVIDER_ERROR | RELEASE_FAILED           | RELEASE | RELEASE_UNKNOWN |
+
+
+
+
+| 图中节点               | 类型                                    | 是否进入代码 | 说明                       |
+| ------------------ | ------------------------------------- | -----: | ------------------------ |
+| `INIT`             | 文档流程节点                                |      否 | 表示流程开始                   |
+| `VALIDATING`       | 文档流程节点                                |      否 | 校验 lockName/options      |
+| `INVALID_OPTIONS`  | `LockStatus`                          |      是 | 参数非法最终结果                 |
+| `PREPARE_REQUEST`  | 文档流程节点                                |      否 | 生成 ownerToken、组装 request |
+| `ACQUIRING`        | 文档流程节点                                |      否 | 正在尝试加锁                   |
+| `ACQUIRED`         | `LockStatus` / `LockEventType`        |      是 | tryLock 成功               |
+| `WAITING`          | 文档流程节点                                |      否 | 正在退避等待                   |
+| `NOT_ACQUIRED`     | `LockStatus`                          |      是 | 正常竞争失败                   |
+| `EXECUTING`        | 文档流程节点                                |      否 | 正在执行业务 callback          |
+| `SUCCESS`          | `LockStatus`                          |      是 | execute 成功               |
+| `EXECUTION_FAILED` | `LockStatus` / `LockEventType`        |      是 | 业务执行失败                   |
+| `FENCING_REJECTED` | `LockStatus` / `LockEventType`        |      是 | fencing 被业务拒绝            |
+| `RENEWED`          | `LockRenewStatus`                     |      是 | Provider 续期成功            |
+| `NOT_FOUND`        | ProviderStatus                        |      是 | key 不存在                  |
+| `NOT_OWNER`        | ProviderStatus                        |      是 | ownerToken 不匹配           |
+| `LOCK_LOST`        | `LockStatus` / `LockEventType`        |      是 | 锁已丢失                     |
+| `RELEASING`        | 文档流程节点                                |      否 | 正在释放锁                    |
+| `RELEASED`         | `LockReleaseStatus` / `LockEventType` |      是 | Provider 释放成功            |
+| `RELEASE_FAILED`   | `LockStatus` / `LockEventType`        |      是 | 释放失败                     |
+| `STOP_WATCHDOG`    | 文档流程节点                                |      否 | 停止续期任务                   |
+

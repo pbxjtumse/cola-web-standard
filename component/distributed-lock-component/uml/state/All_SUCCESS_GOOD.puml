@@ -1,0 +1,55 @@
+@startuml
+title DistributedLock execute 状态图 - 标记代码状态与文档节点
+
+[*] --> INIT
+INIT : [DOC: FlowNode]\n流程开始
+
+INIT --> VALIDATING
+VALIDATING : [DOC: FlowNode]\n校验 lockName/options
+
+VALIDATING --> INVALID_OPTIONS : 参数非法
+INVALID_OPTIONS : [CODE: LockStatus]\nstatus=INVALID_OPTIONS\nstage=VALIDATE
+
+VALIDATING --> PREPARE_REQUEST : 参数合法
+PREPARE_REQUEST : [DOC: FlowNode]\n生成 ownerToken\n组装 LockAcquireRequest
+
+PREPARE_REQUEST --> ACQUIRING
+ACQUIRING : [DOC: FlowNode]\n调用 LockProvider.acquire
+
+ACQUIRING --> ACQUIRED : acquire success
+ACQUIRED : [CODE: LockStatus]\nstatus=ACQUIRED\nstage=ACQUIRE\nacquired=true
+
+ACQUIRING --> WAITING : lock held and waitTime > 0
+WAITING : [DOC: FlowNode]\nBACKOFF + jitter
+
+WAITING --> ACQUIRING : retry
+WAITING --> NOT_ACQUIRED : wait timeout
+NOT_ACQUIRED : [CODE: LockStatus]\nstatus=NOT_ACQUIRED\nstage=WAIT\nacquired=false
+
+ACQUIRING --> PROVIDER_ERROR : Redis/Lua error
+PROVIDER_ERROR : [CODE: LockStatus]\nstatus=PROVIDER_ERROR\nstage=ACQUIRE
+
+ACQUIRED --> EXECUTING
+EXECUTING : [DOC: FlowNode]\n执行 LockCallback
+
+EXECUTING --> SUCCESS : callback success + release success
+SUCCESS : [CODE: LockStatus]\nstatus=SUCCESS\nstage=EXECUTE\nacquired=true
+
+EXECUTING --> EXECUTION_FAILED : callback throws
+EXECUTION_FAILED : [CODE: LockStatus]\nstatus=EXECUTION_FAILED\nstage=EXECUTE\nacquired=true
+
+EXECUTING --> FENCING_REJECTED : DB rejects fencing token
+FENCING_REJECTED : [CODE: LockStatus]\nstatus=FENCING_REJECTED\nstage=FENCING\nacquired=true
+
+EXECUTING --> LOCK_LOST : assertHeld/checkHeld fails
+LOCK_LOST : [CODE: LockStatus]\nstatus=LOCK_LOST\nstage=CHECK or RENEW or RELEASE\nacquired=true
+
+SUCCESS --> [*]
+NOT_ACQUIRED --> [*]
+INVALID_OPTIONS --> [*]
+PROVIDER_ERROR --> [*]
+EXECUTION_FAILED --> [*]
+FENCING_REJECTED --> [*]
+LOCK_LOST --> [*]
+
+@enduml

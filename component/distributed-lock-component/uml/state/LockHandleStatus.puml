@@ -1,0 +1,36 @@
+@startuml
+title LockHandle 租约生命周期状态机
+
+[*] --> HELD : LockProvider.acquire success\ncreate LockHandle
+
+HELD --> HELD : checkHeld success
+HELD --> HELD : renew success
+HELD --> RELEASED : unlock success\nmarkReleasedOnce=true
+
+HELD --> LOST : renew NOT_FOUND\nmarkLostOnce=true
+HELD --> LOST : renew NOT_OWNER\nmarkLostOnce=true
+HELD --> LOST : checkHeld false\nmarkLostOnce=true
+HELD --> LOST : release NOT_FOUND/NOT_OWNER\nmarkLostOnce=true
+
+HELD --> PROVIDER_ERROR_STATE : renew provider error
+HELD --> PROVIDER_ERROR_STATE : check provider error
+HELD --> PROVIDER_ERROR_STATE : release provider error
+
+LOST --> LOST : checkHeld false
+LOST --> LOST : renew rejected/no-op
+LOST --> RELEASED_AFTER_LOST : unlock called\nmarkReleasedOnce=true\nprovider release may no-op
+
+RELEASED --> RELEASED : duplicate unlock\ncompareAndSet(false,true) fails\nno-op
+RELEASED --> RELEASED : checkHeld returns false
+RELEASED --> RELEASED : renew returns false
+
+PROVIDER_ERROR_STATE --> HELD : later checkHeld success\noptional
+PROVIDER_ERROR_STATE --> LOST : later checkHeld false
+PROVIDER_ERROR_STATE --> RELEASED : unlock success
+
+RELEASED_AFTER_LOST --> RELEASED
+
+RELEASED --> [*]
+LOST --> [*]
+
+@enduml

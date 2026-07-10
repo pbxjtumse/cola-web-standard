@@ -1,0 +1,154 @@
+@startuml
+title DistributedLock execute 详细状态图 - CODE/DOC 标记版
+
+legend right
+  [DOC: FlowNode]     只用于说明流程，不进入代码枚举
+  [CODE: LockStatus]  代码中的最终状态
+  [CODE: LockStage]   代码中的阶段字段
+  [CODE: Provider]    Provider 返回的底层结果
+  [CODE: RuntimeFlag] LockRuntimeState 中的 lost/released
+end legend
+
+[*] --> INIT
+INIT : [DOC: FlowNode]\n流程开始
+
+INIT --> VALIDATING : execute(lockName, options)
+VALIDATING : [DOC: FlowNode]\n校验 lockName / LockOptions
+
+VALIDATING --> INVALID_OPTIONS : 参数非法
+INVALID_OPTIONS : [CODE: LockStatus]\nstatus=INVALID_OPTIONS\nstage=VALIDATE\nacquired=false
+
+VALIDATING --> PREPARE_REQUEST : 参数合法
+PREPARE_REQUEST : [DOC: FlowNode]\n生成 ownerToken\n选择 Provider\n构造 LockAcquireRequest
+
+PREPARE_REQUEST --> ACQUIRING
+ACQUIRING : [DOC: FlowNode]\n调用 LockProvider.acquire
+
+ACQUIRING --> ACQUIRED : [CODE: Provider]\nAcquireStatus=ACQUIRED
+ACQUIRED : [CODE: LockStatus]\nstatus=ACQUIRED\nstage=ACQUIRE\nacquired=true
+
+ACQUIRING --> WAITING : [CODE: Provider]\nAcquireStatus=NOT_ACQUIRED\nwaitTime > 0
+WAITING : [DOC: FlowNode]\nBACKOFF + jitter\n等待后重试
+
+ACQUIRING --> NOT_ACQUIRED : [CODE: Provider]\nAcquireStatus=NOT_ACQUIRED\nwaitTime = 0
+NOT_ACQUIRED : [CODE: LockStatus]\nstatus=NOT_ACQUIRED\nstage=WAIT\nacquired=false
+
+ACQUIRING --> PROVIDER_ERROR_ACQUIRE : [CODE: Provider]\nAcquireStatus=PROVIDER_ERROR
+PROVIDER_ERROR_ACQUIRE : [CODE: LockStatus]\nstatus=PROVIDER_ERROR\nstage=ACQUIRE\nacquired=false
+
+WAITING --> ACQUIRING : 未超时，重试
+WAITING --> NOT_ACQUIRED : waitTime 超时\nstatus=NOT_ACQUIRED\nstage=WAIT
+WAITING --> PROVIDER_ERROR_ACQUIRE : 等待重试时 Provider 异常\nstatus=PROVIDER_ERROR\nstage=ACQUIRE
+
+ACQUIRED --> CREATE_HANDLE
+CREATE_HANDLE : [DOC: FlowNode]\n创建 LockLease\n创建 LockRuntimeState\n创建 LockHandle
+
+CREATE_HANDLE --> START_WATCHDOG : autoRenew=true
+START_WATCHDOG : [DOC: FlowNode]\n注册 watchdog 续期任务
+
+CREATE_HANDLE --> EXECUTING : autoRenew=false
+START_WATCHDOG --> EXECUTING
+
+EXECUTING : [DOC: FlowNode]\n执行 LockCallback / LockRunnable
+
+state EXECUTING {
+    [*] --> HELD_DURING_EXECUTION
+    HELD_DURING_EXECUTION : [CODE: RuntimeFlag]\nlost=false\nreleased=false
+
+    HELD_DURING_EXECUTION --> HELD_DURING_EXECUTION : [CODE: Provider]\nLockRenewStatus=RENEWED\nstage=RENEW
+
+    HELD_DURING_EXECUTION --> LOST_BY_RENEW_NOT_FOUND : [CODE: Provider]\nLockRenewStatus=NOT_FOUND
+    LOST_BY_RENEW_NOT_FOUND : [CODE: RuntimeFlag]\nmarkLostOnce()\nstatus=LOCK_LOST\nstage=RENEW
+
+    HELD_DURING_EXECUTION --> LOST_BY_RENEW_NOT_OWNER : [CODE: Provider]\nLockRenewStatus=NOT_OWNER
+    LOST_BY_RENEW_NOT_OWNER : [CODE: RuntimeFlag]\nmarkLostOnce()\nstatus=LOCK_LOST\nstage=RENEW
+
+    HELD_DURING_EXECUTION --> RENEW_PROVIDER_ERROR : [CODE: Provider]\nLockRenewStatus=PROVIDER_ERROR
+    RENEW_PROVIDER_ERROR : [CODE: LockStatus]\nstatus=PROVIDER_ERROR\nstage=RENEW\n注意：不确定是否失锁
+
+    LOST_BY_RENEW_NOT_FOUND --> [*]
+    LOST_BY_RENEW_NOT_OWNER --> [*]
+    RENEW_PROVIDER_ERROR --> [*]
+}
+
+EXECUTING --> BUSINESS_SUCCESS : callback 正常返回
+BUSINESS_SUCCESS : [DOC: FlowNode]\n业务代码执行完成\n尚未释放锁
+
+EXECUTING --> EXECUTION_FAILED : callback 普通异常
+EXECUTION_FAILED : [CODE: LockStatus]\nstatus=EXECUTION_FAILED\nstage=EXECUTE\nacquired=true
+
+EXECUTING --> FENCING_REJECTED : callback 抛出 FencingTokenRejectedException
+FENCING_REJECTED : [CODE: LockStatus]\nstatus=FENCING_REJECTED\nstage=FENCING\nacquired=true
+
+EXECUTING --> LOCK_LOST_BY_CHECK : callback 抛出 LockLostException
+LOCK_LOST_BY_CHECK : [CODE: LockStatus]\nstatus=LOCK_LOST\nstage=CHECK\nacquired=true
+
+BUSINESS_SUCCESS --> CHECK_RUNTIME_LOST
+CHECK_RUNTIME_LOST : [DOC: FlowNode]\n检查执行期间 watchdog 是否已 markLost
+
+CHECK_RUNTIME_LOST --> LOCK_LOST_BY_RENEW : lost=true\nfailOnLockLost=true
+LOCK_LOST_BY_RENEW : [CODE: LockStatus]\nstatus=LOCK_LOST\nstage=RENEW\nacquired=true
+
+CHECK_RUNTIME_LOST --> RELEASING : lost=false 或 failOnLockLost=false
+
+EXECUTION_FAILED --> RELEASING_AFTER_FAILURE
+FENCING_REJECTED --> RELEASING_AFTER_FAILURE
+LOCK_LOST_BY_CHECK --> RELEASING_AFTER_FAILURE
+LOCK_LOST_BY_RENEW --> RELEASING_AFTER_FAILURE
+
+RELEASING_AFTER_FAILURE : [DOC: FlowNode]\n业务已失败，但仍尝试 finally unlock
+RELEASING_AFTER_FAILURE --> RELEASING
+
+RELEASING : [DOC: FlowNode]\nhandle.unlock()\nmarkReleasedOnce()
+
+RELEASING --> RELEASED : [CODE: Provider]\nLockReleaseStatus=RELEASED
+RELEASED : [CODE: Provider]\n释放成功\nruntime.released=true
+
+RELEASING --> RELEASE_NOT_FOUND : [CODE: Provider]\nLockReleaseStatus=NOT_FOUND
+RELEASE_NOT_FOUND : [CODE: Provider]\nkey 已不存在\nmarkLostOnce()
+
+RELEASING --> RELEASE_NOT_OWNER : [CODE: Provider]\nLockReleaseStatus=NOT_OWNER
+RELEASE_NOT_OWNER : [CODE: Provider]\nownerToken 不匹配\nmarkLostOnce()
+
+RELEASING --> RELEASE_FAILED : [CODE: Provider]\nLockReleaseStatus=PROVIDER_ERROR
+RELEASE_FAILED : [CODE: LockStatus]\nstatus=RELEASE_FAILED\nstage=RELEASE\nacquired=true
+
+RELEASED --> SUCCESS : 原始业务结果为成功
+SUCCESS : [CODE: LockStatus]\nstatus=SUCCESS\nstage=EXECUTE\nacquired=true
+
+RELEASED --> EXECUTION_FAILED_FINAL : 原始业务结果为 EXECUTION_FAILED
+EXECUTION_FAILED_FINAL : [CODE: LockStatus]\nstatus=EXECUTION_FAILED\nstage=EXECUTE\nacquired=true
+
+RELEASED --> FENCING_REJECTED_FINAL : 原始业务结果为 FENCING_REJECTED
+FENCING_REJECTED_FINAL : [CODE: LockStatus]\nstatus=FENCING_REJECTED\nstage=FENCING\nacquired=true
+
+RELEASED --> LOCK_LOST_FINAL : 原始业务结果为 LOCK_LOST
+LOCK_LOST_FINAL : [CODE: LockStatus]\nstatus=LOCK_LOST\nstage=CHECK or RENEW\nacquired=true
+
+RELEASE_NOT_FOUND --> LOCK_LOST_RELEASE_FINAL : failOnLockLost=true
+RELEASE_NOT_OWNER --> LOCK_LOST_RELEASE_FINAL : failOnLockLost=true
+LOCK_LOST_RELEASE_FINAL : [CODE: LockStatus]\nstatus=LOCK_LOST\nstage=RELEASE\nacquired=true
+
+RELEASE_NOT_FOUND --> SUCCESS_WITH_LOST_EVENT : failOnLockLost=false 且原始业务成功
+RELEASE_NOT_OWNER --> SUCCESS_WITH_LOST_EVENT : failOnLockLost=false 且原始业务成功
+SUCCESS_WITH_LOST_EVENT : [CODE: LockStatus]\nstatus=SUCCESS\nstage=EXECUTE\n同时发布 LOCK_LOST 事件
+
+SUCCESS --> STOP_WATCHDOG
+SUCCESS_WITH_LOST_EVENT --> STOP_WATCHDOG
+EXECUTION_FAILED_FINAL --> STOP_WATCHDOG
+FENCING_REJECTED_FINAL --> STOP_WATCHDOG
+LOCK_LOST_FINAL --> STOP_WATCHDOG
+LOCK_LOST_RELEASE_FINAL --> STOP_WATCHDOG
+RELEASE_FAILED --> STOP_WATCHDOG
+EXECUTION_FAILED --> STOP_WATCHDOG
+FENCING_REJECTED --> STOP_WATCHDOG
+LOCK_LOST_BY_CHECK --> STOP_WATCHDOG
+LOCK_LOST_BY_RENEW --> STOP_WATCHDOG
+PROVIDER_ERROR_ACQUIRE --> [*]
+NOT_ACQUIRED --> [*]
+INVALID_OPTIONS --> [*]
+
+STOP_WATCHDOG : [DOC: FlowNode]\n停止 watchdog\n清理运行态
+STOP_WATCHDOG --> [*]
+
+@enduml

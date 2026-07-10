@@ -1,63 +1,149 @@
 package com.xjtu.iron.distributed.lock.api;
 
 import java.time.Duration;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalLong;
 
 /**
  * 分布式锁操作结果。
  *
- * <p>该对象同时用于 tryLock 和 execute 两类场景。需要特别区分两个概念：</p>
+ * <p>
+ * LockResult 是 tryLock / execute 等 API 返回给业务方的统一结果对象。
+ * 它同时表达三层含义：
+ * </p>
+ *
  * <ul>
- *     <li>{@code status}：本次操作的最终状态，例如 SUCCESS、NOT_ACQUIRED、EXECUTION_FAILED。</li>
- *     <li>{@code acquired}：本次操作是否曾经成功获取过锁。</li>
+ *     <li>status：最终结果是什么，例如 SUCCESS、NOT_ACQUIRED、LOCK_LOST。</li>
+ *     <li>stage：这个结果发生在哪个阶段，例如 ACQUIRE、RENEW、RELEASE。</li>
+ *     <li>acquired：本次操作是否曾经成功获取过锁。</li>
  * </ul>
  *
- * <p>例如 execute 场景下，业务执行失败时 status 是 EXECUTION_FAILED，但 acquired 仍然应该是 true，
- * 因为模板确实拿到过锁。</p>
+ * <p>
+ * 注意：status 和 acquired 不能混为一谈。
+ * 例如 execute 业务执行失败时，status = EXECUTION_FAILED，但 acquired = true，
+ * 因为它确实曾经拿到过锁。
+ * </p>
  *
- * @param <T> 业务返回值类型。
+ * @param <T> 结果值类型
  */
 public final class LockResult<T> {
 
-    /** 最终状态。 */
+    /**
+     * 操作最终状态。
+     *
+     * <p>
+     * 表达这次 tryLock / execute 最终是什么结果。
+     * </p>
+     */
     private final LockStatus status;
 
-    /** 是否曾经成功获取锁。 */
+    /**
+     * 决定最终结果的生命周期阶段。
+     *
+     * <p>
+     * 例如：
+     * </p>
+     *
+     * <ul>
+     *     <li>加锁时 Redis 异常：status = PROVIDER_ERROR，stage = ACQUIRE。</li>
+     *     <li>续期时发现 owner 不匹配：status = LOCK_LOST，stage = RENEW。</li>
+     *     <li>释放时 Redis 异常：status = RELEASE_FAILED，stage = RELEASE。</li>
+     * </ul>
+     */
+    private final LockStage stage;
+
+    /**
+     * 本次操作是否曾经成功获取过锁。
+     *
+     * <p>
+     * acquired = true 不代表最终成功，只代表曾经拿到过锁。
+     * 例如业务执行失败、释放失败、fencing 被拒绝时，acquired 仍然可能是 true。
+     * </p>
+     */
     private final boolean acquired;
 
-    /** 业务返回值。 */
+    /**
+     * execute 成功时的业务返回值。
+     *
+     * <p>
+     * tryLock 场景通常为空。
+     * execute 业务返回 null 时也为空。
+     * </p>
+     */
     private final T value;
 
-    /** 加锁成功后生成的锁句柄。 */
+    /**
+     * tryLock 成功时返回的锁句柄。
+     *
+     * <p>
+     * execute 场景下通常也可以保留 handle，方便排查 ownerToken / fencingToken。
+     * 不过业务正常情况下应通过 callback 入参使用 handle。
+     * </p>
+     */
     private final LockHandle handle;
 
-    /** 异常信息。 */
+    /**
+     * 失败异常。
+     *
+     * <p>
+     * NOT_ACQUIRED 这类正常竞争失败可以没有 error。
+     * PROVIDER_ERROR、EXECUTION_FAILED、RELEASE_FAILED 等通常应包含 error。
+     * </p>
+     */
     private final Throwable error;
 
-    /** 业务锁名称。 */
+    /**
+     * 业务锁名称。
+     */
     private final String lockName;
 
-    /** Provider 真实锁 key 或路径。 */
+    /**
+     * 底层 Provider 实际使用的锁 key / path。
+     *
+     * <p>
+     * Redis Provider 中一般是 Redis key。
+     * ZK Provider 中可能是 ZK path。
+     * Etcd Provider 中可能是 etcd key。
+     * </p>
+     */
     private final String lockKey;
 
-    /** 本次锁租约 ownerToken。 */
+    /**
+     * 本次锁租约的 owner token。
+     *
+     * <p>
+     * ownerToken 用于证明锁归属，释放和续期时必须校验它。
+     * </p>
+     */
     private final String ownerToken;
 
-    /** 本次锁租约 fencingToken。 */
+    /**
+     * fencing token。
+     *
+     * <p>
+     * fencingToken 是业务资源写入版本号，用于防止旧 owner 恢复后覆盖新 owner 的结果。
+     * 没有启用 fencing 时为空。
+     * </p>
+     */
     private final Long fencingToken;
 
-    /** 获取锁等待耗时。 */
+    /**
+     * 获取锁等待耗时。
+     */
     private final Duration waitDuration;
 
-    /** 持锁耗时。 */
+    /**
+     * 持锁耗时。
+     *
+     * <p>
+     * 从加锁成功到释放完成、业务失败、锁丢失之间的耗时。
+     * </p>
+     */
     private final Duration holdDuration;
 
-    /** 附加消息。 */
-    private final String message;
-
     private LockResult(Builder<T> builder) {
-        this.status = builder.status;
+        this.status = Objects.requireNonNull(builder.status, "status must not be null");
+        this.stage = builder.stage;
         this.acquired = builder.acquired;
         this.value = builder.value;
         this.handle = builder.handle;
@@ -68,10 +154,6 @@ public final class LockResult<T> {
         this.fencingToken = builder.fencingToken;
         this.waitDuration = builder.waitDuration;
         this.holdDuration = builder.holdDuration;
-        this.message = builder.message;
-        if (status == null) {
-            throw new IllegalArgumentException("status must not be null");
-        }
     }
 
     public static <T> Builder<T> builder() {
@@ -79,63 +161,99 @@ public final class LockResult<T> {
     }
 
     public static LockResult<LockHandle> acquired(LockHandle handle, Duration waitDuration) {
+        Objects.requireNonNull(handle, "handle must not be null");
+
         return LockResult.<LockHandle>builder()
                 .status(LockStatus.ACQUIRED)
+                .stage(LockStage.ACQUIRE)
                 .acquired(true)
                 .value(handle)
                 .handle(handle)
-                .lockName(handle == null ? null : handle.lockName())
-                .lockKey(handle == null ? null : handle.lockKey())
-                .ownerToken(handle == null ? null : handle.ownerToken())
-                .fencingToken(handle == null || handle.fencingToken().isEmpty() ? null : handle.fencingToken().getAsLong())
+                .lockName(handle.lockName())
+                .lockKey(handle.lockKey())
+                .ownerToken(handle.ownerToken())
+                .fencingToken(handle.fencingToken().isPresent() ? handle.fencingToken().getAsLong() : null)
                 .waitDuration(waitDuration)
                 .build();
     }
 
-    public static <T> LockResult<T> success(T value, LockHandle handle, Duration waitDuration, Duration holdDuration) {
-        return LockResult.<T>builder()
+    public static <T> LockResult<T> success(
+            T value,
+            LockHandle handle,
+            Duration waitDuration,
+            Duration holdDuration
+    ) {
+        Builder<T> builder = LockResult.<T>builder()
                 .status(LockStatus.SUCCESS)
+                .stage(LockStage.EXECUTE)
                 .acquired(true)
                 .value(value)
                 .handle(handle)
-                .lockName(handle == null ? null : handle.lockName())
-                .lockKey(handle == null ? null : handle.lockKey())
-                .ownerToken(handle == null ? null : handle.ownerToken())
-                .fencingToken(handle == null || handle.fencingToken().isEmpty() ? null : handle.fencingToken().getAsLong())
                 .waitDuration(waitDuration)
-                .holdDuration(holdDuration)
-                .build();
+                .holdDuration(holdDuration);
+
+        fillHandleFields(builder, handle);
+        return builder.build();
     }
 
-    public static <T> LockResult<T> notAcquired(String lockName, Duration waitDuration) {
+    public static <T> LockResult<T> notAcquired(
+            String lockName,
+            String lockKey,
+            Duration waitDuration
+    ) {
         return LockResult.<T>builder()
                 .status(LockStatus.NOT_ACQUIRED)
+                .stage(LockStage.WAIT)
                 .acquired(false)
                 .lockName(lockName)
+                .lockKey(lockKey)
                 .waitDuration(waitDuration)
                 .build();
     }
 
-    public static <T> LockResult<T> failed(LockStatus status, String lockName, boolean acquired, Throwable error) {
+    public static <T> LockResult<T> failure(
+            LockStatus status,
+            LockStage stage,
+            boolean acquired,
+            Throwable error
+    ) {
         return LockResult.<T>builder()
                 .status(status)
+                .stage(stage)
                 .acquired(acquired)
-                .lockName(lockName)
                 .error(error)
-                .message(error == null ? null : error.getMessage())
                 .build();
     }
 
-    public LockStatus getStatus() {
+    private static <T> void fillHandleFields(Builder<T> builder, LockHandle handle) {
+        if (handle == null) {
+            return;
+        }
+
+        builder.lockName(handle.lockName())
+                .lockKey(handle.lockKey())
+                .ownerToken(handle.ownerToken())
+                .fencingToken(handle.fencingToken().isPresent() ? handle.fencingToken().getAsLong() : null);
+    }
+
+    public LockStatus status() {
         return status;
     }
 
-    public boolean isAcquired() {
+    public LockStage stage() {
+        return stage;
+    }
+
+    public boolean acquired() {
         return acquired;
     }
 
-    public boolean isSuccess() {
+    public boolean success() {
         return status == LockStatus.SUCCESS || status == LockStatus.ACQUIRED;
+    }
+
+    public boolean notAcquired() {
+        return status == LockStatus.NOT_ACQUIRED;
     }
 
     public Optional<T> value() {
@@ -150,59 +268,66 @@ public final class LockResult<T> {
         return Optional.ofNullable(error);
     }
 
-    public String getLockName() {
+    public String lockName() {
         return lockName;
     }
 
-    public String getLockKey() {
+    public String lockKey() {
         return lockKey;
     }
 
-    public String getOwnerToken() {
+    public String ownerToken() {
         return ownerToken;
     }
 
-    public OptionalLong fencingToken() {
-        return fencingToken == null ? OptionalLong.empty() : OptionalLong.of(fencingToken);
+    public Optional<Long> fencingToken() {
+        return Optional.ofNullable(fencingToken);
     }
 
-    public Duration getWaitDuration() {
+    public Duration waitDuration() {
         return waitDuration;
     }
 
-    public Duration getHoldDuration() {
+    public Duration holdDuration() {
         return holdDuration;
     }
 
-    public String getMessage() {
-        return message;
-    }
-
-    /**
-     * LockResult 构造器。
-     *
-     * @param <T> 业务返回值类型。
-     */
     public static final class Builder<T> {
 
         private LockStatus status;
+
+        private LockStage stage;
+
         private boolean acquired;
+
         private T value;
+
         private LockHandle handle;
+
         private Throwable error;
+
         private String lockName;
+
         private String lockKey;
+
         private String ownerToken;
+
         private Long fencingToken;
+
         private Duration waitDuration;
+
         private Duration holdDuration;
-        private String message;
 
         private Builder() {
         }
 
         public Builder<T> status(LockStatus status) {
             this.status = status;
+            return this;
+        }
+
+        public Builder<T> stage(LockStage stage) {
+            this.stage = stage;
             return this;
         }
 
@@ -253,11 +378,6 @@ public final class LockResult<T> {
 
         public Builder<T> holdDuration(Duration holdDuration) {
             this.holdDuration = holdDuration;
-            return this;
-        }
-
-        public Builder<T> message(String message) {
-            this.message = message;
             return this;
         }
 
