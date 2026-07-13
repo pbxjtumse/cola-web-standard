@@ -117,6 +117,160 @@ public final class LockOptions {
     private final String fencingTokenProviderName;
 
     /**
+     * 创建不等待的锁选项。
+     *
+     * <p>
+     * 语义：
+     * 抢锁时只尝试一次，成功则返回 LockHandle，失败则立即返回 NOT_ACQUIRED。
+     * leaseTime 使用默认 30 秒。
+     * </p>
+     *
+     * @return 不等待锁选项
+     */
+    public static LockOptions noWait() {
+        return builder()
+                .waitTime(Duration.ZERO)
+                .waitStrategy(LockWaitStrategy.NO_WAIT)
+                .build();
+    }
+
+    /**
+     * 创建不等待的锁选项，并指定租约时间。
+     *
+     * <p>
+     * 语义：
+     * 抢锁时只尝试一次，成功后锁租约为指定 leaseTime。
+     * </p>
+     *
+     * @param leaseTime 锁租约时间
+     * @return 不等待锁选项
+     */
+    public static LockOptions noWait(Duration leaseTime) {
+        return builder()
+                .waitTime(Duration.ZERO)
+                .waitStrategy(LockWaitStrategy.NO_WAIT)
+                .leaseTime(leaseTime)
+                .build();
+    }
+
+    /**
+     * 创建带等待时间的锁选项。
+     *
+     * <p>
+     * 语义：
+     * 在 waitTime 内使用 BACKOFF 策略重试获取锁。
+     * leaseTime 使用默认 30 秒。
+     * </p>
+     *
+     * @param waitTime 最长等待时间
+     * @return 带等待时间的锁选项
+     */
+    public static LockOptions waitFor(Duration waitTime) {
+        return builder()
+                .waitTime(waitTime)
+                .waitStrategy(LockWaitStrategy.BACKOFF)
+                .build();
+    }
+
+    /**
+     * 创建带等待时间和租约时间的锁选项。
+     *
+     * <p>
+     * 语义：
+     * 在 waitTime 内使用 BACKOFF 策略重试获取锁。
+     * 获取成功后，锁租约为 leaseTime。
+     * </p>
+     *
+     * @param waitTime 最长等待时间
+     * @param leaseTime 锁租约时间
+     * @return 带等待时间和租约时间的锁选项
+     */
+    public static LockOptions waitFor(Duration waitTime, Duration leaseTime) {
+        return builder()
+                .waitTime(waitTime)
+                .waitStrategy(LockWaitStrategy.BACKOFF)
+                .leaseTime(leaseTime)
+                .build();
+    }
+
+    /**
+     * 创建自动续期的锁选项。
+     *
+     * <p>
+     * 语义：
+     * 不等待抢锁，租约使用默认 30 秒。
+     * 获取锁成功后开启 watchdog 自动续期，最长自动续期时间为 maxRenewTime。
+     * renewInterval 默认取 leaseTime / 3。
+     * </p>
+     *
+     * @param maxRenewTime 最大自动续期时间
+     * @return 自动续期锁选项
+     */
+    public static LockOptions autoRenew(Duration maxRenewTime) {
+        return builder()
+                .waitTime(Duration.ZERO)
+                .waitStrategy(LockWaitStrategy.NO_WAIT)
+                .leaseTime(DEFAULT_LEASE_TIME)
+                .autoRenew(maxRenewTime)
+                .build();
+    }
+
+    /**
+     * 创建指定租约时间和最大续期时间的自动续期锁选项。
+     *
+     * <p>
+     * 语义：
+     * 不等待抢锁。
+     * 获取成功后开启 watchdog 自动续期。
+     * 每次续期会把 Redis TTL 重置为 leaseTime，而不是累加 leaseTime。
+     * </p>
+     *
+     * @param leaseTime 锁租约时间
+     * @param maxRenewTime 最大自动续期时间
+     * @return 自动续期锁选项
+     */
+    public static LockOptions autoRenew(Duration leaseTime, Duration maxRenewTime) {
+        return builder()
+                .waitTime(Duration.ZERO)
+                .waitStrategy(LockWaitStrategy.NO_WAIT)
+                .leaseTime(leaseTime)
+                .autoRenew(maxRenewTime)
+                .build();
+    }
+
+    /**
+     * 创建带等待时间、租约时间和自动续期的锁选项。
+     *
+     * <p>
+     * 这是长任务比较常用的配置：
+     * </p>
+     *
+     * <ul>
+     *     <li>先最多等待 waitTime 获取锁；</li>
+     *     <li>获取成功后，锁租约为 leaseTime；</li>
+     *     <li>业务未结束前，watchdog 自动续期；</li>
+     *     <li>最多自动续期 maxRenewTime。</li>
+     * </ul>
+     *
+     * @param waitTime 最长等待时间
+     * @param leaseTime 锁租约时间
+     * @param maxRenewTime 最大自动续期时间
+     * @return 带等待和自动续期的锁选项
+     */
+    public static LockOptions waitForAndAutoRenew(
+            Duration waitTime,
+            Duration leaseTime,
+            Duration maxRenewTime
+    ) {
+        return builder()
+                .waitTime(waitTime)
+                .waitStrategy(LockWaitStrategy.BACKOFF)
+                .leaseTime(leaseTime)
+                .autoRenew(maxRenewTime)
+                .build();
+    }
+
+    /**
      * 退避等待配置。
      *
      * <p>仅当 waitStrategy 为 BACKOFF 或 PUBSUB_BACKOFF 时生效。</p>

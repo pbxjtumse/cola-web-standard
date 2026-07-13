@@ -1,0 +1,53 @@
+@startuml
+title tryLock 手动使用时序图
+
+actor Biz as 业务代码
+participant Client as DistributedLockClient
+participant DefaultClient as DefaultDistributedLockClient
+participant TokenGen as OwnerTokenGenerator
+participant Waiter as LockWaiter
+participant Provider as RedisLockProvider
+database Redis
+participant Handle as DefaultLockHandle
+
+Biz -> Client : tryLock(lockName, options)
+Client -> DefaultClient : tryLock(lockName, options)
+
+DefaultClient -> DefaultClient : validate(lockName, options)
+DefaultClient -> TokenGen : generate(namespace, lockName)
+TokenGen --> DefaultClient : ownerToken
+
+DefaultClient -> Waiter : waitForLock(request, provider)
+Waiter -> Provider : acquire(request)
+Provider -> Redis : EVAL acquire.lua\nSET lockKey ownerToken PX leaseTime
+Redis --> Provider : 1 / 0 / error
+
+alt acquire success
+    Provider --> Waiter : LockAcquireResponse(ACQUIRED, lease)
+    Waiter --> DefaultClient : acquired
+    DefaultClient -> Handle : new DefaultLockHandle(lease, runtimeState)
+    DefaultClient --> Biz : LockResult(status=ACQUIRED,\nstage=ACQUIRE,\nacquired=true,\nhandle)
+else lock held by others
+    Provider --> Waiter : NOT_ACQUIRED
+    Waiter --> DefaultClient : NOT_ACQUIRED
+    DefaultClient --> Biz : LockResult(status=NOT_ACQUIRED,\nstage=WAIT,\nacquired=false)
+else provider error
+    Provider --> Waiter : PROVIDER_ERROR
+    Waiter --> DefaultClient : PROVIDER_ERROR
+    DefaultClient --> Biz : LockResult(status=PROVIDER_ERROR,\nstage=ACQUIRE,\nacquired=false)
+end
+
+== 业务方手动处理 ==
+
+Biz -> Biz : if result.isAcquired()
+Biz -> Biz : doBusiness()
+
+Biz -> Handle : unlock()
+Handle -> Handle : runtimeState.markReleasedOnce()
+Handle -> Provider : release(ownerToken)
+Provider -> Redis : EVAL release.lua\ncompare ownerToken then DEL
+Redis --> Provider : RELEASED / NOT_FOUND / NOT_OWNER / error
+Provider --> Handle : LockReleaseResponse
+Handle --> Biz : true / false
+
+@enduml

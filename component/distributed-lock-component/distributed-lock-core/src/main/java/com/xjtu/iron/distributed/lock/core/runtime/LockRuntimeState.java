@@ -3,7 +3,7 @@ package com.xjtu.iron.distributed.lock.core.runtime;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 锁句柄运行时状态。
+ * 锁句柄LockHandle 运行时状态 【可变状态】。
  *
  * <p>LockLease 是不可变租约数据；lost/released 这类会被业务线程、watchdog 线程、finally 释放逻辑同时访问的状态
  * 放在本对象中。使用 AtomicBoolean 是为了保证状态转换只发生一次。</p>
@@ -34,6 +34,9 @@ public final class LockRuntimeState {
         return lost.compareAndSet(false, true);
     }
 
+    /** 获取 handle 是否已经判定失锁。 */
     public boolean isLost() { return lost.get(); }
+
+    /** 获取 handle 是否已经判定释放锁。 */
     public boolean isReleased() { return released.get(); }
 }

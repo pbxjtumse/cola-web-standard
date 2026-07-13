@@ -7,7 +7,7 @@ import java.util.OptionalLong;
 /**
  * 锁租约数据快照。
  *
- * <p>该对象表示一次成功加锁后，Provider 返回的不可变租约信息。它只描述“锁是谁、什么时候拿到、租约多久、
+ * <p>该对象表示一次成功加锁后，Provider 返回的【不可变】租约信息。它只描述“锁是谁、什么时候拿到、租约多久、
  * 底层 key/path 是什么”，不保存 lost/released 等运行时状态。</p>
  *
  * <p>lost/released 是客户端运行态，后续应放在 DefaultLockHandle 或 LockRuntimeState 中，并使用 AtomicBoolean

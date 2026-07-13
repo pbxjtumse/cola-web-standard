@@ -82,11 +82,9 @@ public interface DistributedLockClient {
     }
 
     /**
-     * execute 是模板 API 在分布式锁保护下执行业务逻辑，并返回业务结果。
+     * execute 是模板 API 在分布式锁保护下执行业务逻辑，并返回业务结果。【建议优先用】
      *
-     * <p>模板流程为：尝试加锁 -> 成功后执行业务 callback -> finally 中安全释放锁 -> 返回执行结果。
-     * 该方法会把 {@link LockHandle} 传入 callback，业务可以从中获取 ownerToken、fencingToken，
-     * 也可以在长流程中调用 {@link LockHandle#assertHeld()} 主动感知是否失锁。</p>
+     * <p>模板流程为：</p>
      *
      * <ol>
      *     <li>参数校验；</li>
@@ -96,8 +94,8 @@ public interface DistributedLockClient {
      *     <li>启动 watchdog；</li>
      *     <li>执行业务 callback；</li>
      *     <li>捕获业务异常；</li>
-     *     <li>捕获 {@link LockLostException}；</li>
-     *     <li>捕获 {@link FencingTokenRejectedException}；</li>
+     *     <li>捕获 {@link com.xjtu.iron.distributed.lock.api.exception.LockLostException}；</li>
+     *     <li>捕获 {@link com.xjtu.iron.distributed.lock.api.exception.FencingTokenRejectedException}；</li>
      *     <li>在 {@code finally} 中执行 {@code unlock}；</li>
      *     <li>停止 watchdog；</li>
      *     <li>生成 {@link LockResult}；</li>
@@ -105,8 +103,13 @@ public interface DistributedLockClient {
      *     <li>记录指标。</li>
      * </ol>
      *
-     * <p>注意：分布式锁只能降低并发竞争，不替代数据库事务、业务幂等、状态机和补偿逻辑。
-     * 对资金、库存、清结算等强正确性场景，业务写入仍应结合 fencing token 和 DB 条件更新。</p>
+     * <p>注意：
+     * <ol>
+     *     <li>可以在长流程中调用 {@link LockHandle#assertHeld()} 主动感知是否失锁。 </li>
+     *     <li>分布式锁只能降低并发竞争，不替代数据库事务、业务幂等、状态机和补偿逻辑。</li>
+     *     <li>对资金、库存、清结算等强正确性场景，业务写入仍应结合 fencing token 和 DB 条件更新</li>
+     * </ol>
+     * </p>
      *
      * @param lockName 业务锁名称。不能为空。
      * @param options  锁选项。不能为空。

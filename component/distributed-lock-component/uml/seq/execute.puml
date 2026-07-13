@@ -1,0 +1,79 @@
+@startuml
+title execute 模板使用时序图
+
+actor Biz as 业务代码
+participant Client as DistributedLockClient
+participant DefaultClient as DefaultDistributedLockClient
+participant TokenGen as OwnerTokenGenerator
+participant Waiter as LockWaiter
+participant Provider as RedisLockProvider
+database Redis
+participant Handle as DefaultLockHandle
+participant Watchdog as LockWatchdog
+participant Callback as LockCallback
+
+Biz -> Client : execute(lockName, options, callback)
+Client -> DefaultClient : execute(lockName, options, callback)
+
+DefaultClient -> DefaultClient : validate(lockName, options)
+
+alt invalid options
+    DefaultClient --> Biz : LockResult(INVALID_OPTIONS,\nstage=VALIDATE,\nacquired=false)
+else valid
+    DefaultClient -> TokenGen : generate(namespace, lockName)
+    TokenGen --> DefaultClient : ownerToken
+
+    DefaultClient -> Waiter : waitForLock(request, provider)
+    Waiter -> Provider : acquire(request)
+    Provider -> Redis : EVAL acquire.lua
+    Redis --> Provider : acquired / notAcquired / error
+
+    alt not acquired
+        Provider --> Waiter : NOT_ACQUIRED
+        Waiter --> DefaultClient : NOT_ACQUIRED
+        DefaultClient --> Biz : LockResult(NOT_ACQUIRED,\nstage=WAIT,\nacquired=false)
+    else provider error
+        Provider --> Waiter : PROVIDER_ERROR
+        Waiter --> DefaultClient : PROVIDER_ERROR
+        DefaultClient --> Biz : LockResult(PROVIDER_ERROR,\nstage=ACQUIRE,\nacquired=false)
+    else acquired
+        Provider --> Waiter : ACQUIRED + LockLease
+        Waiter --> DefaultClient : acquired
+        DefaultClient -> Handle : new DefaultLockHandle(lease, runtimeState)
+
+        alt autoRenew = true
+            DefaultClient -> Watchdog : start(handle, options)
+        end
+
+        DefaultClient -> Callback : doWithLock(handle)
+
+        alt callback success
+            Callback --> DefaultClient : value
+            DefaultClient -> DefaultClient : originalStatus = SUCCESS
+        else FencingTokenRejectedException
+            Callback --> DefaultClient : throw
+            DefaultClient -> DefaultClient : originalStatus = FENCING_REJECTED
+        else LockLostException
+            Callback --> DefaultClient : throw
+            DefaultClient -> DefaultClient : originalStatus = LOCK_LOST
+        else ordinary exception
+            Callback --> DefaultClient : throw
+            DefaultClient -> DefaultClient : originalStatus = EXECUTION_FAILED
+        end
+
+        DefaultClient -> DefaultClient : check runtimeState.lost
+
+        DefaultClient -> Handle : unlock()
+        Handle -> Provider : release(ownerToken)
+        Provider -> Redis : EVAL release.lua
+        Redis --> Provider : RELEASED / NOT_FOUND / NOT_OWNER / error
+        Provider --> Handle : release response
+        Handle --> DefaultClient : release result
+
+        DefaultClient -> Watchdog : stop(handle)
+        DefaultClient -> DefaultClient : merge original result + release result
+        DefaultClient --> Biz : LockResult(finalStatus, stage, acquired=true)
+    end
+end
+
+@enduml
