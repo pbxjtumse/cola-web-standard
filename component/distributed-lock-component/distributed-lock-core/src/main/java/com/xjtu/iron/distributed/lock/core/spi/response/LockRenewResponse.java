@@ -1,4 +1,6 @@
-package com.xjtu.iron.distributed.lock.core.spi;
+package com.xjtu.iron.distributed.lock.core.spi.response;
+
+import com.xjtu.iron.distributed.lock.core.spi.status.LockRenewStatus;
 
 import java.time.Instant;
 

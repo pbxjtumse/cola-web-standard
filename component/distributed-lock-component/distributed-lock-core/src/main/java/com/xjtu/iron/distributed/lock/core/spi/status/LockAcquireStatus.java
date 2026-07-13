@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.core.spi;
+package com.xjtu.iron.distributed.lock.core.spi.status;
 
 /**
  * Provider 加锁结果状态。

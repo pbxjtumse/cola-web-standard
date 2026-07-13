@@ -1,0 +1,41 @@
+@startuml
+!include ../../_common/style.puml
+title RELEASE_FAILED 释放失败路径时序图
+
+actor Biz
+participant DefaultClient as "DefaultDistributedLockClient"
+participant Provider as "LockProvider"
+database Redis
+participant Handle as "DefaultLockHandle"
+participant Callback as "LockCallback"
+participant Event as "LockEventPublisher"
+
+Biz -> DefaultClient : execute(lockName, options, callback)
+DefaultClient -> Provider : acquire(request)
+Provider -> Redis : EVAL acquire.lua
+Redis --> Provider : acquired
+Provider --> DefaultClient : ACQUIRED + LockLease
+DefaultClient -> Handle : create handle
+DefaultClient -> Callback : doWithLock(handle)
+Callback --> DefaultClient : value
+DefaultClient -> Handle : unlock()
+Handle -> Provider : release(request)
+Provider -> Redis : EVAL release.lua
+
+alt provider error
+    Redis --> Provider : error / timeout
+    Provider --> Handle : PROVIDER_ERROR
+    Handle -> Event : publish RELEASE_FAILED(stage=RELEASE)
+    DefaultClient --> Biz : LockResult(RELEASE_FAILED, stage=RELEASE, acquired=true)
+else NOT_FOUND / NOT_OWNER
+    Redis --> Provider : -1 or 0
+    Provider --> Handle : NOT_FOUND / NOT_OWNER
+    Handle -> Event : publish LOCK_LOST(stage=RELEASE)
+    alt failOnLockLost=true
+        DefaultClient --> Biz : LockResult(LOCK_LOST, stage=RELEASE, acquired=true)
+    else failOnLockLost=false
+        DefaultClient --> Biz : LockResult(SUCCESS, stage=EXECUTE, acquired=true) + event
+    end
+end
+
+@enduml

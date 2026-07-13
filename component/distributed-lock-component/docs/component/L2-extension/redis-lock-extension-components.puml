@@ -1,0 +1,60 @@
+@startuml
+!include ../../_common/style.puml
+
+title Redis Provider 扩展组件关系图
+
+left to right direction
+
+package "Provider SPI" as spi {
+  interface LockProvider
+  class LockProviderCapability
+}
+
+package "Redis Provider\n(distributed-lock-provider-redis)" as redis_provider {
+
+  class RedisLockProvider <<phase1>>
+  class RedisLockKeyBuilder
+  interface RedisLockScriptExecutor
+  class RedisLockScripts
+
+  class "acquire.lua" as acquire_lua <<Lua>>
+  class "release.lua" as release_lua <<Lua>>
+  class "renew.lua" as renew_lua <<Lua>>
+  class "check.lua" as check_lua <<Lua>>
+
+  class Redis <<External>>
+}
+
+LockProvider <|.. RedisLockProvider
+
+RedisLockProvider --> LockProviderCapability : capability
+RedisLockProvider --> RedisLockKeyBuilder : build keys
+RedisLockProvider --> RedisLockScriptExecutor : execute scripts
+RedisLockProvider --> RedisLockScripts : script paths
+
+RedisLockScriptExecutor --> Redis : EVAL / EVALSHA
+
+RedisLockScripts --> acquire_lua
+RedisLockScripts --> release_lua
+RedisLockScripts --> renew_lua
+RedisLockScripts --> check_lua
+
+note right of RedisLockKeyBuilder
+  Redis Cluster 使用 hash tag：
+
+  iron:lock:{namespace:lockName}:lock
+  iron:lock:{namespace:lockName}:fence
+end note
+
+note right of RedisLockProvider
+  一期能力：
+  - ownerToken
+  - Lua acquire
+  - Lua release
+  - Lua renew
+  - Lua check
+
+  fencing token 二期启用。
+end note
+
+@enduml

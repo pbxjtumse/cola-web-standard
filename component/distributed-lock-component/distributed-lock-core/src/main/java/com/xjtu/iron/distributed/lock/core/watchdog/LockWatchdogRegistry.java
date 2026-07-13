@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.core.watchdog;
 
-import com.xjtu.iron.distributed.lock.core.spi.LockLease;
+import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
 
 /**
  * watchdog 注册表。

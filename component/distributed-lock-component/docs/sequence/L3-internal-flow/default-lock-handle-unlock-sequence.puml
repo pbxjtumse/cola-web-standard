@@ -1,0 +1,38 @@
+@startuml
+!include ../../_common/style.puml
+title DefaultLockHandle.unlock() 内部时序图
+
+actor Caller
+participant Handle as "DefaultLockHandle"
+participant Runtime as "LockRuntimeState"
+participant Provider as "LockProvider"
+database Redis
+participant Event as "LockEventPublisher"
+
+Caller -> Handle : unlock()
+Handle -> Runtime : markReleasedOnce()\ncompareAndSet(false, true)
+alt already released
+    Runtime --> Handle : false
+    Handle --> Caller : false / no-op
+else first release
+    Runtime --> Handle : true
+    Handle -> Provider : release(request)
+    Provider -> Redis : EVAL release.lua
+    Redis --> Provider : 1 / 0 / -1 / error
+    alt RELEASED
+        Provider --> Handle : RELEASED
+        Handle -> Event : publish RELEASED
+        Handle --> Caller : true
+    else NOT_FOUND or NOT_OWNER
+        Provider --> Handle : NOT_FOUND / NOT_OWNER
+        Handle -> Runtime : markLostOnce()
+        Handle -> Event : publish LOCK_LOST(stage=RELEASE)
+        Handle --> Caller : false
+    else PROVIDER_ERROR
+        Provider --> Handle : PROVIDER_ERROR
+        Handle -> Event : publish RELEASE_FAILED
+        Handle --> Caller : false
+    end
+end
+
+@enduml

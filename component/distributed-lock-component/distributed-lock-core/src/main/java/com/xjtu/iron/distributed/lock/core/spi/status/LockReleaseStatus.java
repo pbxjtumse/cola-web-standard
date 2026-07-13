@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.core.spi;
+package com.xjtu.iron.distributed.lock.core.spi.status;
 
 /**
  * 底层解锁状态。

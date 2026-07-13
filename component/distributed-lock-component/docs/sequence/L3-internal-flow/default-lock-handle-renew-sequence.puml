@@ -1,0 +1,37 @@
+@startuml
+!include ../../_common/style.puml
+title DefaultLockHandle.renew() 内部时序图
+
+actor Caller as "watchdog或业务代码"
+participant Handle as "DefaultLockHandle"
+participant Runtime as "LockRuntimeState"
+participant Provider as "LockProvider"
+database Redis
+participant Event as "LockEventPublisher"
+
+Caller -> Handle : renew()
+Handle -> Runtime : isReleased() / isLost()
+alt already released or lost
+    Runtime --> Handle : true
+    Handle --> Caller : false
+else active
+    Handle -> Provider : renew(request)
+    Provider -> Redis : EVAL renew.lua
+    Redis --> Provider : 1 / 0 / -1 / error
+    alt RENEWED
+        Provider --> Handle : RENEWED
+        Handle -> Event : publish RENEWED
+        Handle --> Caller : true
+    else NOT_FOUND or NOT_OWNER
+        Provider --> Handle : NOT_FOUND / NOT_OWNER
+        Handle -> Runtime : markLostOnce()
+        Handle -> Event : publish LOCK_LOST(stage=RENEW)
+        Handle --> Caller : false
+    else PROVIDER_ERROR
+        Provider --> Handle : PROVIDER_ERROR
+        Handle -> Event : publish PROVIDER_ERROR(stage=RENEW)
+        Handle --> Caller : false
+    end
+end
+
+@enduml

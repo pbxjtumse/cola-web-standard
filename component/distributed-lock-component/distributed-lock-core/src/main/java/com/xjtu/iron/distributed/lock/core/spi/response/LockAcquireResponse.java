@@ -1,6 +1,7 @@
-package com.xjtu.iron.distributed.lock.core.spi;
+package com.xjtu.iron.distributed.lock.core.spi.response;
 
 import com.xjtu.iron.distributed.lock.api.LockStatus;
+import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
 
 import java.time.Duration;
 import java.util.Objects;

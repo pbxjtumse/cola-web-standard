@@ -1,0 +1,132 @@
+@startuml
+!include ../../_common/style.puml
+
+title 分布式锁核心组件关系图
+
+left to right direction
+
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "API 层\n(distributed-lock-api)" as api_layer {
+
+  interface DistributedLockClient {
+    + tryLock(lockName, options)
+    + execute(lockName, options, callback)
+  }
+
+  interface LockHandle {
+    + unlock()
+    + renew()
+    + checkHeld()
+    + assertHeld()
+  }
+
+  class LockOptions
+  class LockResult
+  class LockLease
+}
+
+package "Core 层\n(distributed-lock-core)" as core_layer {
+
+  class DefaultDistributedLockClient
+  class DefaultLockHandle
+
+  class LockRuntimeState {
+    - lost
+    - released
+  }
+
+  interface LockWaiter
+  class NoWaitLockWaiter
+  class BackoffLockWaiter
+
+  interface LockWatchdog
+  class ScheduledLockWatchdog
+
+  class OwnerTokenGenerator
+  interface LockEventPublisher
+  interface LockMetricsRecorder
+}
+
+package "Provider SPI 层" as spi_layer {
+  interface LockProvider
+  class LockProviderCapability
+}
+
+package "Provider 实现层" as impl_layer {
+  class RedisLockProvider <<phase1>>
+  interface FencingTokenProvider <<phase2>>
+  class ZkLockProvider <<phase3>>
+  class EtcdLockProvider <<phase3>>
+}
+
+' 控制包的自然排列顺序
+api_layer -[hidden]right-> core_layer
+core_layer -[hidden]right-> spi_layer
+spi_layer -[hidden]right-> impl_layer
+
+' API 实现关系
+DistributedLockClient <|.. DefaultDistributedLockClient
+LockHandle <|.. DefaultLockHandle
+
+' Core 内部扩展关系
+LockWaiter <|.. NoWaitLockWaiter
+LockWaiter <|.. BackoffLockWaiter
+LockWatchdog <|.. ScheduledLockWatchdog
+
+' Provider 扩展关系
+LockProvider <|.. RedisLockProvider
+LockProvider <|.. ZkLockProvider
+LockProvider <|.. EtcdLockProvider
+
+' Client 主依赖
+DefaultDistributedLockClient --> LockOptions
+DefaultDistributedLockClient --> LockResult
+DefaultDistributedLockClient --> OwnerTokenGenerator
+DefaultDistributedLockClient --> LockWaiter
+DefaultDistributedLockClient --> LockWatchdog
+DefaultDistributedLockClient --> LockProvider
+
+' Handle 主依赖
+DefaultLockHandle --> LockLease
+DefaultLockHandle --> LockRuntimeState
+DefaultLockHandle --> LockProvider
+
+' 事件和指标作为横切能力，用虚线表达
+DefaultDistributedLockClient ..> LockEventPublisher
+DefaultDistributedLockClient ..> LockMetricsRecorder
+DefaultLockHandle ..> LockEventPublisher
+DefaultLockHandle ..> LockMetricsRecorder
+
+' Provider 能力
+RedisLockProvider --> LockProviderCapability
+DefaultDistributedLockClient ..> FencingTokenProvider : phase2 optional
+
+legend right
+  == 图说明 ==
+
+  API 层：
+  业务可见接口和结果模型。
+  DistributedLockClient 是入口；
+  LockHandle 是一次成功加锁后的租约句柄。
+
+  Core 层：
+  负责 tryLock / execute 编排，
+  包括校验、加锁、等待、callback、
+  watchdog、unlock、事件、指标和结果收敛。
+
+  Provider SPI 层：
+  定义底层锁实现的统一扩展点。
+
+  Provider 实现层：
+  RedisLockProvider 是一期实现。
+  FencingTokenProvider 是二期扩展。
+  ZK / Etcd 是三期强协调扩展。
+
+  Redis Provider 细节：
+  见 L2-extension/redis-lock-extension-components.puml。
+endlegend
+
+@enduml

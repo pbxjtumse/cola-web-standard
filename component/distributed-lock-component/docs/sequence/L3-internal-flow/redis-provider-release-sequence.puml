@@ -1,0 +1,31 @@
+@startuml
+!include ../../_common/style.puml
+title RedisLockProvider.release() 内部时序图
+
+participant Handle as "DefaultLockHandle"
+participant Provider as "RedisLockProvider"
+participant Executor as "RedisLockScriptExecutor"
+database Redis
+
+Handle -> Provider : release(request)
+Provider -> Executor : execute release.lua\nKEYS[lockKey]\nARGV[ownerToken]
+Executor -> Redis : EVAL release.lua
+alt owner matched
+    Redis --> Executor : 1
+    Executor --> Provider : RELEASED
+    Provider --> Handle : LockReleaseResponse(RELEASED)
+else key not found
+    Redis --> Executor : -1
+    Executor --> Provider : NOT_FOUND
+    Provider --> Handle : LockReleaseResponse(NOT_FOUND)
+else owner not matched
+    Redis --> Executor : 0
+    Executor --> Provider : NOT_OWNER
+    Provider --> Handle : LockReleaseResponse(NOT_OWNER)
+else redis error
+    Redis --> Executor : error
+    Executor --> Provider : PROVIDER_ERROR
+    Provider --> Handle : LockReleaseResponse(PROVIDER_ERROR)
+end
+
+@enduml

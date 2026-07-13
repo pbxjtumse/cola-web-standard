@@ -1,0 +1,46 @@
+@startuml
+!include ../../_common/style.puml
+title watchdog 自动续期生命周期状态图
+
+[*] --> DECISION
+DECISION --> DISABLED : autoRenew=false
+DECISION --> RUNNING : autoRenew=true
+
+DISABLED : 不启动 watchdog
+DISABLED --> [*]
+
+RUNNING : 定时任务运行中
+RUNNING : 每隔 renewInterval 调用 handle.renew()
+RUNNING --> RUNNING : RENEWED\n续期成功
+RUNNING --> LOST_NOT_FOUND : renew NOT_FOUND
+RUNNING --> LOST_NOT_OWNER : renew NOT_OWNER
+RUNNING --> PROVIDER_ERROR : renew PROVIDER_ERROR
+RUNNING --> MAX_RENEW_EXCEEDED : reached maxRenewTime
+RUNNING --> STOPPED : callback finished\nor handle released
+
+LOST_NOT_FOUND : markLostOnce
+LOST_NOT_FOUND : status=LOCK_LOST
+LOST_NOT_FOUND : stage=RENEW
+LOST_NOT_OWNER : markLostOnce
+LOST_NOT_OWNER : status=LOCK_LOST
+LOST_NOT_OWNER : stage=RENEW
+PROVIDER_ERROR : publish PROVIDER_ERROR
+PROVIDER_ERROR : stage=RENEW
+PROVIDER_ERROR : 不确定是否失锁
+MAX_RENEW_EXCEEDED : markLostOnce
+MAX_RENEW_EXCEEDED : 停止续期
+MAX_RENEW_EXCEEDED : 防止无限续期
+
+LOST_NOT_FOUND --> STOPPED
+LOST_NOT_OWNER --> STOPPED
+PROVIDER_ERROR --> RUNNING : 策略允许继续尝试
+PROVIDER_ERROR --> STOPPED : 策略选择停止
+MAX_RENEW_EXCEEDED --> STOPPED
+STOPPED --> [*]
+
+note right of RUNNING
+  watchdog 是 Java 内部定时续期任务。
+  Redis 是底层锁存储。
+end note
+
+@enduml

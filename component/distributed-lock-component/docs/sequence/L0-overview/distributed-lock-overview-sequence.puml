@@ -1,0 +1,20 @@
+@startuml
+!include ../../_common/style.puml
+title 分布式锁运行总览时序图
+
+actor Biz as "业务代码"
+participant Client as "DistributedLockClient"
+participant Core as "Core"
+participant Provider as "LockProvider"
+database Store as "Redis/ZK/Etcd"
+
+Biz -> Client : execute / tryLock
+Client -> Core : 编排锁流程
+Core -> Provider : acquire / renew / release / check
+Provider -> Store : 底层原子操作
+Store --> Provider : 底层结果
+Provider --> Core : ProviderStatus / Response
+Core --> Client : LockResult / LockHandle
+Client --> Biz : result
+
+@enduml

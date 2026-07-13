@@ -1,0 +1,49 @@
+@startuml
+!include ../../_common/style.puml
+title LOCK_LOST 失锁路径时序图
+
+actor Biz
+participant DefaultClient as "DefaultDistributedLockClient"
+participant Provider as "LockProvider"
+database Redis
+participant Handle as "DefaultLockHandle"
+participant Runtime as "LockRuntimeState"
+participant Watchdog as "LockWatchdog"
+participant Callback as "LockCallback"
+
+Biz -> DefaultClient : execute(lockName, autoRenew=true, callback)
+DefaultClient -> Provider : acquire(request)
+Provider -> Redis : EVAL acquire.lua
+Redis --> Provider : acquired
+Provider --> DefaultClient : ACQUIRED + LockLease
+DefaultClient -> Handle : create handle
+DefaultClient -> Watchdog : start(handle)
+DefaultClient -> Callback : doWithLock(handle)
+
+par watchdog detects lost
+    Watchdog -> Handle : renew()
+    Handle -> Provider : renew(request)
+    Provider -> Redis : EVAL renew.lua
+    Redis --> Provider : 0 or -1
+    Provider --> Handle : NOT_OWNER or NOT_FOUND
+    Handle -> Runtime : markLostOnce()
+else business checks held
+    Callback -> Handle : assertHeld()
+    Handle -> Provider : check(request)
+    Provider -> Redis : EVAL check.lua
+    Redis --> Provider : 0 or -1
+    Provider --> Handle : NOT_OWNER or NOT_FOUND
+    Handle -> Runtime : markLostOnce()
+    Handle --> Callback : throw LockLostException
+end
+
+Callback --> DefaultClient : LockLostException or normal with runtime lost
+DefaultClient -> Handle : unlock()
+Handle -> Provider : release(request)
+Provider -> Redis : EVAL release.lua
+Redis --> Provider : NOT_FOUND / NOT_OWNER
+Provider --> Handle : release lost
+DefaultClient -> Watchdog : stop(handle)
+DefaultClient --> Biz : LockResult(LOCK_LOST, stage=CHECK or RENEW, acquired=true)
+
+@enduml

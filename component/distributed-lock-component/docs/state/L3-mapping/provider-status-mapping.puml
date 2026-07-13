@@ -1,0 +1,46 @@
+@startuml
+title ProviderStatus 到 Core 状态映射图
+
+legend right
+  [CODE: Provider]     Provider 返回的底层事实
+  [CODE: LockStatus]   API 最终状态
+  [CODE: LockStage]    API 阶段字段
+  [CODE: RuntimeFlag]  LockRuntimeState 中的 lost/released
+endlegend
+
+[*] --> PROVIDER_RESULT
+
+PROVIDER_RESULT --> ACQUIRE_MAPPING : acquire response
+ACQUIRE_MAPPING : ACQUIRED -> status=ACQUIRED, stage=ACQUIRE
+ACQUIRE_MAPPING : NOT_ACQUIRED -> status=NOT_ACQUIRED, stage=WAIT
+ACQUIRE_MAPPING : PROVIDER_ERROR -> status=PROVIDER_ERROR, stage=ACQUIRE
+
+PROVIDER_RESULT --> RENEW_MAPPING : renew response
+RENEW_MAPPING : RENEWED -> keep running
+RENEW_MAPPING : NOT_FOUND -> status=LOCK_LOST, stage=RENEW, markLostOnce
+RENEW_MAPPING : NOT_OWNER -> status=LOCK_LOST, stage=RENEW, markLostOnce
+RENEW_MAPPING : PROVIDER_ERROR -> status=PROVIDER_ERROR, stage=RENEW
+
+PROVIDER_RESULT --> RELEASE_MAPPING : release response
+RELEASE_MAPPING : RELEASED -> released=true
+RELEASE_MAPPING : NOT_FOUND -> LOCK_LOST event, stage=RELEASE, markLostOnce
+RELEASE_MAPPING : NOT_OWNER -> LOCK_LOST event, stage=RELEASE, markLostOnce
+RELEASE_MAPPING : PROVIDER_ERROR -> status=RELEASE_FAILED, stage=RELEASE
+
+PROVIDER_RESULT --> CHECK_MAPPING : check response
+CHECK_MAPPING : HELD -> checkHeld=true
+CHECK_MAPPING : NOT_FOUND -> status=LOCK_LOST, stage=CHECK, markLostOnce
+CHECK_MAPPING : NOT_OWNER -> status=LOCK_LOST, stage=CHECK, markLostOnce
+CHECK_MAPPING : PROVIDER_ERROR -> status=PROVIDER_ERROR, stage=CHECK
+
+ACQUIRE_MAPPING --> [*]
+RENEW_MAPPING --> [*]
+RELEASE_MAPPING --> [*]
+CHECK_MAPPING --> [*]
+
+note bottom of PROVIDER_RESULT
+  ProviderStatus 是底层事实。
+  Core 层负责转换为 LockStatus + LockStage + RuntimeFlag。
+end note
+
+@enduml

@@ -1,0 +1,74 @@
+@startuml
+title 分布式锁一期组件角色关系图
+
+interface DistributedLockClient
+interface LockHandle
+class DefaultDistributedLockClient
+class DefaultLockHandle
+class LockOptions
+class LockResult
+class LockLease
+class LockRuntimeState
+interface LockProvider
+class RedisLockProvider
+interface LockWaiter
+class NoWaitLockWaiter
+class BackoffLockWaiter
+interface LockWatchdog
+class ScheduledLockWatchdog
+class OwnerTokenGenerator
+interface LockEventPublisher
+interface LockMetricsRecorder
+
+DistributedLockClient <|.. DefaultDistributedLockClient
+LockHandle <|.. DefaultLockHandle
+LockProvider <|.. RedisLockProvider
+LockWaiter <|.. NoWaitLockWaiter
+LockWaiter <|.. BackoffLockWaiter
+LockWatchdog <|.. ScheduledLockWatchdog
+
+DefaultDistributedLockClient --> LockOptions
+DefaultDistributedLockClient --> LockResult
+DefaultDistributedLockClient --> OwnerTokenGenerator
+DefaultDistributedLockClient --> LockWaiter
+DefaultDistributedLockClient --> LockProvider
+DefaultDistributedLockClient --> LockWatchdog
+DefaultDistributedLockClient --> LockEventPublisher
+DefaultDistributedLockClient --> LockMetricsRecorder
+
+DefaultLockHandle --> LockLease
+DefaultLockHandle --> LockRuntimeState
+DefaultLockHandle --> LockProvider
+DefaultLockHandle --> LockEventPublisher
+
+RedisLockProvider --> LockLease
+
+note right of DistributedLockClient
+  业务入口。
+  提供 tryLock 和 execute。
+end note
+
+note right of DefaultDistributedLockClient
+  核心编排器。
+  负责编排校验、加锁、等待、
+  callback、释放、watchdog、
+  事件、指标和结果收敛。
+end note
+
+note right of DefaultLockHandle
+  一次成功加锁后的租约操作句柄。
+  负责 unlock / renew / checkHeld。
+end note
+
+note bottom of LockLease
+  不可变租约快照。
+  记录 lockName、lockKey、ownerToken、
+  leaseTime、acquiredAt、expireAt。
+end note
+
+note bottom of LockRuntimeState
+  JVM 内部运行态。
+  记录 lost / released。
+end note
+
+@enduml

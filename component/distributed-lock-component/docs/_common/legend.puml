@@ -1,0 +1,7 @@
+legend right
+  == 图例 ==
+  <<phase1>> 一期实现
+  <<phase2>> 二期扩展
+  <<phase3>> 三期扩展
+  <<External>> 外部系统
+endlegend

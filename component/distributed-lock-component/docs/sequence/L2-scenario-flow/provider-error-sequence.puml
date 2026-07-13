@@ -1,0 +1,36 @@
+@startuml
+!include ../../_common/style.puml
+title PROVIDER_ERROR 路径时序图
+
+actor Biz
+participant DefaultClient as "DefaultDistributedLockClient"
+participant Provider as "LockProvider"
+database Redis
+participant Handle as "DefaultLockHandle"
+participant Watchdog as "LockWatchdog"
+
+alt acquire 阶段 Redis 异常
+    Biz -> DefaultClient : execute(...)
+    DefaultClient -> Provider : acquire(request)
+    Provider -> Redis : EVAL acquire.lua
+    Redis --> Provider : error
+    Provider --> DefaultClient : PROVIDER_ERROR
+    DefaultClient --> Biz : LockResult(PROVIDER_ERROR, stage=ACQUIRE, acquired=false)
+else renew 阶段 Redis 异常
+    Watchdog -> Handle : renew()
+    Handle -> Provider : renew(request)
+    Provider -> Redis : EVAL renew.lua
+    Redis --> Provider : error
+    Provider --> Handle : PROVIDER_ERROR
+    Handle --> Watchdog : false
+    Watchdog -> Watchdog : publish PROVIDER_ERROR(stage=RENEW), 不确定是否失锁
+else release 阶段 Redis 异常
+    DefaultClient -> Handle : unlock()
+    Handle -> Provider : release(request)
+    Provider -> Redis : EVAL release.lua
+    Redis --> Provider : error
+    Provider --> Handle : PROVIDER_ERROR
+    DefaultClient --> Biz : LockResult(RELEASE_FAILED, stage=RELEASE, acquired=true)
+end
+
+@enduml

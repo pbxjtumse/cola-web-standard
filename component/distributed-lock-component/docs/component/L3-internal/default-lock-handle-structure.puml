@@ -1,0 +1,57 @@
+@startuml
+!include ../../_common/style.puml
+
+title DefaultLockHandle 内部结构图
+
+left to right direction
+
+interface LockHandle {
+  + unlock()
+  + renew()
+  + checkHeld()
+  + assertHeld()
+}
+
+class DefaultLockHandle
+
+class LockLease {
+  - namespace
+  - lockName
+  - lockKey
+  - ownerToken
+  - fencingToken
+  - leaseTime
+  - acquiredAt
+  - expireAt
+}
+
+class LockRuntimeState {
+  - lost
+  - released
+  + markLostOnce()
+  + markReleasedOnce()
+}
+
+interface LockProvider
+interface LockEventPublisher
+interface LockMetricsRecorder
+
+LockHandle <|.. DefaultLockHandle
+
+DefaultLockHandle --> LockLease : immutable lease
+DefaultLockHandle --> LockRuntimeState : local state
+DefaultLockHandle --> LockProvider : renew/release/check
+DefaultLockHandle ..> LockEventPublisher : publish
+DefaultLockHandle ..> LockMetricsRecorder : record
+
+note bottom of LockLease
+  不可变租约快照：
+  描述这次锁是谁拿到的。
+end note
+
+note bottom of LockRuntimeState
+  JVM 本地运行态：
+  lost 和 released 不是互斥状态。
+end note
+
+@enduml

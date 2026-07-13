@@ -1,0 +1,38 @@
+@startuml
+!include ../../_common/style.puml
+title watchdog 自动续期主流程时序图
+
+participant Client as "DefaultDistributedLockClient"
+participant Watchdog as "ScheduledLockWatchdog"
+participant Scheduler as "ScheduledExecutorService"
+participant Handle as "DefaultLockHandle"
+participant Runtime as "LockRuntimeState"
+participant Provider as "LockProvider"
+database Redis
+
+Client -> Watchdog : start(handle, options)
+Watchdog -> Watchdog : read renewInterval / maxRenewTime
+Watchdog -> Scheduler : scheduleAtFixedRate(renewTask)
+
+loop every renewInterval
+    Scheduler -> Watchdog : run renewTask
+    Watchdog -> Runtime : isReleased() / isLost()
+    alt released or lost
+        Watchdog -> Scheduler : cancel task
+    else maxRenewTime exceeded
+        Watchdog -> Runtime : markLostOnce()
+        Watchdog -> Scheduler : cancel task
+    else active
+        Watchdog -> Handle : renew()
+        Handle -> Provider : renew(request)
+        Provider -> Redis : EVAL renew.lua
+        Redis --> Provider : RENEWED / NOT_FOUND / NOT_OWNER / error
+        Provider --> Handle : LockRenewResponse
+        Handle --> Watchdog : true / false
+    end
+end
+
+Client -> Watchdog : stop(handle)
+Watchdog -> Scheduler : cancel task
+
+@enduml

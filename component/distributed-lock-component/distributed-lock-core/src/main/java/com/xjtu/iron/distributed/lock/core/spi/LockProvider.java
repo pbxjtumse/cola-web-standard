@@ -1,5 +1,14 @@
 package com.xjtu.iron.distributed.lock.core.spi;
 
+import com.xjtu.iron.distributed.lock.core.spi.request.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockReleaseRequest;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockRenewRequest;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockCheckResponse;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockRenewResponse;
+
 /**
  * 分布式锁底层 Provider SPI。
  *

@@ -1,0 +1,12 @@
+' Common PlantUML style for component diagrams.
+' Keep lines natural: do NOT set linetype ortho here.
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam wrapWidth 220
+skinparam maxMessageSize 120
+skinparam ArrowColor #555555
+skinparam NoteBackgroundColor #FFF8DC
+skinparam NoteBorderColor #999999
+hide empty members

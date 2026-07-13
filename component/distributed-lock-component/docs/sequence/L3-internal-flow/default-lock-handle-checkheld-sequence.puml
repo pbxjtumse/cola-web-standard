@@ -1,0 +1,35 @@
+@startuml
+!include ../../_common/style.puml
+title DefaultLockHandle.checkHeld() / assertHeld() 内部时序图
+
+actor Caller
+participant Handle as "DefaultLockHandle"
+participant Runtime as "LockRuntimeState"
+participant Provider as "LockProvider"
+database Redis
+participant Event as "LockEventPublisher"
+
+Caller -> Handle : checkHeld() / assertHeld()
+Handle -> Runtime : isReleased() / isLost()
+alt local released or lost
+    Handle --> Caller : false or throw LockLostException
+else active
+    Handle -> Provider : check(request)
+    Provider -> Redis : EVAL check.lua
+    Redis --> Provider : 1 / 0 / -1 / error
+    alt HELD
+        Provider --> Handle : HELD
+        Handle --> Caller : true
+    else NOT_FOUND or NOT_OWNER
+        Provider --> Handle : NOT_FOUND / NOT_OWNER
+        Handle -> Runtime : markLostOnce()
+        Handle -> Event : publish LOCK_LOST(stage=CHECK)
+        Handle --> Caller : false or throw LockLostException
+    else PROVIDER_ERROR
+        Provider --> Handle : PROVIDER_ERROR
+        Handle -> Event : publish PROVIDER_ERROR(stage=CHECK)
+        Handle --> Caller : false or throw ProviderException
+    end
+end
+
+@enduml

@@ -1,0 +1,60 @@
+@startuml
+!include ../../_common/style.puml
+title execute 模板主流程时序图
+
+actor Biz as "业务代码"
+participant Client as "DistributedLockClient"
+participant DefaultClient as "DefaultDistributedLockClient"
+participant TokenGen as "OwnerTokenGenerator"
+participant Waiter as "LockWaiter"
+participant Provider as "LockProvider"
+database Redis
+participant Handle as "DefaultLockHandle"
+participant Watchdog as "LockWatchdog"
+participant Callback as "LockCallback"
+
+Biz -> Client : execute(lockName, options, callback)
+Client -> DefaultClient : execute(lockName, options, callback)
+DefaultClient -> DefaultClient : validate(lockName, options)
+
+alt invalid options
+    DefaultClient --> Biz : LockResult(INVALID_OPTIONS, stage=VALIDATE, acquired=false)
+else valid options
+    DefaultClient -> TokenGen : generate(namespace, lockName)
+    TokenGen --> DefaultClient : ownerToken
+    DefaultClient -> Waiter : waitForLock(request, provider)
+    Waiter -> Provider : acquire(request)
+    Provider -> Redis : EVAL acquire.lua
+    Redis --> Provider : acquired / notAcquired / error
+
+    alt not acquired
+        Provider --> Waiter : NOT_ACQUIRED
+        Waiter --> DefaultClient : NOT_ACQUIRED
+        DefaultClient --> Biz : LockResult(NOT_ACQUIRED, stage=WAIT, acquired=false)
+    else provider error
+        Provider --> Waiter : PROVIDER_ERROR
+        Waiter --> DefaultClient : PROVIDER_ERROR
+        DefaultClient --> Biz : LockResult(PROVIDER_ERROR, stage=ACQUIRE, acquired=false)
+    else acquired
+        Provider --> Waiter : ACQUIRED + LockLease
+        Waiter --> DefaultClient : acquired
+        DefaultClient -> Handle : new DefaultLockHandle(lease, runtimeState)
+        alt autoRenew=true
+            DefaultClient -> Watchdog : start(handle, options)
+        end
+        DefaultClient -> Callback : doWithLock(handle)
+        Callback --> DefaultClient : value / exception
+        DefaultClient -> DefaultClient : collect original result
+        DefaultClient -> Handle : unlock()
+        Handle -> Provider : release(ownerToken)
+        Provider -> Redis : EVAL release.lua
+        Redis --> Provider : RELEASED / NOT_FOUND / NOT_OWNER / error
+        Provider --> Handle : release response
+        Handle --> DefaultClient : release result
+        DefaultClient -> Watchdog : stop(handle)
+        DefaultClient -> DefaultClient : merge original result + release result
+        DefaultClient --> Biz : LockResult(finalStatus, stage, acquired=true)
+    end
+end
+
+@enduml

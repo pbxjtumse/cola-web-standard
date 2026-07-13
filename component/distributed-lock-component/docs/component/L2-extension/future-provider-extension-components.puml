@@ -1,0 +1,55 @@
+@startuml
+!include ../../_common/style.puml
+
+title Future Provider 扩展组件关系图
+
+left to right direction
+
+package "Provider SPI" as spi {
+  interface LockProvider
+}
+
+package "Phase 2 - Fencing Token" as phase2 {
+  interface FencingTokenProvider <<phase2>>
+  class RedisIncrFencingTokenProvider <<phase2>>
+  class DbSequenceFencingTokenProvider <<phase2>>
+}
+
+package "Phase 3 - Strong Coordination Provider" as phase3 {
+  class ZkLockProvider <<phase3>>
+  class EtcdLockProvider <<phase3>>
+}
+
+LockProvider <|.. ZkLockProvider
+LockProvider <|.. EtcdLockProvider
+
+FencingTokenProvider <|.. RedisIncrFencingTokenProvider
+FencingTokenProvider <|.. DbSequenceFencingTokenProvider
+
+note right of FencingTokenProvider
+  二期能力：
+  为成功加锁生成单调递增 fencing token。
+
+  可选实现：
+  - Redis INCR
+  - DB sequence
+  - 独立 token table
+end note
+
+note right of ZkLockProvider
+  三期能力：
+  - 临时节点
+  - 顺序节点
+  - 公平锁
+  - 强协调
+end note
+
+note right of EtcdLockProvider
+  三期能力：
+  - lease
+  - revision
+  - watch
+  - 选主 / 控制面协调
+end note
+
+@enduml

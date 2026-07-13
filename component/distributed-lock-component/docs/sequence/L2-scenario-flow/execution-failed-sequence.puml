@@ -1,0 +1,28 @@
+@startuml
+!include ../../_common/style.puml
+title EXECUTION_FAILED 业务异常路径时序图
+
+actor Biz
+participant DefaultClient as "DefaultDistributedLockClient"
+participant Provider as "LockProvider"
+database Redis
+participant Handle as "DefaultLockHandle"
+participant Callback as "LockCallback"
+
+Biz -> DefaultClient : execute(lockName, options, callback)
+DefaultClient -> Provider : acquire(request)
+Provider -> Redis : EVAL acquire.lua
+Redis --> Provider : acquired
+Provider --> DefaultClient : ACQUIRED + LockLease
+DefaultClient -> Handle : create handle
+DefaultClient -> Callback : doWithLock(handle)
+Callback --> DefaultClient : throw ordinary exception
+DefaultClient -> DefaultClient : originalStatus=EXECUTION_FAILED
+DefaultClient -> Handle : unlock()
+Handle -> Provider : release(request)
+Provider -> Redis : EVAL release.lua
+Redis --> Provider : RELEASED
+Provider --> Handle : RELEASED
+DefaultClient --> Biz : LockResult(EXECUTION_FAILED, stage=EXECUTE, acquired=true, error)
+
+@enduml

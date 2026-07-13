@@ -1,4 +1,6 @@
-package com.xjtu.iron.distributed.lock.core.spi;
+package com.xjtu.iron.distributed.lock.core.spi.request;
+
+import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
 
 /**
  * Provider 持锁检查请求。

@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.core.spi;
+package com.xjtu.iron.distributed.lock.core.spi.model;
 
 import java.time.Duration;
 import java.time.Instant;

@@ -1,0 +1,32 @@
+@startuml
+!include ../../_common/style.puml
+title BackoffLockWaiter 等待重试内部时序图
+
+participant Client as "DefaultDistributedLockClient"
+participant Waiter as "BackoffLockWaiter"
+participant Provider as "LockProvider"
+database Redis
+participant Sleeper as "Sleeper"
+
+Client -> Waiter : waitForLock(request, provider)
+Waiter -> Waiter : deadline = now + waitTime
+loop until deadline
+    Waiter -> Provider : acquire(request)
+    Provider -> Redis : EVAL acquire.lua
+    Redis --> Provider : ACQUIRED / NOT_ACQUIRED / error
+    Provider --> Waiter : response
+    alt ACQUIRED
+        Waiter --> Client : ACQUIRED
+    else PROVIDER_ERROR
+        Waiter --> Client : PROVIDER_ERROR
+    else NOT_ACQUIRED
+        Waiter -> Waiter : compute delay\nbackoff + jitter
+        alt delay exceed deadline
+            Waiter --> Client : NOT_ACQUIRED
+        else still have time
+            Waiter -> Sleeper : sleep(delay)
+        end
+    end
+end
+
+@enduml

@@ -1,0 +1,42 @@
+@startuml
+!include ../../_common/style.puml
+
+title distributed-lock-component 模块结构图
+
+package "distributed-lock-component" as root {
+  package "distributed-lock-api" as api
+  package "distributed-lock-core" as core
+
+  package "distributed-lock-provider" as provider {
+    package "distributed-lock-provider-redis" as redis
+  }
+
+  package "distributed-lock-starter" as starter
+  package "distributed-lock-demo" as demo
+}
+
+core ..> api : depends on API
+redis ..> api : use API/SPI model
+redis ..> core : use core SPI/model
+starter ..> api : expose beans
+starter ..> core : auto-config core
+starter ..> redis : auto-config Redis provider
+demo ..> starter : use starter
+
+note right of api
+  API 层：
+  业务可见接口与结果模型。
+end note
+
+note right of core
+  Core 层：
+  通用流程编排、waiter、watchdog、
+  事件、指标和结果收敛。
+end note
+
+note right of redis
+  Redis Provider：
+  一期默认底层实现。
+end note
+
+@enduml

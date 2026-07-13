@@ -1,0 +1,46 @@
+@startuml
+!include ../../_common/style.puml
+title tryLock 手动主流程时序图
+
+actor Biz as "业务代码"
+participant Client as "DistributedLockClient"
+participant DefaultClient as "DefaultDistributedLockClient"
+participant TokenGen as "OwnerTokenGenerator"
+participant Waiter as "LockWaiter"
+participant Provider as "LockProvider"
+database Redis
+participant Handle as "DefaultLockHandle"
+
+Biz -> Client : tryLock(lockName, options)
+Client -> DefaultClient : tryLock(lockName, options)
+DefaultClient -> DefaultClient : validate(lockName, options)
+DefaultClient -> TokenGen : generate(namespace, lockName)
+TokenGen --> DefaultClient : ownerToken
+DefaultClient -> Waiter : waitForLock(request, provider)
+Waiter -> Provider : acquire(request)
+Provider -> Redis : EVAL acquire.lua
+Redis --> Provider : acquired / notAcquired / error
+
+alt acquired
+    Provider --> Waiter : ACQUIRED + LockLease
+    Waiter --> DefaultClient : acquired
+    DefaultClient -> Handle : new DefaultLockHandle(lease, runtimeState)
+    DefaultClient --> Biz : LockResult(ACQUIRED, handle)
+else not acquired
+    Provider --> Waiter : NOT_ACQUIRED
+    DefaultClient --> Biz : LockResult(NOT_ACQUIRED)
+else provider error
+    Provider --> Waiter : PROVIDER_ERROR
+    DefaultClient --> Biz : LockResult(PROVIDER_ERROR)
+end
+
+== manual section ==
+Biz -> Biz : if acquired then try/finally
+Biz -> Handle : unlock()
+Handle -> Provider : release(request)
+Provider -> Redis : EVAL release.lua
+Redis --> Provider : release result
+Provider --> Handle : LockReleaseResponse
+Handle --> Biz : true / false
+
+@enduml

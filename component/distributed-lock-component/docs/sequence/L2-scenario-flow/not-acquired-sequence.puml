@@ -1,0 +1,33 @@
+@startuml
+!include ../../_common/style.puml
+title NOT_ACQUIRED 未获取锁路径时序图
+
+actor Biz
+participant DefaultClient as "DefaultDistributedLockClient"
+participant Waiter as "LockWaiter"
+participant Provider as "LockProvider"
+database Redis
+
+Biz -> DefaultClient : execute / tryLock
+DefaultClient -> Waiter : waitForLock(request, provider)
+
+alt waitTime = 0
+    Waiter -> Provider : acquire(request)
+    Provider -> Redis : EVAL acquire.lua
+    Redis --> Provider : {0, pttl}
+    Provider --> Waiter : NOT_ACQUIRED
+    Waiter --> DefaultClient : NOT_ACQUIRED
+    DefaultClient --> Biz : LockResult(NOT_ACQUIRED, stage=WAIT, acquired=false)
+else waitTime > 0
+    loop until waitTime timeout
+        Waiter -> Provider : acquire(request)
+        Provider -> Redis : EVAL acquire.lua
+        Redis --> Provider : {0, pttl}
+        Provider --> Waiter : NOT_ACQUIRED
+        Waiter -> Waiter : sleep backoff + jitter
+    end
+    Waiter --> DefaultClient : timeout / NOT_ACQUIRED
+    DefaultClient --> Biz : LockResult(NOT_ACQUIRED, stage=WAIT, acquired=false)
+end
+
+@enduml

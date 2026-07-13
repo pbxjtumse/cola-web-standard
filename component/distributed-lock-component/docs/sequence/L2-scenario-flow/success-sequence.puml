@@ -1,0 +1,36 @@
+@startuml
+!include ../../_common/style.puml
+title SUCCESS 成功路径时序图
+
+actor Biz
+participant Client as "DistributedLockClient"
+participant DefaultClient as "DefaultDistributedLockClient"
+participant Provider as "LockProvider"
+database Redis
+participant Handle as "DefaultLockHandle"
+participant Callback as "LockCallback"
+participant Watchdog as "LockWatchdog"
+
+Biz -> Client : execute(lockName, options, callback)
+Client -> DefaultClient : execute(...)
+DefaultClient -> Provider : acquire(request)
+Provider -> Redis : EVAL acquire.lua
+Redis --> Provider : acquired
+Provider --> DefaultClient : ACQUIRED + LockLease
+DefaultClient -> Handle : create handle
+alt autoRenew=true
+    DefaultClient -> Watchdog : start(handle)
+end
+DefaultClient -> Callback : doWithLock(handle)
+Callback --> DefaultClient : value
+DefaultClient -> DefaultClient : runtimeState.lost == false
+DefaultClient -> Handle : unlock()
+Handle -> Provider : release(request)
+Provider -> Redis : EVAL release.lua
+Redis --> Provider : 1
+Provider --> Handle : RELEASED
+Handle --> DefaultClient : release success
+DefaultClient -> Watchdog : stop(handle)
+DefaultClient --> Biz : LockResult(SUCCESS, stage=EXECUTE, acquired=true, value)
+
+@enduml

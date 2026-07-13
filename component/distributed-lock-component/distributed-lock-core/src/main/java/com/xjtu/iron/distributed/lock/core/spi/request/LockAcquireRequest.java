@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.core.spi;
+package com.xjtu.iron.distributed.lock.core.spi.request;
 
 import com.xjtu.iron.distributed.lock.api.LockOptions;
 

@@ -1,0 +1,52 @@
+@startuml
+!include ../../_common/style.puml
+
+title LockOptions 结构图
+
+left to right direction
+
+class LockOptions {
+  - namespace
+  - waitTime
+  - leaseTime
+  - waitStrategy
+  - autoRenew
+  - renewInterval
+  - maxRenewTime
+  - fencingRequired
+  - failOnLockLost
+  - providerName
+  - fencingTokenProviderName
+  - backoffSpec
+  + defaults()
+  + noWait()
+  + waitFor(waitTime)
+  + autoRenew(maxRenewTime)
+  + waitForAndAutoRenew(waitTime, leaseTime, maxRenewTime)
+}
+
+enum LockWaitStrategy {
+  NO_WAIT
+  BACKOFF
+}
+
+class RetryBackoffSpec {
+  - initialDelay
+  - maxDelay
+  - multiplier
+  - jitter
+}
+
+LockOptions --> LockWaitStrategy
+LockOptions --> RetryBackoffSpec
+
+note right of LockOptions
+  默认语义：
+  - 不等待
+  - leaseTime = 30s
+  - autoRenew = false
+  - fencingRequired = false
+  - failOnLockLost = true
+end note
+
+@enduml

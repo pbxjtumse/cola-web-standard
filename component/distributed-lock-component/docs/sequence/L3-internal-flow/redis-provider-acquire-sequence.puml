@@ -1,0 +1,33 @@
+@startuml
+!include ../../_common/style.puml
+title RedisLockProvider.acquire() 内部时序图
+
+participant Caller as "LockWaiter / DefaultClient"
+participant Provider as "RedisLockProvider"
+participant KeyBuilder as "RedisLockKeyBuilder"
+participant Executor as "RedisLockScriptExecutor"
+database Redis
+
+Caller -> Provider : acquire(request)
+Provider -> KeyBuilder : buildLockKey(namespace, lockName)
+KeyBuilder --> Provider : iron:lock:{namespace:lockName}:lock
+Provider -> KeyBuilder : buildFencingKey(namespace, lockName)
+KeyBuilder --> Provider : iron:lock:{namespace:lockName}:fence
+Provider -> Executor : execute acquire.lua\nKEYS[lockKey,fencingKey]\nARGV[ownerToken,leaseMillis,fencingRequired]
+Executor -> Redis : EVAL acquire.lua
+alt key not exists
+    Redis --> Executor : {1, optionalFence}
+    Executor --> Provider : success
+    Provider -> Provider : build LockLease
+    Provider --> Caller : LockAcquireResponse(ACQUIRED, lease)
+else key exists
+    Redis --> Executor : {0, pttl}
+    Executor --> Provider : not acquired
+    Provider --> Caller : LockAcquireResponse(NOT_ACQUIRED, pttl)
+else redis error
+    Redis --> Executor : error
+    Executor --> Provider : exception
+    Provider --> Caller : LockAcquireResponse(PROVIDER_ERROR)
+end
+
+@enduml

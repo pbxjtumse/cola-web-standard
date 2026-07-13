@@ -1,0 +1,85 @@
+@startuml
+!include ../../_common/style.puml
+title 状态、阶段、Provider 结果关系图
+
+skinparam classAttributeIconSize 0
+
+enum LockStatus <<CODE: API Final Status>> {
+  ACQUIRED
+  SUCCESS
+  NOT_ACQUIRED
+  EXECUTION_FAILED
+  LOCK_LOST
+  FENCING_REJECTED
+  RELEASE_FAILED
+  PROVIDER_ERROR
+  INVALID_OPTIONS
+}
+
+enum LockStage <<CODE: API Stage>> {
+  VALIDATE
+  ACQUIRE
+  WAIT
+  EXECUTE
+  FENCING
+  RENEW
+  RELEASE
+  CHECK
+}
+
+enum LockAcquireStatus <<SPI>> {
+  ACQUIRED
+  NOT_ACQUIRED
+  PROVIDER_ERROR
+}
+
+enum LockRenewStatus <<SPI>> {
+  RENEWED
+  NOT_FOUND
+  NOT_OWNER
+  PROVIDER_ERROR
+}
+
+enum LockReleaseStatus <<SPI>> {
+  RELEASED
+  NOT_FOUND
+  NOT_OWNER
+  PROVIDER_ERROR
+}
+
+enum LockCheckStatus <<SPI>> {
+  HELD
+  NOT_FOUND
+  NOT_OWNER
+  PROVIDER_ERROR
+}
+
+class LockResult {
+  - LockStatus status
+  - LockStage stage
+  - boolean acquired
+}
+class LockEvent {
+  - LockEventType eventType
+  - LockStage stage
+  - LockStatus status
+}
+
+LockResult --> LockStatus
+LockResult --> LockStage
+LockEvent --> LockStatus
+LockEvent --> LockStage
+
+LockAcquireStatus ..> LockStatus : ACQUIRED=>ACQUIRED\nNOT_ACQUIRED=>NOT_ACQUIRED\nPROVIDER_ERROR=>PROVIDER_ERROR
+LockRenewStatus ..> LockStatus : NOT_FOUND/NOT_OWNER=>LOCK_LOST\nPROVIDER_ERROR=>PROVIDER_ERROR
+LockReleaseStatus ..> LockStatus : PROVIDER_ERROR=>RELEASE_FAILED\nNOT_FOUND/NOT_OWNER=>LOCK_LOST or event
+LockCheckStatus ..> LockStatus : NOT_FOUND/NOT_OWNER=>LOCK_LOST\nPROVIDER_ERROR=>PROVIDER_ERROR
+
+note right of LockStatus
+  最终结果，不表达发生在哪一步。
+end note
+note right of LockStage
+  生命周期阶段，需要和 LockStatus 组合理解。
+end note
+
+@enduml
