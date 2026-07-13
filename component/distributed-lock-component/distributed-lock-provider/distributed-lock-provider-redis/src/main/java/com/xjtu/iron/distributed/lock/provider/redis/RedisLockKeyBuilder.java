@@ -3,18 +3,23 @@ package com.xjtu.iron.distributed.lock.provider.redis;
 /**
  * Redis 锁 key 构造器。
  *
- * <p>Redis 的 lockKey、fencingKey、releaseChannel 都属于 Redis Provider 的物理命名规则，不应该放到通用
- * LockProvider SPI 中。</p>
+ * <p>Redis 的 lockKey、fencingKey、releaseChannel 都属于 Redis Provider 的物理命名规则，
+ * 不应该泄漏到通用 LockProvider SPI 中。</p>
+ *
+ * <p>注意 Redis Cluster 场景：acquire.lua 可能同时使用 lockKey 和 fencingKey。
+ * 多 key Lua 脚本要求这些 key 位于同一个 hash slot。因此这里使用 Redis hash tag：
+ * {@code iron:lock:{namespace:lockName}:lock} 与 {@code iron:lock:{namespace:lockName}:fence}
+ * 会落到同一个 slot。</p>
  */
 public final class RedisLockKeyBuilder {
 
     /** Redis key 前缀。 */
     private final String keyPrefix;
 
-    /** Redis 释放通知 channel 前缀。 */
+    /** Redis 释放通知 channel 前缀。二期 PUBSUB_BACKOFF 才会使用。 */
     private final String releaseChannelPrefix;
 
-    /** fencing key 后缀。 */
+    /** fencing key 后缀。二期 fencingToken 启用时使用。 */
     private final String fencingKeySuffix;
 
     public RedisLockKeyBuilder() {
@@ -31,23 +36,37 @@ public final class RedisLockKeyBuilder {
 
     /**
      * 构造 Redis 锁 key。
+     *
+     * @param namespace 命名空间。
+     * @param lockName  业务锁名称。
+     * @return Redis 锁 key。
      */
     public String buildLockKey(String namespace, String lockName) {
-        return keyPrefix + ':' + normalize(namespace) + ':' + normalize(lockName);
+        return keyPrefix + ":{" + buildHashTag(namespace, lockName) + "}:lock";
     }
 
     /**
      * 构造 Redis fencing token key。
+     *
+     * @param namespace 命名空间。
+     * @param lockName  业务锁名称。
+     * @return Redis fencing key。
      */
     public String buildFencingKey(String namespace, String lockName) {
-        return buildLockKey(namespace, lockName) + ':' + fencingKeySuffix;
+        return keyPrefix + ":{" + buildHashTag(namespace, lockName) + "}:" + fencingKeySuffix;
     }
 
     /**
      * 构造 Redis 解锁发布 channel。
+     *
+     * <p>一期不实现 PUBSUB_BACKOFF，因此该 channel 暂时只作为预留。</p>
      */
     public String buildReleaseChannel(String namespace, String lockName) {
-        return releaseChannelPrefix + ':' + normalize(namespace) + ':' + normalize(lockName);
+        return releaseChannelPrefix + ':' + buildHashTag(namespace, lockName);
+    }
+
+    private static String buildHashTag(String namespace, String lockName) {
+        return normalize(namespace) + ':' + normalize(lockName);
     }
 
     private static String normalize(String value) {

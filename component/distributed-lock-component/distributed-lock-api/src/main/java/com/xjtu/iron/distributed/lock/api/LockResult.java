@@ -7,15 +7,14 @@ import java.util.Optional;
 /**
  * 分布式锁操作结果。
  *
- * <p>
- * LockResult 是 tryLock / execute 等 API 返回给业务方的统一结果对象。
- * 它同时表达三层含义：
- * </p>
+ * <p>LockResult 是 {@link DistributedLockClient#tryLock(String, LockOptions)} 和
+ * {@link DistributedLockClient#execute(String, LockOptions, LockCallback)} 返回给业务方的统一结果对象。</p>
  *
+ * <p>它同时表达三层含义：</p>
  * <ul>
- *     <li>status：最终结果是什么，例如 SUCCESS、NOT_ACQUIRED、LOCK_LOST。</li>
- *     <li>stage：这个结果发生在哪个阶段，例如 ACQUIRE、RENEW、RELEASE。</li>
- *     <li>acquired：本次操作是否曾经成功获取过锁。</li>
+ *     <li>{@code status}：最终结果是什么，例如 SUCCESS、NOT_ACQUIRED、LOCK_LOST。</li>
+ *     <li>{@code stage}：该最终结果发生在哪个阶段，例如 ACQUIRE、RENEW、RELEASE。</li>
+ *     <li>{@code acquired}：本次操作是否曾经成功获取过锁。</li>
  * </ul>
  *
  * <p>
@@ -143,7 +142,7 @@ public final class LockResult<T> {
 
     private LockResult(Builder<T> builder) {
         this.status = Objects.requireNonNull(builder.status, "status must not be null");
-        this.stage = builder.stage;
+        this.stage = Objects.requireNonNull(builder.stage, "stage must not be null");
         this.acquired = builder.acquired;
         this.value = builder.value;
         this.handle = builder.handle;
@@ -160,6 +159,9 @@ public final class LockResult<T> {
         return new Builder<>();
     }
 
+    /**
+     * 创建 tryLock 成功结果。
+     */
     public static LockResult<LockHandle> acquired(LockHandle handle, Duration waitDuration) {
         Objects.requireNonNull(handle, "handle must not be null");
 
@@ -177,12 +179,10 @@ public final class LockResult<T> {
                 .build();
     }
 
-    public static <T> LockResult<T> success(
-            T value,
-            LockHandle handle,
-            Duration waitDuration,
-            Duration holdDuration
-    ) {
+    /**
+     * 创建 execute 成功结果。
+     */
+    public static <T> LockResult<T> success(T value, LockHandle handle, Duration waitDuration, Duration holdDuration) {
         Builder<T> builder = LockResult.<T>builder()
                 .status(LockStatus.SUCCESS)
                 .stage(LockStage.EXECUTE)
@@ -191,16 +191,14 @@ public final class LockResult<T> {
                 .handle(handle)
                 .waitDuration(waitDuration)
                 .holdDuration(holdDuration);
-
         fillHandleFields(builder, handle);
         return builder.build();
     }
 
-    public static <T> LockResult<T> notAcquired(
-            String lockName,
-            String lockKey,
-            Duration waitDuration
-    ) {
+    /**
+     * 创建未获取到锁结果。
+     */
+    public static <T> LockResult<T> notAcquired(String lockName, String lockKey, Duration waitDuration) {
         return LockResult.<T>builder()
                 .status(LockStatus.NOT_ACQUIRED)
                 .stage(LockStage.WAIT)
@@ -211,12 +209,10 @@ public final class LockResult<T> {
                 .build();
     }
 
-    public static <T> LockResult<T> failure(
-            LockStatus status,
-            LockStage stage,
-            boolean acquired,
-            Throwable error
-    ) {
+    /**
+     * 创建失败结果。
+     */
+    public static <T> LockResult<T> failure(LockStatus status, LockStage stage, boolean acquired, Throwable error) {
         return LockResult.<T>builder()
                 .status(status)
                 .stage(stage)
@@ -229,7 +225,6 @@ public final class LockResult<T> {
         if (handle == null) {
             return;
         }
-
         builder.lockName(handle.lockName())
                 .lockKey(handle.lockKey())
                 .ownerToken(handle.ownerToken())
@@ -240,7 +235,15 @@ public final class LockResult<T> {
         return status;
     }
 
+    public LockStatus getStatus() {
+        return status;
+    }
+
     public LockStage stage() {
+        return stage;
+    }
+
+    public LockStage getStage() {
         return stage;
     }
 
@@ -248,12 +251,24 @@ public final class LockResult<T> {
         return acquired;
     }
 
+    public boolean isAcquired() {
+        return acquired;
+    }
+
     public boolean success() {
         return status == LockStatus.SUCCESS || status == LockStatus.ACQUIRED;
     }
 
+    public boolean isSuccess() {
+        return success();
+    }
+
     public boolean notAcquired() {
         return status == LockStatus.NOT_ACQUIRED;
+    }
+
+    public boolean isNotAcquired() {
+        return notAcquired();
     }
 
     public Optional<T> value() {
@@ -292,30 +307,20 @@ public final class LockResult<T> {
         return holdDuration;
     }
 
+    /** LockResult 构造器。 */
     public static final class Builder<T> {
 
         private LockStatus status;
-
         private LockStage stage;
-
         private boolean acquired;
-
         private T value;
-
         private LockHandle handle;
-
         private Throwable error;
-
         private String lockName;
-
         private String lockKey;
-
         private String ownerToken;
-
         private Long fencingToken;
-
         private Duration waitDuration;
-
         private Duration holdDuration;
 
         private Builder() {

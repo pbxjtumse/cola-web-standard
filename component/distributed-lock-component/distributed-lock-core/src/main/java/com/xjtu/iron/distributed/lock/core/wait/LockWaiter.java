@@ -5,16 +5,16 @@ import com.xjtu.iron.distributed.lock.core.spi.LockAcquireResponse;
 /**
  * 锁等待器。
  *
- * <p>不同等待策略实现本接口，例如 NO_WAIT 尝试一次，BACKOFF 在 waitTime 内退避重试，PUBSUB_BACKOFF 等待释放通知
- * 并配合本地退避兜底。</p>
+ * <p>LockWaiter 负责“第一次没有抢到锁之后怎么等”。它不负责创建 ownerToken，
+ * 不负责构造 LockHandle，也不负责执行 callback。</p>
  */
 public interface LockWaiter {
 
     /**
-     * 等待并尝试获取锁。
+     * 在指定等待上下文中尝试获取锁。
      *
-     * @param context 等待上下文。
-     * @return 加锁响应。
+     * @param context 等待上下文，包含 request、provider、clock 等信息。
+     * @return Provider 加锁响应。
      */
     LockAcquireResponse waitForLock(LockWaitContext context);
 }

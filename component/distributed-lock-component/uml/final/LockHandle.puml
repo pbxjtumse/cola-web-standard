@@ -1,0 +1,58 @@
+@startuml
+title LockHandle 租约句柄生命周期图
+
+legend right
+  [DOC: FlowNode]      说明性状态，不进入代码枚举
+  [CODE: RuntimeFlag]  LockRuntimeState 中的 lost/released
+  [CODE: Provider]     Provider 返回结果
+endlegend
+
+[*] --> HELD
+
+HELD : [DOC: FlowNode]\n创建 LockHandle 后的默认状态\nlost=false\nreleased=false
+
+HELD --> HELD : checkHeld success
+HELD --> HELD : renew success\nLockRenewStatus=RENEWED
+
+HELD --> LOST : renew NOT_FOUND / NOT_OWNER
+HELD --> LOST : checkHeld false
+HELD --> LOST : release NOT_FOUND / NOT_OWNER
+
+LOST : [CODE: RuntimeFlag]\nlost=true
+
+HELD --> RELEASED : unlock success\nLockReleaseStatus=RELEASED
+RELEASED : [CODE: RuntimeFlag]\nreleased=true
+
+HELD --> PROVIDER_ERROR_STATE : renew/check/release provider error
+PROVIDER_ERROR_STATE : [DOC: FlowNode]\nProvider 异常\n不确定是否失锁
+
+PROVIDER_ERROR_STATE --> HELD : later checkHeld success
+PROVIDER_ERROR_STATE --> LOST : later checkHeld false
+PROVIDER_ERROR_STATE --> RELEASED : later unlock success
+
+LOST --> LOST : checkHeld false
+LOST --> RELEASED_AFTER_LOST : unlock called\nmarkReleasedOnce()
+
+RELEASED_AFTER_LOST : [CODE: RuntimeFlag]\nlost=true\nreleased=true
+
+RELEASED --> RELEASED : duplicate unlock\nmarkReleasedOnce=false\nno-op
+RELEASED --> RELEASED : renew returns false
+RELEASED --> RELEASED : checkHeld returns false
+
+RELEASED_AFTER_LOST --> RELEASED
+
+RELEASED --> [*]
+LOST --> [*]
+
+note bottom of LOST
+  LOST 不一定代表业务已经停止。
+  它只表示当前 LockHandle 已经被判断为不再持有锁。
+end note
+
+note bottom of RELEASED
+  RELEASED 表示本地释放逻辑已经执行过。
+  通过 released.compareAndSet(false, true)
+  保证同一个 handle 只释放一次。
+end note
+
+@enduml

@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.starter;
+package com.xjtu.iron.distributed.lock.starter.properties;
 
 /**
  * Redis 分布式锁配置属性。

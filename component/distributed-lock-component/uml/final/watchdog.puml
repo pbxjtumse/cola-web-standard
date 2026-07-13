@@ -1,0 +1,38 @@
+@startuml
+title EXECUTING 阶段 watchdog 并发续期局部图
+
+legend right
+  [DOC: FlowNode]      说明性流程节点，不进入代码枚举
+  [CODE: Provider]     Provider 返回的底层状态
+  [CODE: LockStatus]   API 最终状态
+  [CODE: LockStage]    API 阶段字段
+  [CODE: RuntimeFlag]  LockRuntimeState 中的 lost/released
+endlegend
+
+[*] --> EXECUTING
+EXECUTING : [DOC: FlowNode]\n业务 callback 正在执行\nwatchdog 同时定时续期
+
+EXECUTING --> HELD_DURING_EXECUTION
+HELD_DURING_EXECUTION : [DOC: FlowNode]\ncallback 执行中\nruntime.lost=false\nruntime.released=false
+
+HELD_DURING_EXECUTION --> HELD_DURING_EXECUTION : [CODE: Provider]\nLockRenewStatus=RENEWED\nstage=RENEW\n说明：续期成功，不改变主流程
+
+HELD_DURING_EXECUTION --> LOST_BY_RENEW_NOT_FOUND : [CODE: Provider]\nLockRenewStatus=NOT_FOUND
+LOST_BY_RENEW_NOT_FOUND : [DOC: FlowNode]\nRedis key 不存在\n[CODE: RuntimeFlag] markLostOnce()\n[CODE: LockStatus] status=LOCK_LOST\n[CODE: LockStage] stage=RENEW
+
+HELD_DURING_EXECUTION --> LOST_BY_RENEW_NOT_OWNER : [CODE: Provider]\nLockRenewStatus=NOT_OWNER
+LOST_BY_RENEW_NOT_OWNER : [DOC: FlowNode]\nownerToken 不匹配\n[CODE: RuntimeFlag] markLostOnce()\n[CODE: LockStatus] status=LOCK_LOST\n[CODE: LockStage] stage=RENEW
+
+HELD_DURING_EXECUTION --> RENEW_PROVIDER_ERROR : [CODE: Provider]\nLockRenewStatus=PROVIDER_ERROR
+RENEW_PROVIDER_ERROR : [DOC: FlowNode]\n续期发生 Provider 异常\n[CODE: LockStatus] status=PROVIDER_ERROR\n[CODE: LockStage] stage=RENEW\n注意：不确定是否失锁
+
+LOST_BY_RENEW_NOT_FOUND --> EXECUTING_CONTINUES
+LOST_BY_RENEW_NOT_OWNER --> EXECUTING_CONTINUES
+RENEW_PROVIDER_ERROR --> EXECUTING_CONTINUES
+HELD_DURING_EXECUTION --> EXECUTING_CONTINUES : callback 继续执行或结束
+
+EXECUTING_CONTINUES : [DOC: FlowNode]\nwatchdog 结果不会直接终止 callback\ncallback 结束后由主流程检查 runtime.lost
+
+EXECUTING_CONTINUES --> [*]
+
+@enduml

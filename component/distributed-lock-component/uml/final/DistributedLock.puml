@@ -66,6 +66,9 @@ note right of EXECUTING
      -> 发布 PROVIDER_ERROR 事件
      -> stage=RENEW
      -> 不确定是否失锁
+
+  详细过程见：
+  图 3：EXECUTING 阶段 watchdog 并发续期局部图
 end note
 
 EXECUTING --> BUSINESS_SUCCESS : callback 正常返回

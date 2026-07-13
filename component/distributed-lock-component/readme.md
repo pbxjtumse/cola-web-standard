@@ -122,3 +122,14 @@ Release 阶段
 | `RELEASE_FAILED`   | `LockStatus` / `LockEventType`        |      是 | 释放失败                     |
 | `STOP_WATCHDOG`    | 文档流程节点                                |      否 | 停止续期任务                   |
 
+
+
+watchdog 不会无限续期。
+
+watchdog 会在以下情况停止：
+1. callback 执行完成；
+2. handle.unlock() 成功或已调用；
+3. renew 返回 NOT_FOUND / NOT_OWNER，说明锁已丢失；
+4. renew 出现不可恢复 Provider 异常；
+5. 达到 maxRenewTime；
+6. 组件关闭。

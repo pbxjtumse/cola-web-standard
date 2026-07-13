@@ -1,0 +1,106 @@
+@startuml
+title 分布式锁状态、阶段、Provider 结果关系图
+
+skinparam classAttributeIconSize 0
+
+enum LockStatus <<CODE: API Final Status>> {
+  ACQUIRED
+  SUCCESS
+  NOT_ACQUIRED
+  EXECUTION_FAILED
+  LOCK_LOST
+  FENCING_REJECTED
+  RELEASE_FAILED
+  PROVIDER_ERROR
+  INVALID_OPTIONS
+}
+
+enum LockStage <<CODE: API Stage>> {
+  VALIDATE
+  ACQUIRE
+  WAIT
+  EXECUTE
+  FENCING
+  RENEW
+  RELEASE
+  CHECK
+}
+
+enum LockAcquireStatus <<CODE: Provider Acquire Status>> {
+  ACQUIRED
+  NOT_ACQUIRED
+  PROVIDER_ERROR
+}
+
+enum LockRenewStatus <<CODE: Provider Renew Status>> {
+  RENEWED
+  NOT_FOUND
+  NOT_OWNER
+  PROVIDER_ERROR
+}
+
+enum LockReleaseStatus <<CODE: Provider Release Status>> {
+  RELEASED
+  NOT_FOUND
+  NOT_OWNER
+  PROVIDER_ERROR
+}
+
+enum LockCheckStatus <<CODE: Provider Check Status>> {
+  HELD
+  NOT_FOUND
+  NOT_OWNER
+  PROVIDER_ERROR
+}
+
+class LockResult <<CODE: API Result>> {
+  - LockStatus status
+  - LockStage stage
+  - boolean acquired
+  - T value
+  - LockHandle handle
+  - Throwable error
+}
+
+class LockEvent <<CODE: Core Event>> {
+  - LockEventType eventType
+  - LockStage stage
+  - LockStatus status
+  - Throwable error
+}
+
+LockResult --> LockStatus : final result
+LockResult --> LockStage : occurred at
+
+LockEvent --> LockStatus : current/final status
+LockEvent --> LockStage : event stage
+
+LockAcquireStatus ..> LockStatus : ACQUIRED => ACQUIRED\nNOT_ACQUIRED => NOT_ACQUIRED\nPROVIDER_ERROR => PROVIDER_ERROR
+LockAcquireStatus ..> LockStage : mapped stage = ACQUIRE or WAIT
+
+LockRenewStatus ..> LockStatus : NOT_FOUND / NOT_OWNER => LOCK_LOST\nPROVIDER_ERROR => PROVIDER_ERROR
+LockRenewStatus ..> LockStage : mapped stage = RENEW
+
+LockReleaseStatus ..> LockStatus : PROVIDER_ERROR => RELEASE_FAILED\nNOT_FOUND / NOT_OWNER => LOCK_LOST or SUCCESS + event
+LockReleaseStatus ..> LockStage : mapped stage = RELEASE
+
+LockCheckStatus ..> LockStatus : NOT_FOUND / NOT_OWNER => LOCK_LOST\nPROVIDER_ERROR => PROVIDER_ERROR
+LockCheckStatus ..> LockStage : mapped stage = CHECK
+
+note right of LockStatus
+  LockStatus 表示最终结果。
+  它不表达错误发生在哪一步。
+end note
+
+note right of LockStage
+  LockStage 表示生命周期阶段。
+  它和 LockStatus 组合使用。
+end note
+
+note bottom of LockRenewStatus
+  ProviderStatus 是底层事实。
+  Core 层负责把它映射成：
+  LockStatus + LockStage + RuntimeFlag。
+end note
+
+@enduml

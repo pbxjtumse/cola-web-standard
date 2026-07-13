@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.starter;
+package com.xjtu.iron.distributed.lock.starter.properties;
 
 import com.xjtu.iron.distributed.lock.api.LockWaitStrategy;
 

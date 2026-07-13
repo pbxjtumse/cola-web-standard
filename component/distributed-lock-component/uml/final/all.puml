@@ -1,5 +1,5 @@
 @startuml
-title DistributedLock execute 完整状态图 - CODE/DOC 合并收敛版
+title DistributedLock execute 主流程 + watchdog 合并状态图
 
 legend right
   [DOC: FlowNode]      说明性流程节点，不进入代码枚举
@@ -42,31 +42,54 @@ PROVIDER_ERROR_ACQUIRE : [CODE: LockStatus]\nstatus=PROVIDER_ERROR\nstage=ACQUIR
 ACQUIRED --> CREATE_HANDLE
 CREATE_HANDLE : [DOC: FlowNode]\n创建 LockLease\n创建 LockRuntimeState\n创建 LockHandle
 
-CREATE_HANDLE --> START_WATCHDOG : autoRenew=true
-START_WATCHDOG : [DOC: FlowNode]\n注册 watchdog 续期任务
+CREATE_HANDLE --> EXECUTING
 
-CREATE_HANDLE --> EXECUTING : autoRenew=false
-START_WATCHDOG --> EXECUTING
+state EXECUTING {
+    [*] --> CALLBACK_RUNNING
 
-EXECUTING : [DOC: FlowNode]\n执行 LockCallback / LockRunnable\n此时 acquired=true
+    CALLBACK_RUNNING : [DOC: FlowNode]\n业务 callback 正在执行\nruntime.released=false
 
-note right of EXECUTING
-  watchdog 是异步续期任务，不是业务线程。
+    CALLBACK_RUNNING --> BUSINESS_SUCCESS_INNER : callback 正常返回
+    BUSINESS_SUCCESS_INNER : [DOC: FlowNode]\n业务执行完成\n但锁尚未释放
 
-  执行业务期间可能发生：
-  1. renew=RENEWED
-     -> 不改变主流程
+    CALLBACK_RUNNING --> EXECUTION_FAILED_INNER : callback 普通异常
+    EXECUTION_FAILED_INNER : [CODE: LockStatus]\nstatus=EXECUTION_FAILED\nstage=EXECUTE\nacquired=true
 
-  2. renew=NOT_FOUND / NOT_OWNER
-     -> runtime.lost=true
-     -> 发布 LOCK_LOST 事件
-     -> stage=RENEW
+    CALLBACK_RUNNING --> FENCING_REJECTED_INNER : callback 抛出 FencingTokenRejectedException
+    FENCING_REJECTED_INNER : [CODE: LockStatus]\nstatus=FENCING_REJECTED\nstage=FENCING\nacquired=true
 
-  3. renew=PROVIDER_ERROR
-     -> 发布 PROVIDER_ERROR 事件
-     -> stage=RENEW
-     -> 不确定是否失锁
-end note
+    CALLBACK_RUNNING --> LOCK_LOST_BY_CHECK_INNER : callback 抛出 LockLostException
+    LOCK_LOST_BY_CHECK_INNER : [CODE: LockStatus]\nstatus=LOCK_LOST\nstage=CHECK\nacquired=true
+
+    --
+
+    [*] --> WATCHDOG_DECISION
+
+    WATCHDOG_DECISION : [DOC: FlowNode]\n是否开启自动续期
+
+    WATCHDOG_DECISION --> WATCHDOG_DISABLED : autoRenew=false
+    WATCHDOG_DISABLED : [DOC: FlowNode]\n不启动 watchdog
+
+    WATCHDOG_DECISION --> WATCHDOG_RUNNING : autoRenew=true
+    WATCHDOG_RUNNING : [DOC: FlowNode]\nwatchdog 定时续期\n每隔 renewInterval 调用 provider.renew()
+
+    WATCHDOG_RUNNING --> WATCHDOG_RUNNING : [CODE: Provider]\nLockRenewStatus=RENEWED\nstage=RENEW\n续期成功，不改变主流程
+
+    WATCHDOG_RUNNING --> WATCHDOG_LOST_NOT_FOUND : [CODE: Provider]\nLockRenewStatus=NOT_FOUND
+    WATCHDOG_LOST_NOT_FOUND : [DOC: FlowNode]\nRedis key 不存在\n[CODE: RuntimeFlag] markLostOnce()\n[CODE: LockStatus] status=LOCK_LOST\n[CODE: LockStage] stage=RENEW
+
+    WATCHDOG_RUNNING --> WATCHDOG_LOST_NOT_OWNER : [CODE: Provider]\nLockRenewStatus=NOT_OWNER
+    WATCHDOG_LOST_NOT_OWNER : [DOC: FlowNode]\nownerToken 不匹配\n[CODE: RuntimeFlag] markLostOnce()\n[CODE: LockStatus] status=LOCK_LOST\n[CODE: LockStage] stage=RENEW
+
+    WATCHDOG_RUNNING --> WATCHDOG_PROVIDER_ERROR : [CODE: Provider]\nLockRenewStatus=PROVIDER_ERROR
+    WATCHDOG_PROVIDER_ERROR : [DOC: FlowNode]\n续期发生 Provider 异常\n[CODE: LockStatus] status=PROVIDER_ERROR\n[CODE: LockStage] stage=RENEW\n注意：不确定是否失锁
+
+    WATCHDOG_LOST_NOT_FOUND --> WATCHDOG_STOPPED
+    WATCHDOG_LOST_NOT_OWNER --> WATCHDOG_STOPPED
+    WATCHDOG_PROVIDER_ERROR --> WATCHDOG_RUNNING : 可按策略继续尝试或告警
+
+    WATCHDOG_STOPPED : [DOC: FlowNode]\nwatchdog 停止续期\nruntime.lost=true 或任务结束
+}
 
 EXECUTING --> BUSINESS_SUCCESS : callback 正常返回
 BUSINESS_SUCCESS : [DOC: FlowNode]\n业务代码执行完成\n但锁尚未释放
