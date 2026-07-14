@@ -121,16 +121,25 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
             }
 
             metricsRecorder.recordAcquire(provider.providerName(), actualOptions.getNamespace(), pattern, false, waitDuration);
+            LockStage notAcquiredStage = actualOptions.getWaitTime().isZero()
+                    ? LockStage.ACQUIRE
+                    : LockStage.WAIT;
             eventPublisher.publish(LockEvent.builder()
                     .eventType(LockEventType.NOT_ACQUIRED)
-                    .stage(LockStage.WAIT)
+                    .stage(notAcquiredStage)
                     .status(LockStatus.NOT_ACQUIRED)
                     .namespace(actualOptions.getNamespace())
                     .lockName(lockName)
                     .providerName(provider.providerName())
                     .ownerToken(ownerToken)
                     .build());
-            return LockResult.notAcquired(lockName, null, waitDuration);
+            return LockResult.<LockHandle>builder()
+                    .status(LockStatus.NOT_ACQUIRED)
+                    .stage(notAcquiredStage)
+                    .acquired(false)
+                    .lockName(lockName)
+                    .waitDuration(waitDuration)
+                    .build();
         } catch (IllegalArgumentException e) {
             return LockResult.<LockHandle>builder()
                     .status(LockStatus.INVALID_OPTIONS)

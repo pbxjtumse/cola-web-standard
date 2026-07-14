@@ -65,7 +65,7 @@ public final class ScheduledLockWatchdog implements LockWatchdog, AutoCloseable 
     }
 
     private void renewOnce(WatchdogLockHandle handle, Instant maxRenewDeadline) {
-        if (handle.isReleased() || handle.isLost()) {
+        if (handle.isReleaseAttempted() || handle.isLost()) {
             stop(handle);
             return;
         }

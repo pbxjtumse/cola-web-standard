@@ -1,59 +1,87 @@
 package com.xjtu.iron.distributed.lock.core.runtime;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
  * LockHandle 的本地运行态。
  *
  * <p>
- * 该对象只描述当前 JVM 内部对一次锁租约的运行时判断，不直接等同于 Redis 中 lock key 的真实状态。
+ * 该对象只描述当前 JVM 内部对一次锁租约的运行时判断，不直接等同于 Redis、ZK 或 Etcd 中的真实锁状态。
  * </p>
  *
  * <p>
- * lost 表示当前 LockHandle 已经被判断为不再持有锁，通常由 renew/check/release 返回 NOT_FOUND 或 NOT_OWNER 触发。
- * 它表示非预期失锁或释放阶段发现已经不是 owner。
+ * lost 表示当前 LockHandle 已经被组件判定为不再持有锁。典型触发来源包括 renew/check/release 返回
+ * NOT_FOUND 或 NOT_OWNER。它表达的是“当前 ownerToken 已经不再是锁 owner”，通常意味着非预期失锁或
+ * 释放阶段发现锁已经不属于当前 handle。
  * </p>
  *
  * <p>
- * released 表示当前 LockHandle 的本地释放流程已经执行过。注意：released=true 不一定代表底层锁一定释放成功；
- * 它主要用于保证同一个 LockHandle 的 release 逻辑只执行一次。底层释放是否成功，需要结合 LockReleaseStatus 判断。
+ * releaseAttempted 表示当前 LockHandle 已经进入过本地释放流程。注意：releaseAttempted=true 不代表底层锁
+ * 一定释放成功；它只用于保证同一个 LockHandle 的 release 逻辑只真正执行一次。底层释放结果必须结合
+ * LockReleaseStatus 或 LockResult 判断。
  * </p>
  */
 public final class LockRuntimeState {
 
-    /** 当前 handle 是否已经判定【非预期地丢失锁】。 */
+    /** 当前 handle 是否已经被判定失锁。 */
     private final AtomicBoolean lost = new AtomicBoolean(false);
 
-    /**
-     * 当前 LockHandle 是否已经执行过本地释放流程。
-     *
-     * <p>
-     * 注意：releaseAttempted=true 不一定表示底层锁一定释放成功。它主要用于保证同一个 LockHandle 的 release 逻辑只执行一次。
-     * 底层 release 是否成功，需要结合 LockReleaseStatus 判断。
-     * </p>
-     */
+    /** 当前 handle 是否已经进入过本地释放流程。 */
     private final AtomicBoolean releaseAttempted = new AtomicBoolean(false);
 
     /**
-     * 尝试把状态标记为已释放。
+     * 尝试把当前 handle 标记为已经进入释放流程。
      *
-     * @return 如果本次调用是第一次标记 releaseAttempted，返回 true；如果之前已经释放过，返回 false。
+     * @return 如果本次调用是第一次进入释放流程，返回 true；否则返回 false。
      */
-    public boolean markReleasedOnce() {
+    public boolean markReleaseAttemptedOnce() {
         return releaseAttempted.compareAndSet(false, true);
     }
 
     /**
-     * 尝试把状态标记为失锁。
+     * 兼容旧命名。推荐使用 {@link #markReleaseAttemptedOnce()}。
      *
-     * @return 如果本次调用是第一次标记 lost，返回 true；如果之前已经标记过，返回 false。
+     * @return 如果本次调用是第一次进入释放流程，返回 true；否则返回 false。
+     */
+    @Deprecated
+    public boolean markReleasedOnce() {
+        return markReleaseAttemptedOnce();
+    }
+
+    /**
+     * 尝试把当前 handle 标记为失锁。
+     *
+     * @return 如果本次调用是第一次标记 lost，返回 true；否则返回 false。
      */
     public boolean markLostOnce() {
         return lost.compareAndSet(false, true);
     }
 
-    /** 获取 handle 是否已经判定失锁。 */
-    public boolean isLost() { return lost.get(); }
+    /**
+     * 当前 handle 是否已经被判定失锁。
+     *
+     * @return 已判定失锁返回 true。
+     */
+    public boolean isLost() {
+        return lost.get();
+    }
 
-    /** 获取 handle 是否已经判定释放锁。 */
-    public boolean isReleased() { return releaseAttempted.get(); }
+    /**
+     * 当前 handle 是否已经进入过本地释放流程。
+     *
+     * @return 已进入过本地释放流程返回 true。
+     */
+    public boolean isReleaseAttempted() {
+        return releaseAttempted.get();
+    }
+
+    /**
+     * 兼容旧命名。推荐使用 {@link #isReleaseAttempted()}。
+     *
+     * @return 已进入过本地释放流程返回 true。
+     */
+    @Deprecated
+    public boolean isReleased() {
+        return isReleaseAttempted();
+    }
 }

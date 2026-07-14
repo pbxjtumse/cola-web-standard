@@ -106,11 +106,28 @@ public interface LockHandle extends AutoCloseable {
     boolean isLost();
 
     /**
-     * 当前 handle 是否已经释放过。
+     * 当前 handle 是否已经进入过本地释放流程。
      *
-     * @return 已释放返回 {@code true}。
+     * <p>注意：本方法不表示底层锁一定释放成功，只表示当前 LockHandle 的 release 流程已经被尝试过，
+     * 主要用于避免同一个 handle 重复执行远程释放逻辑。底层释放是否成功需要结合 release 结果、事件或
+     * execute 返回的 LockResult 判断。</p>
+     *
+     * @return 已进入过本地释放流程返回 {@code true}。
      */
-    boolean isReleased();
+    boolean isReleaseAttempted();
+
+    /**
+     * 当前 handle 是否已经进入过本地释放流程。
+     *
+     * <p>兼容旧命名。该方法容易被误解为“底层锁已经释放成功”，因此新代码应优先使用
+     * {@link #isReleaseAttempted()}。</p>
+     *
+     * @return 已进入过本地释放流程返回 {@code true}。
+     */
+    @Deprecated
+    default boolean isReleased() {
+        return isReleaseAttempted();
+    }
 
     /**
      * 当前时刻是否仍然持有锁。

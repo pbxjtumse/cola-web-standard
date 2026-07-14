@@ -28,7 +28,7 @@ import java.util.OptionalLong;
  * 默认锁句柄实现。
  *
  * <p>DefaultLockHandle 表示一次成功加锁后的本地租约句柄。它持有不可变的 {@link LockLease}，
- * 并通过 {@link LockRuntimeState} 保存 lost/released 这类运行态标记。</p>
+ * 并通过 {@link LockRuntimeState} 保存 lost/releaseAttempted 这类运行态标记。</p>
  *
  * <p>注意：本类不使用 Java Thread 判断锁归属。所有续期、释放、检查操作都依赖 ownerToken。
  * 因此同一个 LockHandle 可以跨线程传递。</p>
@@ -128,13 +128,13 @@ public final class DefaultLockHandle implements WatchdogLockHandle {
     }
 
     @Override
-    public boolean isReleased() {
-        return runtimeState.isReleased();
+    public boolean isReleaseAttempted() {
+        return runtimeState.isReleaseAttempted();
     }
 
     @Override
     public boolean checkHeld() {
-        if (runtimeState.isReleased() || runtimeState.isLost()) {
+        if (runtimeState.isReleaseAttempted() || runtimeState.isLost()) {
             return false;
         }
         LockCheckResponse response = provider.check(LockCheckRequest.fromLease(lease));
@@ -154,7 +154,7 @@ public final class DefaultLockHandle implements WatchdogLockHandle {
 
     @Override
     public boolean renew() {
-        if (runtimeState.isReleased() || runtimeState.isLost()) {
+        if (runtimeState.isReleaseAttempted() || runtimeState.isLost()) {
             return false;
         }
         LockRenewResponse response = provider.renew(LockRenewRequest.fromLease(lease));
@@ -188,8 +188,11 @@ public final class DefaultLockHandle implements WatchdogLockHandle {
      * 因此这里提供比 {@link #unlock()} 更细的 core 内部方法。</p>
      */
     public LockReleaseResponse releaseWithResult() {
-        if (!runtimeState.markReleasedOnce()) {
-            return LockReleaseResponse.notFound();
+        if (!runtimeState.markReleaseAttemptedOnce()) {
+            // 本地 release 流程已经执行过，说明这是重复 unlock/close/finally。
+            // 这里不能返回 NOT_FOUND，否则 execute 模板可能把重复释放误判成失锁。
+            // 返回 RELEASED 只表示“本次无需再执行远程释放”，不会代表这次调用真的删除了 Redis key。
+            return LockReleaseResponse.released();
         }
         LockReleaseResponse response = provider.release(LockReleaseRequest.fromLease(lease));
         switch (response.getStatus()) {

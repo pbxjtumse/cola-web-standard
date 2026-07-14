@@ -1,7 +1,7 @@
 package com.xjtu.iron.distributed.lock.core.spi.response;
 
-import com.xjtu.iron.distributed.lock.api.LockStatus;
 import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
+import com.xjtu.iron.distributed.lock.core.spi.status.LockAcquireStatus;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -9,13 +9,16 @@ import java.util.Objects;
 /**
  * Provider 加锁响应。
  *
- * <p>该对象只表达底层 Provider 的加锁事实：成功、未抢到、Provider 异常。
- * 不直接表达 API 最终状态，最终状态由 core 层根据等待策略和执行阶段统一映射。</p>
+ * <p>
+ * 该对象只表达底层 Provider 的加锁事实：成功、未抢到、Provider 异常。
+ * 它不直接表达 API 最终状态。Core 层会根据等待策略、发生阶段和执行上下文，把
+ * {@link LockAcquireStatus} 映射为 LockStatus + LockStage。
+ * </p>
  */
 public final class LockAcquireResponse {
 
     /** Provider 加锁状态。 */
-    private final LockStatus status;
+    private final LockAcquireStatus status;
 
     /** 加锁成功后的租约快照。 */
     private final LockLease lease;
@@ -36,10 +39,10 @@ public final class LockAcquireResponse {
         this.error = builder.error;
         this.message = builder.message;
 
-        if (status == LockStatus.ACQUIRED && lease == null) {
+        if (status == LockAcquireStatus.ACQUIRED && lease == null) {
             throw new IllegalArgumentException("lease must not be null when status is ACQUIRED");
         }
-        if (status != LockStatus.ACQUIRED && lease != null) {
+        if (status != LockAcquireStatus.ACQUIRED && lease != null) {
             throw new IllegalArgumentException("lease must be null when status is not ACQUIRED");
         }
     }
@@ -49,31 +52,31 @@ public final class LockAcquireResponse {
     }
 
     public static LockAcquireResponse acquired(LockLease lease) {
-        return builder().status(LockStatus.ACQUIRED).lease(lease).build();
+        return builder().status(LockAcquireStatus.ACQUIRED).lease(lease).build();
     }
 
     public static LockAcquireResponse notAcquired(Duration remainingTtl) {
-        return builder().status(LockStatus.NOT_ACQUIRED).remainingTtl(remainingTtl).build();
+        return builder().status(LockAcquireStatus.NOT_ACQUIRED).remainingTtl(remainingTtl).build();
     }
 
     public static LockAcquireResponse failed(Throwable error) {
         return builder()
-                .status(LockStatus.PROVIDER_ERROR)
+                .status(LockAcquireStatus.PROVIDER_ERROR)
                 .error(error)
                 .message(error == null ? null : error.getMessage())
                 .build();
     }
 
-    public LockStatus getStatus() {
+    public LockAcquireStatus getStatus() {
         return status;
     }
 
     public boolean isAcquired() {
-        return status == LockStatus.ACQUIRED;
+        return status == LockAcquireStatus.ACQUIRED;
     }
 
     public boolean isNotAcquired() {
-        return status == LockStatus.NOT_ACQUIRED;
+        return status == LockAcquireStatus.NOT_ACQUIRED;
     }
 
     public LockLease getLease() {
@@ -93,13 +96,13 @@ public final class LockAcquireResponse {
     }
 
     public boolean hasError() {
-        return status == LockStatus.PROVIDER_ERROR || error != null;
+        return status == LockAcquireStatus.PROVIDER_ERROR || error != null;
     }
 
     /** LockAcquireResponse 构造器。 */
     public static final class Builder {
 
-        private LockStatus status;
+        private LockAcquireStatus status;
         private LockLease lease;
         private Duration remainingTtl;
         private Throwable error;
@@ -108,7 +111,7 @@ public final class LockAcquireResponse {
         private Builder() {
         }
 
-        public Builder status(LockStatus status) {
+        public Builder status(LockAcquireStatus status) {
             this.status = status;
             return this;
         }
