@@ -136,6 +136,23 @@ watchdog 会在以下情况停止：
 
 
 
+README
+架构图
+核心时序图
+状态图
+Quick Start
+Demo
+单元测试
+并发测试
+故障测试
+Benchmark
+Metrics截图
+生产边界说明
+已知限制
+版本发布记录
+
+
+
 合法的组合 
 
 

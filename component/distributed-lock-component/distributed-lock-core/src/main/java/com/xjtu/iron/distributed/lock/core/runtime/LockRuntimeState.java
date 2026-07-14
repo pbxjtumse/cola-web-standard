@@ -38,15 +38,6 @@ public final class LockRuntimeState {
         return releaseAttempted.compareAndSet(false, true);
     }
 
-    /**
-     * 兼容旧命名。推荐使用 {@link #markReleaseAttemptedOnce()}。
-     *
-     * @return 如果本次调用是第一次进入释放流程，返回 true；否则返回 false。
-     */
-    @Deprecated
-    public boolean markReleasedOnce() {
-        return markReleaseAttemptedOnce();
-    }
 
     /**
      * 尝试把当前 handle 标记为失锁。
@@ -75,13 +66,4 @@ public final class LockRuntimeState {
         return releaseAttempted.get();
     }
 
-    /**
-     * 兼容旧命名。推荐使用 {@link #isReleaseAttempted()}。
-     *
-     * @return 已进入过本地释放流程返回 true。
-     */
-    @Deprecated
-    public boolean isReleased() {
-        return isReleaseAttempted();
-    }
 }
