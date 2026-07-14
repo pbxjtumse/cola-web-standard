@@ -133,3 +133,44 @@ watchdog 会在以下情况停止：
 4. renew 出现不可恢复 Provider 异常；
 5. 达到 maxRenewTime；
 6. 组件关闭。
+
+
+
+合法的组合 
+
+
+| LockStatus         | 合法 LockStage | acquired | 说明                                                          |
+| ------------------ | ------------ | -------: | ----------------------------------------------------------- |
+| `INVALID_OPTIONS`  | `VALIDATE`   |    false | 参数非法                                                        |
+| `ACQUIRED`         | `ACQUIRE`    |     true | `tryLock` 成功返回 `LockHandle`                                 |
+| `NOT_ACQUIRED`     | `ACQUIRE`    |    false | `NO_WAIT` 下首次抢锁失败                                           |
+| `NOT_ACQUIRED`     | `WAIT`       |    false | 等待重试后超时                                                     |
+| `SUCCESS`          | `EXECUTE`    |     true | `execute` 业务正常完成，释放成功或释放失锁被降级为事件                            |
+| `EXECUTION_FAILED` | `EXECUTE`    |     true | callback 普通异常                                               |
+| `LOCK_LOST`        | `RENEW`      |     true | watchdog 续期发现 `NOT_FOUND / NOT_OWNER`                       |
+| `LOCK_LOST`        | `CHECK`      |     true | `checkHeld/assertHeld` 发现失锁                                 |
+| `LOCK_LOST`        | `RELEASE`    |     true | release 时发现 `NOT_FOUND / NOT_OWNER`，且 `failOnLockLost=true` |
+| `FENCING_REJECTED` | `FENCING`    |     true | 二期 fencing token 被业务资源拒绝                                    |
+| `RELEASE_FAILED`   | `RELEASE`    |     true | release 阶段 Provider 异常                                      |
+| `PROVIDER_ERROR`   | `ACQUIRE`    |    false | acquire 阶段 Provider 异常                                      |
+| `PROVIDER_ERROR`   | `RENEW`      |     true | renew 阶段 Provider 异常，是否失锁不确定                                |
+| `PROVIDER_ERROR`   | `CHECK`      |     true | check 阶段 Provider 异常                                        |
+
+
+最直观的对比
+
+| 对象                 | 什么时候存在                | 是否变化 | 给谁用              | 表达什么                         |
+| ------------------ | --------------------- | ---: | ---------------- | ---------------------------- |
+| `LockRuntimeState` | callback 执行期间         |  会变化 | 组件内部             | 管“执行过程中这个 handle 现在怎么样”；|
+| `LockResult`       | tryLock / execute 返回时 | 不应变化 | 业务方              | LockResult 管“这次 API 调用最后结果是什么”                 |
+| `LockLease`        | 加锁成功时创建               | 不应变化 | 组件内部 / handle 使用 | 本次租约的身份信息                    |
+| `LockHandle`       | 加锁成功后                 | 行为对象 | 业务方 + 组件内部       | 操作这次租约                       |
+
+
+
+| lost  | releaseAttempted | 含义                      |
+| ----- | ---------------- | ----------------------- |
+| false | false            | 当前 handle 认为自己仍在持锁，还没释放 |
+| true  | false            | 已经发现失锁，但还没进入本地释放流程      |
+| false | true             | 正常进入过释放流程，且没有发现失锁       |
+| true  | true             | 已经发现失锁，并且释放流程也执行过       |

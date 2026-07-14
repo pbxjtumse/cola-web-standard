@@ -1,85 +1,250 @@
 @startuml
 !include ../../_common/style.puml
+
 title 状态、阶段、Provider 结果关系图
 
+left to right direction
+
+skinparam packageStyle rectangle
 skinparam classAttributeIconSize 0
+hide empty members
 
-enum LockStatus <<CODE: API Final Status>> {
+package "Provider 动作结果\n(core.spi.status)" as provider_status {
+
+  enum LockAcquireStatus <<SPI>> {
+    ACQUIRED
+    NOT_ACQUIRED
+    PROVIDER_ERROR
+  }
+
+  enum LockRenewStatus <<SPI>> {
+    RENEWED
+    NOT_FOUND
+    NOT_OWNER
+    PROVIDER_ERROR
+  }
+
+  enum LockReleaseStatus <<SPI>> {
+    RELEASED
+    NOT_FOUND
+    NOT_OWNER
+    PROVIDER_ERROR
+  }
+
+  enum LockCheckStatus <<SPI>> {
+    HELD
+    NOT_FOUND
+    NOT_OWNER
+    PROVIDER_ERROR
+  }
+}
+
+package "API Result\n(distributed-lock-api)" as api_result {
+
+  class LockResult {
+    - LockStatus status
+    - LockStage stage
+    - boolean acquired
+  }
+
+  class LockRuntimeState <<Core Runtime>> {
+    lost
+    released
+  }
+
+  enum LockStatus <<API Final Status>> {
+    ACQUIRED
+    SUCCESS
+    NOT_ACQUIRED
+    EXECUTION_FAILED
+    LOCK_LOST
+    FENCING_REJECTED
+    RELEASE_FAILED
+    PROVIDER_ERROR
+    INVALID_OPTIONS
+  }
+
+  enum LockStage <<API Stage>> {
+    VALIDATE
+    ACQUIRE
+    WAIT
+    EXECUTE
+    FENCING
+    RENEW
+    RELEASE
+    CHECK
+  }
+}
+
+provider_status ..> LockResult : Core 映射为\nstatus + stage + acquired
+provider_status ..> LockRuntimeState : 部分结果更新\nlost / released
+
+LockResult --> LockStatus : final status
+LockResult --> LockStage : occurred stage
+
+' =========================
+' Mapping Cards
+' =========================
+
+note as acquire_note
+  Acquire Mapping
+
   ACQUIRED
-  SUCCESS
-  NOT_ACQUIRED
-  EXECUTION_FAILED
-  LOCK_LOST
-  FENCING_REJECTED
-  RELEASE_FAILED
+  -> status=ACQUIRED
+  -> stage=ACQUIRE
+  -> acquired=true
+
+  NOT_ACQUIRED + waitTime=0
+  -> status=NOT_ACQUIRED
+  -> stage=ACQUIRE
+  -> acquired=false
+
+  NOT_ACQUIRED + waitTime>0 timeout
+  -> status=NOT_ACQUIRED
+  -> stage=WAIT
+  -> acquired=false
+
   PROVIDER_ERROR
-  INVALID_OPTIONS
-}
+  -> status=PROVIDER_ERROR
+  -> stage=ACQUIRE
+  -> acquired=false
+end note
 
-enum LockStage <<CODE: API Stage>> {
-  VALIDATE
-  ACQUIRE
-  WAIT
-  EXECUTE
-  FENCING
-  RENEW
-  RELEASE
-  CHECK
-}
+note as release_note
+  Release Mapping
 
-enum LockAcquireStatus <<SPI>> {
-  ACQUIRED
-  NOT_ACQUIRED
-  PROVIDER_ERROR
-}
-
-enum LockRenewStatus <<SPI>> {
-  RENEWED
-  NOT_FOUND
-  NOT_OWNER
-  PROVIDER_ERROR
-}
-
-enum LockReleaseStatus <<SPI>> {
   RELEASED
-  NOT_FOUND
-  NOT_OWNER
-  PROVIDER_ERROR
-}
+  -> runtime.released=true
+  -> 不改变原始业务结果
 
-enum LockCheckStatus <<SPI>> {
+  NOT_FOUND / NOT_OWNER
+  -> runtime.lost=true
+  -> 发布 LOCK_LOST 事件
+  -> stage=RELEASE
+
+  PROVIDER_ERROR
+  -> status=RELEASE_FAILED
+  -> stage=RELEASE
+end note
+
+note as renew_note
+  Renew Mapping
+
+  RENEWED
+  -> 续期成功
+  -> 不改变主流程
+
+  NOT_FOUND / NOT_OWNER
+  -> runtime.lost=true
+  -> status=LOCK_LOST
+  -> stage=RENEW
+
+  PROVIDER_ERROR
+  -> status=PROVIDER_ERROR
+  -> stage=RENEW
+  -> 不确定是否失锁
+end note
+
+note as check_note
+  Check Mapping
+
   HELD
-  NOT_FOUND
-  NOT_OWNER
+  -> checkHeld=true
+
+  NOT_FOUND / NOT_OWNER
+  -> runtime.lost=true
+  -> status=LOCK_LOST
+  -> stage=CHECK
+
   PROVIDER_ERROR
-}
-
-class LockResult {
-  - LockStatus status
-  - LockStage stage
-  - boolean acquired
-}
-class LockEvent {
-  - LockEventType eventType
-  - LockStage stage
-  - LockStatus status
-}
-
-LockResult --> LockStatus
-LockResult --> LockStage
-LockEvent --> LockStatus
-LockEvent --> LockStage
-
-LockAcquireStatus ..> LockStatus : ACQUIRED=>ACQUIRED\nNOT_ACQUIRED=>NOT_ACQUIRED\nPROVIDER_ERROR=>PROVIDER_ERROR
-LockRenewStatus ..> LockStatus : NOT_FOUND/NOT_OWNER=>LOCK_LOST\nPROVIDER_ERROR=>PROVIDER_ERROR
-LockReleaseStatus ..> LockStatus : PROVIDER_ERROR=>RELEASE_FAILED\nNOT_FOUND/NOT_OWNER=>LOCK_LOST or event
-LockCheckStatus ..> LockStatus : NOT_FOUND/NOT_OWNER=>LOCK_LOST\nPROVIDER_ERROR=>PROVIDER_ERROR
-
-note right of LockStatus
-  最终结果，不表达发生在哪一步。
+  -> status=PROVIDER_ERROR
+  -> stage=CHECK
 end note
-note right of LockStage
-  生命周期阶段，需要和 LockStatus 组合理解。
+
+note as combo_note
+  LockStatus + LockStage 合法组合
+
+  INVALID_OPTIONS
+  -> stage=VALIDATE, acquired=false
+
+  ACQUIRED
+  -> stage=ACQUIRE, acquired=true
+  -> 仅 tryLock 成功直接返回时使用
+
+  NOT_ACQUIRED
+  -> stage=ACQUIRE, acquired=false
+  -> NO_WAIT 首次抢锁失败
+
+  NOT_ACQUIRED
+  -> stage=WAIT, acquired=false
+  -> BACKOFF 等待超时
+
+  SUCCESS
+  -> stage=EXECUTE, acquired=true
+
+  EXECUTION_FAILED
+  -> stage=EXECUTE, acquired=true
+
+  LOCK_LOST
+  -> stage=RENEW, acquired=true
+  -> watchdog 续期发现失锁
+
+  LOCK_LOST
+  -> stage=CHECK, acquired=true
+  -> checkHeld / assertHeld 发现失锁
+
+  LOCK_LOST
+  -> stage=RELEASE, acquired=true
+  -> release 发现失锁且 failOnLockLost=true
+
+  FENCING_REJECTED
+  -> stage=FENCING, acquired=true
+
+  RELEASE_FAILED
+  -> stage=RELEASE, acquired=true
+
+  PROVIDER_ERROR
+  -> stage=ACQUIRE, acquired=false
+
+  PROVIDER_ERROR
+  -> stage=RENEW, acquired=true
+
+  PROVIDER_ERROR
+  -> stage=CHECK, acquired=true
 end note
+
+note as status_note
+  LockStatus 是最终结果。
+  不表达发生在哪一步。
+end note
+
+note as stage_note
+  LockStage 是生命周期阶段。
+  必须和 LockStatus 组合理解。
+end note
+
+' =========================
+' Layout Hints
+' =========================
+
+' 上方：合法组合
+combo_note -[hidden]down-> provider_status
+
+' 左侧：Acquire / Release
+acquire_note -[hidden]down-> release_note
+acquire_note -[hidden]right-> provider_status
+release_note -[hidden]right-> provider_status
+
+' 主体：Provider -> API Result
+provider_status -[hidden]right-> api_result
+
+' 下方：Renew / Check
+provider_status -[hidden]down-> renew_note
+renew_note -[hidden]right-> check_note
+renew_note -[hidden]up-> api_result
+
+' 右侧：Status / Stage 说明
+api_result -[hidden]right-> status_note
+status_note -[hidden]down-> stage_note
 
 @enduml

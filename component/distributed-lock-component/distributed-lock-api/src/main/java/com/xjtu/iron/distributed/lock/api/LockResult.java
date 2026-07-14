@@ -5,7 +5,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * 分布式锁操作结果。
+ * 分布式锁操作最终结果
  *
  * <p>LockResult 是 {@link DistributedLockClient#tryLock(String, LockOptions)} 和
  * {@link DistributedLockClient#execute(String, LockOptions, LockCallback)} 返回给业务方的统一结果对象。</p>

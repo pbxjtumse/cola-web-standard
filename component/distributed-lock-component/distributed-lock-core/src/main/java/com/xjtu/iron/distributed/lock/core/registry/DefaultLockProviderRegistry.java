@@ -1,4 +1,7 @@
-package com.xjtu.iron.distributed.lock.core.spi;
+package com.xjtu.iron.distributed.lock.core.registry;
+
+import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
+import com.xjtu.iron.distributed.lock.core.spi.LockProviderRegistry;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
