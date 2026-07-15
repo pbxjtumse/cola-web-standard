@@ -3,7 +3,7 @@ package com.xjtu.iron.distributed.lock.starter.configuration;
 import com.xjtu.iron.distributed.lock.provider.redis.RedisLockKeyBuilder;
 import com.xjtu.iron.distributed.lock.provider.redis.RedisLockProvider;
 import com.xjtu.iron.distributed.lock.provider.redis.RedisLockScriptExecutor;
-import com.xjtu.iron.distributed.lock.provider.redis.StringRedisTemplateRedisLockScriptExecutor;
+import com.xjtu.iron.distributed.lock.provider.redis.spring.StringRedisTemplateRedisLockScriptExecutor;
 import com.xjtu.iron.distributed.lock.starter.properties.RedisDistributedLockProperties;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
