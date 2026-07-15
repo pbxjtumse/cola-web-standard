@@ -3,7 +3,7 @@ package com.xjtu.iron.distributed.lock.starter.configuration;
 import com.xjtu.iron.distributed.lock.api.DistributedLockClient;
 import com.xjtu.iron.distributed.lock.provider.redis.RedisLockProvider;
 import com.xjtu.iron.distributed.lock.provider.redis.RedisLockScriptExecutor;
-import org.testng.annotations.Test;
+import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 

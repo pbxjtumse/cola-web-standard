@@ -1,7 +1,7 @@
-package com.xjtu.iron.distributed.lock.provider.redis.spring;
+package com.xjtu.iron.distributed.lock.starter.redis;
 
+import com.xjtu.iron.distributed.lock.provider.redis.RedisLockScriptDescriptor;
 import com.xjtu.iron.distributed.lock.provider.redis.RedisLockScriptExecutor;
-import com.xjtu.iron.distributed.lock.provider.redis.RedisLockScripts;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -16,21 +16,12 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 基于 {@link StringRedisTemplate} 的 Redis Lua 脚本执行器。
+ * 基于 Spring Data Redis {@link StringRedisTemplate} 的 Redis Lua 脚本执行器。
  *
  * <p>
- * 本类只负责把 classpath 下的 Lua 脚本加载成 Spring Data Redis 的 {@link RedisScript} 并执行。
- * Redis 分布式锁的业务语义仍然由 {@code RedisLockProvider} 负责解析。
+ * 该类属于 Spring Boot starter 适配层，而不是 Redis Provider 核心实现。
+ * Redis Provider 只依赖 {@link RedisLockScriptExecutor} 抽象，避免 provider 模块反向依赖 Spring Data Redis。
  * </p>
- *
- * <p>
- * 返回类型约定：
- * </p>
- *
- * <ul>
- *     <li>{@code acquire.lua} 返回 {@code List}，形如 {@code [1, fence]} 或 {@code [0, ttl]}；</li>
- *     <li>{@code release.lua}、{@code renew.lua}、{@code check.lua} 返回 {@code Long}。</li>
- * </ul>
  */
 public final class StringRedisTemplateRedisLockScriptExecutor implements RedisLockScriptExecutor {
 
@@ -54,9 +45,10 @@ public final class StringRedisTemplateRedisLockScriptExecutor implements RedisLo
     }
 
     private RedisScript<?> loadScript(String scriptLocation) {
+        RedisLockScriptDescriptor descriptor = RedisLockScriptDescriptor.fromLocation(scriptLocation);
         DefaultRedisScript<Object> script = new DefaultRedisScript<>();
-        script.setScriptText(loadScriptText(scriptLocation));
-        script.setResultType(resultType(scriptLocation));
+        script.setScriptText(loadScriptText(descriptor.getLocation()));
+        script.setResultType(resultType(descriptor));
         return script;
     }
 
@@ -73,15 +65,7 @@ public final class StringRedisTemplateRedisLockScriptExecutor implements RedisLo
     }
 
     @SuppressWarnings("unchecked")
-    private Class<Object> resultType(String scriptLocation) {
-        if (RedisLockScripts.ACQUIRE.equals(scriptLocation)) {
-            return (Class<Object>) (Class<?>) List.class;
-        }
-        if (RedisLockScripts.RELEASE.equals(scriptLocation)
-                || RedisLockScripts.RENEW.equals(scriptLocation)
-                || RedisLockScripts.CHECK.equals(scriptLocation)) {
-            return (Class<Object>) (Class<?>) Long.class;
-        }
-        return Object.class;
+    private Class<Object> resultType(RedisLockScriptDescriptor descriptor) {
+        return (Class<Object>) descriptor.getResultType();
     }
 }

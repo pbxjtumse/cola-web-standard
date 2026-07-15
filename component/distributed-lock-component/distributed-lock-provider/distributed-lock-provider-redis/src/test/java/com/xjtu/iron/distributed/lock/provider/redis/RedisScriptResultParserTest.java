@@ -1,6 +1,5 @@
-package com.xjtu.iron.distributed.lock.provider.redis.spring;
+package com.xjtu.iron.distributed.lock.provider.redis;
 
-import com.xjtu.iron.distributed.lock.provider.redis.RedisScriptResultParser;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
