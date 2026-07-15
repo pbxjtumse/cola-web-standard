@@ -1,51 +1,43 @@
 package com.xjtu.iron.distributed.lock.core.spi.response;
 
+import com.xjtu.iron.distributed.lock.core.spi.LockProviderError;
 import com.xjtu.iron.distributed.lock.core.spi.status.LockReleaseStatus;
 
-/**
- * Provider 解锁响应。
- */
-public final class LockReleaseResponse {
+import java.util.Objects;
 
-    /** 解锁状态。 */
+/** Provider 解锁响应。 */
+public final class LockReleaseResponse implements LockProviderResponse<LockReleaseStatus> {
+
     private final LockReleaseStatus status;
-
-    /** Provider 异常。 */
-    private final Throwable error;
-
-    /** Provider 额外消息。 */
-    private final String message;
+    private final LockProviderError lockProviderError;
 
     private LockReleaseResponse(Builder builder) {
-        this.status = builder.status;
-        this.error = builder.error;
-        this.message = builder.message;
-        if (status == null) {
-            throw new IllegalArgumentException("status must not be null");
-        }
+        this.status = Objects.requireNonNull(builder.status, "status must not be null");
+        this.lockProviderError = builder.lockProviderError == null ? LockProviderError.none() : builder.lockProviderError;
     }
 
     public static Builder builder() { return new Builder(); }
     public static LockReleaseResponse released() { return builder().status(LockReleaseStatus.RELEASED).build(); }
     public static LockReleaseResponse notOwner() { return builder().status(LockReleaseStatus.NOT_OWNER).build(); }
     public static LockReleaseResponse notFound() { return builder().status(LockReleaseStatus.NOT_FOUND).build(); }
-    public static LockReleaseResponse failed(Throwable error) { return builder().status(LockReleaseStatus.PROVIDER_ERROR).error(error).message(error == null ? null : error.getMessage()).build(); }
+    public static LockReleaseResponse failed(Throwable error) { return builder().status(LockReleaseStatus.PROVIDER_ERROR).providerError(LockProviderError.of(error)).build(); }
+    public static LockReleaseResponse failed(Throwable error, String message) { return builder().status(LockReleaseStatus.PROVIDER_ERROR).providerError(LockProviderError.of(error, message)).build(); }
 
+    @Override
     public LockReleaseStatus getStatus() { return status; }
-    public Throwable getError() { return error; }
-    public String getMessage() { return message; }
+    @Override
+    public LockProviderError getProviderError() { return lockProviderError; }
     public boolean isReleased() { return status == LockReleaseStatus.RELEASED; }
     public boolean isLockLost() { return status == LockReleaseStatus.NOT_OWNER || status == LockReleaseStatus.NOT_FOUND; }
 
-    /** LockReleaseResponse 构造器。 */
     public static final class Builder {
         private LockReleaseStatus status;
-        private Throwable error;
-        private String message;
+        private LockProviderError lockProviderError;
         private Builder() {}
         public Builder status(LockReleaseStatus status) { this.status = status; return this; }
-        public Builder error(Throwable error) { this.error = error; return this; }
-        public Builder message(String message) { this.message = message; return this; }
+        public Builder providerError(LockProviderError lockProviderError) { this.lockProviderError = lockProviderError; return this; }
+        public Builder error(Throwable error) { this.lockProviderError = LockProviderError.of(error); return this; }
+        public Builder message(String message) { this.lockProviderError = LockProviderError.of(lockProviderError == null ? null : lockProviderError.getCause(), message); return this; }
         public LockReleaseResponse build() { return new LockReleaseResponse(this); }
     }
 }

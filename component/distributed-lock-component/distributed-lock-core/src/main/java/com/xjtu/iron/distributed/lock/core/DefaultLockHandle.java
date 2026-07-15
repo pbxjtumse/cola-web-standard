@@ -3,19 +3,19 @@ package com.xjtu.iron.distributed.lock.core;
 import com.xjtu.iron.distributed.lock.api.LockStage;
 import com.xjtu.iron.distributed.lock.api.LockStatus;
 import com.xjtu.iron.distributed.lock.api.exception.LockLostException;
-import com.xjtu.iron.distributed.lock.core.event.LockEvent;
+import com.xjtu.iron.distributed.lock.core.event.LockEventFactory;
 import com.xjtu.iron.distributed.lock.core.event.LockEventPublisher;
 import com.xjtu.iron.distributed.lock.core.event.LockEventType;
-import com.xjtu.iron.distributed.lock.core.metrics.LockMetricsRecorder;
-import com.xjtu.iron.distributed.lock.core.name.LockNamePatternResolver;
+import com.xjtu.iron.distributed.lock.core.metrics.LockMetricsFacade;
+import com.xjtu.iron.distributed.lock.core.result.LockReleaseOutcome;
 import com.xjtu.iron.distributed.lock.core.runtime.LockRuntimeState;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockCheckResponse;
-import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
+import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
 import com.xjtu.iron.distributed.lock.core.spi.request.LockReleaseRequest;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
 import com.xjtu.iron.distributed.lock.core.spi.request.LockRenewRequest;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockCheckResponse;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
 import com.xjtu.iron.distributed.lock.core.spi.response.LockRenewResponse;
 import com.xjtu.iron.distributed.lock.core.watchdog.WatchdogLockHandle;
 
@@ -35,108 +35,44 @@ import java.util.OptionalLong;
  */
 public final class DefaultLockHandle implements WatchdogLockHandle {
 
-    /** 底层锁 Provider。 */
     private final LockProvider provider;
-
-    /** 不可变租约数据。 */
     private final LockLease lease;
-
-    /** 本地运行时状态。 */
     private final LockRuntimeState runtimeState;
-
-    /** 事件发布器。 */
     private final LockEventPublisher eventPublisher;
-
-    /** 指标记录器。 */
-    private final LockMetricsRecorder metricsRecorder;
-
-    /** 锁名称 pattern 解析器，用于降低指标 tag 基数。 */
-    private final LockNamePatternResolver patternResolver;
+    private final LockEventFactory eventFactory;
+    private final LockMetricsFacade metricsFacade;
 
     public DefaultLockHandle(
             LockProvider provider,
             LockLease lease,
             LockRuntimeState runtimeState,
             LockEventPublisher eventPublisher,
-            LockMetricsRecorder metricsRecorder,
-            LockNamePatternResolver patternResolver
+            LockEventFactory eventFactory,
+            LockMetricsFacade metricsFacade
     ) {
         this.provider = Objects.requireNonNull(provider, "provider must not be null");
         this.lease = Objects.requireNonNull(lease, "lease must not be null");
         this.runtimeState = Objects.requireNonNull(runtimeState, "runtimeState must not be null");
         this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
-        this.metricsRecorder = Objects.requireNonNull(metricsRecorder, "metricsRecorder must not be null");
-        this.patternResolver = Objects.requireNonNull(patternResolver, "patternResolver must not be null");
+        this.eventFactory = Objects.requireNonNull(eventFactory, "eventFactory must not be null");
+        this.metricsFacade = Objects.requireNonNull(metricsFacade, "metricsFacade must not be null");
     }
 
-    /**
-     * 获取内部租约快照。
-     *
-     * <p>该方法仅供 core 内部编排使用，不建议暴露到 API 层。</p>
-     */
-    public LockLease lease() {
-        return lease;
-    }
-
-    /**
-     * 获取运行时状态。
-     *
-     * <p>该方法仅供 core 内部编排和单元测试使用。</p>
-     */
-    public LockRuntimeState runtimeState() {
-        return runtimeState;
-    }
-
-    @Override
-    public String lockName() {
-        return lease.getLockName();
-    }
-
-    @Override
-    public String lockKey() {
-        return lease.getLockKey();
-    }
-
-    @Override
-    public String ownerToken() {
-        return lease.getOwnerToken();
-    }
-
-    @Override
-    public OptionalLong fencingToken() {
-        return lease.fencingToken();
-    }
-
-    @Override
-    public Instant acquiredAt() {
-        return lease.getAcquiredAt();
-    }
-
-    @Override
-    public Duration leaseTime() {
-        return lease.getLeaseTime();
-    }
-
-    @Override
-    public Instant expireAt() {
-        return lease.getExpireAt();
-    }
-
-    @Override
-    public boolean isLost() {
-        return runtimeState.isLost();
-    }
-
-    @Override
-    public boolean isReleaseAttempted() {
-        return runtimeState.isReleaseAttempted();
-    }
+    public LockLease lease() { return lease; }
+    public LockRuntimeState runtimeState() { return runtimeState; }
+    @Override public String lockName() { return lease.getLockName(); }
+    @Override public String lockKey() { return lease.getLockKey(); }
+    @Override public String ownerToken() { return lease.getOwnerToken(); }
+    @Override public OptionalLong fencingToken() { return lease.fencingToken(); }
+    @Override public Instant acquiredAt() { return lease.getAcquiredAt(); }
+    @Override public Duration leaseTime() { return lease.getLeaseTime(); }
+    @Override public Instant expireAt() { return lease.getExpireAt(); }
+    @Override public boolean isLost() { return runtimeState.isLost(); }
+    @Override public boolean isReleaseAttempted() { return runtimeState.isReleaseAttempted(); }
 
     @Override
     public boolean checkHeld() {
-        if (runtimeState.isReleaseAttempted() || runtimeState.isLost()) {
-            return false;
-        }
+        if (runtimeState.isReleaseAttempted() || runtimeState.isLost()) { return false; }
         LockCheckResponse response = provider.check(LockCheckRequest.fromLease(lease));
         switch (response.getStatus()) {
             case HELD:
@@ -154,23 +90,21 @@ public final class DefaultLockHandle implements WatchdogLockHandle {
 
     @Override
     public boolean renew() {
-        if (runtimeState.isReleaseAttempted() || runtimeState.isLost()) {
-            return false;
-        }
+        if (runtimeState.isReleaseAttempted() || runtimeState.isLost()) { return false; }
         LockRenewResponse response = provider.renew(LockRenewRequest.fromLease(lease));
         switch (response.getStatus()) {
             case RENEWED:
-                metricsRecorder.recordRenew(lease.getProviderName(), lease.getNamespace(), true);
+                metricsFacade.recordRenew(lease, true);
                 publish(LockEventType.RENEWED, LockStage.RENEW, null, null);
                 return true;
             case NOT_FOUND:
             case NOT_OWNER:
-                metricsRecorder.recordRenew(lease.getProviderName(), lease.getNamespace(), false);
+                metricsFacade.recordRenew(lease, false);
                 markLost(LockStage.RENEW, null);
                 return false;
             case PROVIDER_ERROR:
             default:
-                metricsRecorder.recordRenew(lease.getProviderName(), lease.getNamespace(), false);
+                metricsFacade.recordRenew(lease, false);
                 publishProviderError(LockStage.RENEW, response.getError());
                 return false;
         }
@@ -178,46 +112,39 @@ public final class DefaultLockHandle implements WatchdogLockHandle {
 
     @Override
     public boolean unlock() {
-        return releaseWithResult().isReleased();
+        return releaseWithOutcome().isReleased();
     }
 
-    /**
-     * 执行释放并返回 Provider 细粒度释放结果。
-     *
-     * <p>execute 模板需要知道 release 是 RELEASED、NOT_OWNER、NOT_FOUND 还是 PROVIDER_ERROR，
-     * 因此这里提供比 {@link #unlock()} 更细的 core 内部方法。</p>
-     */
-    public LockReleaseResponse releaseWithResult() {
+    /** 执行释放并返回 core 内部释放解释结果。 */
+    public LockReleaseOutcome releaseWithOutcome() {
         if (!runtimeState.markReleaseAttemptedOnce()) {
-            // 本地 release 流程已经执行过，说明这是重复 unlock/close/finally。
-            // 这里不能返回 NOT_FOUND，否则 execute 模板可能把重复释放误判成失锁。
-            // 返回 RELEASED 只表示“本次无需再执行远程释放”，不会代表这次调用真的删除了 Redis key。
-            return LockReleaseResponse.released();
+            return LockReleaseOutcome.alreadyAttempted();
         }
         LockReleaseResponse response = provider.release(LockReleaseRequest.fromLease(lease));
-        switch (response.getStatus()) {
+        LockReleaseOutcome outcome = LockReleaseOutcome.fromProviderResponse(response);
+        switch (outcome.getType()) {
             case RELEASED:
-                metricsRecorder.recordRelease(lease.getProviderName(), lease.getNamespace(), true);
+                metricsFacade.recordRelease(lease, true);
                 publish(LockEventType.RELEASED, LockStage.RELEASE, null, null);
-                return response;
-            case NOT_FOUND:
-            case NOT_OWNER:
-                metricsRecorder.recordRelease(lease.getProviderName(), lease.getNamespace(), false);
+                break;
+            case LOCK_LOST:
+                metricsFacade.recordRelease(lease, false);
                 markLost(LockStage.RELEASE, null);
-                return response;
-            case PROVIDER_ERROR:
+                break;
+            case RELEASE_FAILED:
+                metricsFacade.recordRelease(lease, false);
+                publish(LockEventType.RELEASE_FAILED, LockStage.RELEASE, LockStatus.RELEASE_FAILED, outcome.getError());
+                break;
+            case ALREADY_ATTEMPTED:
             default:
-                metricsRecorder.recordRelease(lease.getProviderName(), lease.getNamespace(), false);
-                publish(LockEventType.RELEASE_FAILED, LockStage.RELEASE, LockStatus.RELEASE_FAILED, response.getError());
-                return response;
+                break;
         }
+        return outcome;
     }
 
     @Override
     public void assertHeld() {
-        if (!checkHeld()) {
-            throw new LockLostException("lock lost: " + lease.getLockName());
-        }
+        if (!checkHeld()) { throw new LockLostException("lock lost: " + lease.getLockName()); }
     }
 
     @Override
@@ -228,14 +155,14 @@ public final class DefaultLockHandle implements WatchdogLockHandle {
     @Override
     public void markLostByWatchdog(String reason, Throwable error) {
         if (runtimeState.markLostOnce()) {
-            metricsRecorder.recordLost(lease.getProviderName(), lease.getNamespace());
+            metricsFacade.recordLost(lease);
             publish(LockEventType.LOCK_LOST, LockStage.RENEW, LockStatus.LOCK_LOST, error);
         }
     }
 
     private void markLost(LockStage stage, Throwable error) {
         if (runtimeState.markLostOnce()) {
-            metricsRecorder.recordLost(lease.getProviderName(), lease.getNamespace());
+            metricsFacade.recordLost(lease);
             publish(LockEventType.LOCK_LOST, stage, LockStatus.LOCK_LOST, error);
         }
     }
@@ -245,22 +172,6 @@ public final class DefaultLockHandle implements WatchdogLockHandle {
     }
 
     private void publish(LockEventType type, LockStage stage, LockStatus status, Throwable error) {
-        eventPublisher.publish(LockEvent.builder()
-                .eventType(type)
-                .stage(stage)
-                .status(status)
-                .namespace(lease.getNamespace())
-                .lockName(lease.getLockName())
-                .lockKey(lease.getLockKey())
-                .providerName(lease.getProviderName())
-                .ownerToken(lease.getOwnerToken())
-                .fencingToken(lease.fencingToken().isPresent() ? lease.fencingToken().getAsLong() : null)
-                .error(error)
-                .build());
-    }
-
-    @SuppressWarnings("unused")
-    private String lockNamePattern() {
-        return patternResolver.resolvePattern(lease.getLockName());
+        eventPublisher.publish(eventFactory.fromLease(lease, type, stage, status, error));
     }
 }

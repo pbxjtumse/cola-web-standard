@@ -8,21 +8,25 @@ import com.xjtu.iron.distributed.lock.api.LockResult;
 import com.xjtu.iron.distributed.lock.api.LockStage;
 import com.xjtu.iron.distributed.lock.api.LockStatus;
 import com.xjtu.iron.distributed.lock.api.exception.FencingTokenRejectedException;
+import com.xjtu.iron.distributed.lock.api.exception.InvalidLockOptionsException;
 import com.xjtu.iron.distributed.lock.api.exception.LockLostException;
 import com.xjtu.iron.distributed.lock.api.exception.LockProviderException;
-import com.xjtu.iron.distributed.lock.core.event.LockEvent;
+import com.xjtu.iron.distributed.lock.core.event.LockEventFactory;
 import com.xjtu.iron.distributed.lock.core.event.LockEventPublisher;
 import com.xjtu.iron.distributed.lock.core.event.LockEventType;
+import com.xjtu.iron.distributed.lock.core.metrics.LockMetricsFacade;
 import com.xjtu.iron.distributed.lock.core.metrics.LockMetricsRecorder;
 import com.xjtu.iron.distributed.lock.core.name.LockNamePatternResolver;
 import com.xjtu.iron.distributed.lock.core.name.LockNameValidator;
+import com.xjtu.iron.distributed.lock.core.result.ExecutionOutcome;
+import com.xjtu.iron.distributed.lock.core.result.LockReleaseOutcome;
+import com.xjtu.iron.distributed.lock.core.result.LockResultResolver;
 import com.xjtu.iron.distributed.lock.core.runtime.LockRuntimeState;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockAcquireRequest;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
-import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.core.spi.LockProviderRegistry;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
+import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
 import com.xjtu.iron.distributed.lock.core.token.OwnerTokenGenerator;
 import com.xjtu.iron.distributed.lock.core.wait.LockWaitContext;
 import com.xjtu.iron.distributed.lock.core.wait.LockWaiter;
@@ -56,10 +60,11 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
     private final LockWaiterFactory waiterFactory;
     private final LockWatchdog watchdog;
     private final LockEventPublisher eventPublisher;
-    private final LockMetricsRecorder metricsRecorder;
+    private final LockEventFactory eventFactory;
+    private final LockMetricsFacade metricsFacade;
     private final LockNameValidator lockNameValidator;
-    private final LockNamePatternResolver patternResolver;
     private final Clock clock;
+    private final LockResultResolver resultResolver;
 
     public DefaultDistributedLockClient(
             LockProviderRegistry providerRegistry,
@@ -72,15 +77,33 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
             LockNamePatternResolver patternResolver,
             Clock clock
     ) {
+        this(providerRegistry, ownerTokenGenerator, waiterFactory, watchdog, eventPublisher,
+                new LockEventFactory(), new LockMetricsFacade(metricsRecorder, patternResolver),
+                lockNameValidator, clock, new LockResultResolver());
+    }
+
+    public DefaultDistributedLockClient(
+            LockProviderRegistry providerRegistry,
+            OwnerTokenGenerator ownerTokenGenerator,
+            LockWaiterFactory waiterFactory,
+            LockWatchdog watchdog,
+            LockEventPublisher eventPublisher,
+            LockEventFactory eventFactory,
+            LockMetricsFacade metricsFacade,
+            LockNameValidator lockNameValidator,
+            Clock clock,
+            LockResultResolver resultResolver
+    ) {
         this.providerRegistry = Objects.requireNonNull(providerRegistry, "providerRegistry must not be null");
         this.ownerTokenGenerator = Objects.requireNonNull(ownerTokenGenerator, "ownerTokenGenerator must not be null");
         this.waiterFactory = Objects.requireNonNull(waiterFactory, "waiterFactory must not be null");
         this.watchdog = Objects.requireNonNull(watchdog, "watchdog must not be null");
         this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
-        this.metricsRecorder = Objects.requireNonNull(metricsRecorder, "metricsRecorder must not be null");
+        this.eventFactory = Objects.requireNonNull(eventFactory, "eventFactory must not be null");
+        this.metricsFacade = Objects.requireNonNull(metricsFacade, "metricsFacade must not be null");
         this.lockNameValidator = Objects.requireNonNull(lockNameValidator, "lockNameValidator must not be null");
-        this.patternResolver = Objects.requireNonNull(patternResolver, "patternResolver must not be null");
         this.clock = clock == null ? Clock.systemUTC() : clock;
+        this.resultResolver = Objects.requireNonNull(resultResolver, "resultResolver must not be null");
     }
 
     @Override
@@ -90,33 +113,28 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
             LockOptions actualOptions = validate(lockName, options);
             LockProvider provider = selectProvider(actualOptions);
             validateProviderCapabilities(provider, actualOptions);
-
             String ownerToken = ownerTokenGenerator.generate(actualOptions.getNamespace(), lockName);
             LockAcquireRequest request = LockAcquireRequest.builder()
                     .lockName(lockName)
                     .ownerToken(ownerToken)
                     .options(actualOptions)
                     .build();
-
-            publishAttempt(provider, request);
+            eventPublisher.publish(eventFactory.fromAcquireRequest(provider, request, LockEventType.ACQUIRE_ATTEMPT, LockStage.ACQUIRE, null, null));
             LockWaiter waiter = waiterFactory.getWaiter(actualOptions.getWaitStrategy());
             LockAcquireResponse response = waiter.waitForLock(new LockWaitContext(request, provider, clock));
             Duration waitDuration = Duration.between(start, Instant.now(clock));
-            String pattern = patternResolver.resolvePattern(lockName);
 
             if (response.isAcquired()) {
                 DefaultLockHandle handle = newHandle(provider, response.getLease());
-                metricsRecorder.recordAcquire(provider.providerName(), actualOptions.getNamespace(), pattern, true, waitDuration);
-                publish(handle.lease(), LockEventType.ACQUIRED, LockStage.ACQUIRE, LockStatus.ACQUIRED, null);
+                metricsFacade.recordAcquire(provider.providerName(), actualOptions.getNamespace(), lockName, true, waitDuration);
+                eventPublisher.publish(eventFactory.fromLease(handle.lease(), LockEventType.ACQUIRED, LockStage.ACQUIRE, LockStatus.ACQUIRED, null));
                 return LockResult.acquired(handle, waitDuration);
             }
 
-            if (response.hasError()) {
-                Throwable error = response.getError() == null
-                        ? new LockProviderException(response.getMessage())
-                        : response.getError();
-                metricsRecorder.recordAcquire(provider.providerName(), actualOptions.getNamespace(), pattern, false, waitDuration);
-                publishProviderError(provider, request, LockStage.ACQUIRE, error);
+            if (response.hasProviderError()) {
+                Throwable error = response.getError() == null ? new LockProviderException(response.getMessage()) : response.getError();
+                metricsFacade.recordAcquire(provider.providerName(), actualOptions.getNamespace(), lockName, false, waitDuration);
+                eventPublisher.publish(eventFactory.fromAcquireRequest(provider, request, LockEventType.PROVIDER_ERROR, LockStage.ACQUIRE, LockStatus.PROVIDER_ERROR, error));
                 return LockResult.<LockHandle>builder()
                         .status(LockStatus.PROVIDER_ERROR)
                         .stage(LockStage.ACQUIRE)
@@ -127,27 +145,11 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
                         .build();
             }
 
-            metricsRecorder.recordAcquire(provider.providerName(), actualOptions.getNamespace(), pattern, false, waitDuration);
-            LockStage notAcquiredStage = actualOptions.getWaitTime().isZero()
-                    ? LockStage.ACQUIRE
-                    : LockStage.WAIT;
-            eventPublisher.publish(LockEvent.builder()
-                    .eventType(LockEventType.NOT_ACQUIRED)
-                    .stage(notAcquiredStage)
-                    .status(LockStatus.NOT_ACQUIRED)
-                    .namespace(actualOptions.getNamespace())
-                    .lockName(lockName)
-                    .providerName(provider.providerName())
-                    .ownerToken(ownerToken)
-                    .build());
-            return LockResult.<LockHandle>builder()
-                    .status(LockStatus.NOT_ACQUIRED)
-                    .stage(notAcquiredStage)
-                    .acquired(false)
-                    .lockName(lockName)
-                    .waitDuration(waitDuration)
-                    .build();
-        } catch (IllegalArgumentException e) {
+            metricsFacade.recordAcquire(provider.providerName(), actualOptions.getNamespace(), lockName, false, waitDuration);
+            LockStage notAcquiredStage = actualOptions.getWaitTime().isZero() ? LockStage.ACQUIRE : LockStage.WAIT;
+            eventPublisher.publish(eventFactory.fromAcquireRequest(provider, request, LockEventType.NOT_ACQUIRED, notAcquiredStage, LockStatus.NOT_ACQUIRED, null));
+            return LockResult.notAcquired(lockName, null, notAcquiredStage, waitDuration);
+        } catch (IllegalArgumentException | InvalidLockOptionsException e) {
             return LockResult.<LockHandle>builder()
                     .status(LockStatus.INVALID_OPTIONS)
                     .stage(LockStage.VALIDATE)
@@ -162,12 +164,10 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
     @Override
     public <T> LockResult<T> execute(String lockName, LockOptions options, LockCallback<T> callback) {
         Objects.requireNonNull(callback, "callback must not be null");
-        Instant start = Instant.now(clock);
         LockResult<LockHandle> acquireResult = tryLock(lockName, options);
         if (!acquireResult.isAcquired()) {
             return copyAcquireFailure(acquireResult);
         }
-
         DefaultLockHandle handle = (DefaultLockHandle) acquireResult.handle()
                 .orElseThrow(() -> new IllegalStateException("acquired result has no handle"));
         LockOptions actualOptions = options == null ? LockOptions.defaults() : options;
@@ -175,59 +175,40 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
             watchdog.start(handle, actualOptions);
         }
 
-        T value = null;
-        LockStatus originalStatus = LockStatus.SUCCESS;
-        LockStage originalStage = LockStage.EXECUTE;
-        Throwable originalError = null;
+        ExecutionOutcome<T> executionOutcome;
         try {
-            publish(handle.lease(), LockEventType.EXECUTION_STARTED, LockStage.EXECUTE, null, null);
-            value = callback.doWithLock(handle);
+            eventPublisher.publish(eventFactory.fromLease(handle.lease(), LockEventType.EXECUTION_STARTED, LockStage.EXECUTE, null, null));
+            T value = callback.doWithLock(handle);
             if (handle.isLost() && actualOptions.isFailOnLockLost()) {
-                originalStatus = LockStatus.LOCK_LOST;
-                originalStage = LockStage.RENEW;
-                originalError = new LockLostException("lock lost during execution: " + lockName);
+                executionOutcome = ExecutionOutcome.failure(LockStatus.LOCK_LOST, LockStage.RENEW,
+                        new LockLostException("lock lost during execution: " + lockName));
+            } else {
+                executionOutcome = ExecutionOutcome.success(value);
             }
         } catch (FencingTokenRejectedException e) {
-            originalStatus = LockStatus.FENCING_REJECTED;
-            originalStage = LockStage.FENCING;
-            originalError = e;
-            publish(handle.lease(), LockEventType.FENCING_REJECTED, originalStage, originalStatus, e);
+            executionOutcome = ExecutionOutcome.failure(LockStatus.FENCING_REJECTED, LockStage.FENCING, e);
+            eventPublisher.publish(eventFactory.fromLease(handle.lease(), LockEventType.FENCING_REJECTED, LockStage.FENCING, LockStatus.FENCING_REJECTED, e));
         } catch (LockLostException e) {
-            originalStatus = LockStatus.LOCK_LOST;
-            originalStage = LockStage.CHECK;
-            originalError = e;
-            publish(handle.lease(), LockEventType.LOCK_LOST, originalStage, originalStatus, e);
+            executionOutcome = ExecutionOutcome.failure(LockStatus.LOCK_LOST, LockStage.CHECK, e);
+            eventPublisher.publish(eventFactory.fromLease(handle.lease(), LockEventType.LOCK_LOST, LockStage.CHECK, LockStatus.LOCK_LOST, e));
         } catch (Throwable e) {
-            originalStatus = LockStatus.EXECUTION_FAILED;
-            originalStage = LockStage.EXECUTE;
-            originalError = e;
-            publish(handle.lease(), LockEventType.EXECUTION_FAILED, originalStage, originalStatus, e);
+            executionOutcome = ExecutionOutcome.failure(LockStatus.EXECUTION_FAILED, LockStage.EXECUTE, e);
+            eventPublisher.publish(eventFactory.fromLease(handle.lease(), LockEventType.EXECUTION_FAILED, LockStage.EXECUTE, LockStatus.EXECUTION_FAILED, e));
         }
 
-        LockReleaseResponse releaseResponse;
+        LockReleaseOutcome releaseOutcome;
         try {
-            releaseResponse = handle.releaseWithResult();
+            releaseOutcome = handle.releaseWithOutcome();
         } finally {
             watchdog.stop(handle);
         }
 
         Duration holdDuration = Duration.between(handle.acquiredAt(), Instant.now(clock));
-        Duration waitDuration = acquireResult.waitDuration();
-        LockResult<T> result = mergeExecutionAndReleaseResult(
-                value,
-                handle,
-                waitDuration,
-                holdDuration,
-                originalStatus,
-                originalStage,
-                originalError,
-                releaseResponse,
-                actualOptions
-        );
-        metricsRecorder.recordHold(handle.lease().getProviderName(), handle.lease().getNamespace(),
-                patternResolver.resolvePattern(lockName), result.status(), holdDuration);
+        LockResult<T> result = resultResolver.resolve(executionOutcome, releaseOutcome, handle,
+                acquireResult.waitDuration(), holdDuration, actualOptions);
+        metricsFacade.recordHold(handle.lease(), result.status(), holdDuration);
         if (result.status() == LockStatus.SUCCESS) {
-            publish(handle.lease(), LockEventType.EXECUTION_SUCCESS, LockStage.EXECUTE, LockStatus.SUCCESS, null);
+            eventPublisher.publish(eventFactory.fromLease(handle.lease(), LockEventType.EXECUTION_SUCCESS, LockStage.EXECUTE, LockStatus.SUCCESS, null));
         }
         return result;
     }
@@ -239,9 +220,7 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
         return actualOptions;
     }
 
-    private LockProvider selectProvider(LockOptions options) {
-        return providerRegistry.getProvider(options.getProviderName());
-    }
+    private LockProvider selectProvider(LockOptions options) { return providerRegistry.getProvider(options.getProviderName()); }
 
     private void validateProviderCapabilities(LockProvider provider, LockOptions options) {
         if (options.isAutoRenew() && !provider.capabilities().isAutoRenewSupported()) {
@@ -253,47 +232,7 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
     }
 
     private DefaultLockHandle newHandle(LockProvider provider, LockLease lease) {
-        return new DefaultLockHandle(provider, lease, new LockRuntimeState(), eventPublisher,
-                metricsRecorder, patternResolver);
-    }
-
-    private void publishAttempt(LockProvider provider, LockAcquireRequest request) {
-        eventPublisher.publish(LockEvent.builder()
-                .eventType(LockEventType.ACQUIRE_ATTEMPT)
-                .stage(LockStage.ACQUIRE)
-                .namespace(request.getNamespace())
-                .lockName(request.getLockName())
-                .providerName(provider.providerName())
-                .ownerToken(request.getOwnerToken())
-                .build());
-    }
-
-    private void publishProviderError(LockProvider provider, LockAcquireRequest request, LockStage stage, Throwable error) {
-        eventPublisher.publish(LockEvent.builder()
-                .eventType(LockEventType.PROVIDER_ERROR)
-                .stage(stage)
-                .status(LockStatus.PROVIDER_ERROR)
-                .namespace(request.getNamespace())
-                .lockName(request.getLockName())
-                .providerName(provider.providerName())
-                .ownerToken(request.getOwnerToken())
-                .error(error)
-                .build());
-    }
-
-    private void publish(LockLease lease, LockEventType eventType, LockStage stage, LockStatus status, Throwable error) {
-        eventPublisher.publish(LockEvent.builder()
-                .eventType(eventType)
-                .stage(stage)
-                .status(status)
-                .namespace(lease.getNamespace())
-                .lockName(lease.getLockName())
-                .lockKey(lease.getLockKey())
-                .providerName(lease.getProviderName())
-                .ownerToken(lease.getOwnerToken())
-                .fencingToken(lease.fencingToken().isPresent() ? lease.fencingToken().getAsLong() : null)
-                .error(error)
-                .build());
+        return new DefaultLockHandle(provider, lease, new LockRuntimeState(), eventPublisher, eventFactory, metricsFacade);
     }
 
     private <T> LockResult<T> copyAcquireFailure(LockResult<LockHandle> acquireResult) {
@@ -306,65 +245,6 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
                 .lockKey(acquireResult.lockKey())
                 .ownerToken(acquireResult.ownerToken())
                 .waitDuration(acquireResult.waitDuration())
-                .build();
-    }
-
-    private <T> LockResult<T> mergeExecutionAndReleaseResult(
-            T value,
-            DefaultLockHandle handle,
-            Duration waitDuration,
-            Duration holdDuration,
-            LockStatus originalStatus,
-            LockStage originalStage,
-            Throwable originalError,
-            LockReleaseResponse releaseResponse,
-            LockOptions options
-    ) {
-        LockStatus finalStatus = originalStatus;
-        LockStage finalStage = originalStage;
-        Throwable finalError = originalError;
-
-        if (releaseResponse.getStatus() == null) {
-            finalStatus = LockStatus.RELEASE_FAILED;
-            finalStage = LockStage.RELEASE;
-        } else {
-            switch (releaseResponse.getStatus()) {
-                case RELEASED:
-                    break;
-                case NOT_FOUND:
-                case NOT_OWNER:
-                    if (originalStatus == LockStatus.SUCCESS && options.isFailOnLockLost()) {
-                        finalStatus = LockStatus.LOCK_LOST;
-                        finalStage = LockStage.RELEASE;
-                        finalError = new LockLostException("lock lost on release: " + handle.lockName());
-                    }
-                    break;
-                case PROVIDER_ERROR:
-                default:
-                    if (originalStatus == LockStatus.SUCCESS) {
-                        finalStatus = LockStatus.RELEASE_FAILED;
-                        finalStage = LockStage.RELEASE;
-                        finalError = releaseResponse.getError();
-                    } else if (originalError != null && releaseResponse.getError() != null) {
-                        originalError.addSuppressed(releaseResponse.getError());
-                    }
-                    break;
-            }
-        }
-
-        return LockResult.<T>builder()
-                .status(finalStatus)
-                .stage(finalStage)
-                .acquired(true)
-                .value(finalStatus == LockStatus.SUCCESS ? value : null)
-                .handle(handle)
-                .error(finalError)
-                .lockName(handle.lockName())
-                .lockKey(handle.lockKey())
-                .ownerToken(handle.ownerToken())
-                .fencingToken(handle.fencingToken().isPresent() ? handle.fencingToken().getAsLong() : null)
-                .waitDuration(waitDuration)
-                .holdDuration(holdDuration)
                 .build();
     }
 }

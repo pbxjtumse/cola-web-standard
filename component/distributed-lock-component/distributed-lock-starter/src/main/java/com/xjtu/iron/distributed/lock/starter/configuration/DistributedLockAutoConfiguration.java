@@ -1,10 +1,105 @@
 package com.xjtu.iron.distributed.lock.starter.configuration;
 
-/**
- * 分布式锁自动配置占位类。
- *
- * <p>后续接入 Spring Boot 时，本类负责装配 DistributedLockClient、LockProviderRegistry、
- * LockWaiterFactory、LockWatchdog、事件发布器和指标记录器等核心 Bean。</p>
- */
+import com.xjtu.iron.distributed.lock.api.DistributedLockClient;
+import com.xjtu.iron.distributed.lock.core.DefaultDistributedLockClient;
+import com.xjtu.iron.distributed.lock.core.event.LockEventPublisher;
+import com.xjtu.iron.distributed.lock.core.metrics.LockMetricsRecorder;
+import com.xjtu.iron.distributed.lock.core.metrics.NoOpLockMetricsRecorder;
+import com.xjtu.iron.distributed.lock.core.name.DefaultLockNamePatternResolver;
+import com.xjtu.iron.distributed.lock.core.name.DefaultLockNameValidator;
+import com.xjtu.iron.distributed.lock.core.name.LockNamePatternResolver;
+import com.xjtu.iron.distributed.lock.core.name.LockNameValidator;
+import com.xjtu.iron.distributed.lock.core.registry.DefaultLockProviderRegistry;
+import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
+import com.xjtu.iron.distributed.lock.core.spi.LockProviderRegistry;
+import com.xjtu.iron.distributed.lock.core.token.DefaultOwnerTokenGenerator;
+import com.xjtu.iron.distributed.lock.core.token.OwnerTokenGenerator;
+import com.xjtu.iron.distributed.lock.core.wait.LockWaiterFactory;
+import com.xjtu.iron.distributed.lock.core.watchdog.LockWatchdog;
+import com.xjtu.iron.distributed.lock.core.watchdog.ScheduledLockWatchdog;
+import com.xjtu.iron.distributed.lock.starter.event.SpringLockEventPublisher;
+import com.xjtu.iron.distributed.lock.starter.metrics.MicrometerLockMetricsRecorder;
+import com.xjtu.iron.distributed.lock.starter.properties.DistributedLockProperties;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Bean;
+
+import java.time.Clock;
+import java.util.List;
+
+/** 分布式锁核心自动配置。 */
+@AutoConfiguration(after = RedisDistributedLockAutoConfiguration.class)
+@EnableConfigurationProperties(DistributedLockProperties.class)
+@ConditionalOnProperty(prefix = "iron.distributed-lock", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class DistributedLockAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean
+    public OwnerTokenGenerator ownerTokenGenerator() { return new DefaultOwnerTokenGenerator(); }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LockWaiterFactory lockWaiterFactory() { return new LockWaiterFactory(); }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LockWatchdog lockWatchdog() { return new ScheduledLockWatchdog(); }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LockNameValidator lockNameValidator() { return new DefaultLockNameValidator(); }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LockNamePatternResolver lockNamePatternResolver() { return new DefaultLockNamePatternResolver(); }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LockEventPublisher lockEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+        return new SpringLockEventPublisher(applicationEventPublisher);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnClass(MeterRegistry.class)
+    public LockMetricsRecorder micrometerLockMetricsRecorder(MeterRegistry meterRegistry) {
+        return new MicrometerLockMetricsRecorder(meterRegistry);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(LockMetricsRecorder.class)
+    public LockMetricsRecorder noOpLockMetricsRecorder() { return new NoOpLockMetricsRecorder(); }
+
+    @Bean
+    @ConditionalOnBean(LockProvider.class)
+    @ConditionalOnMissingBean
+    public LockProviderRegistry lockProviderRegistry(List<LockProvider> providers, DistributedLockProperties properties) {
+        return new DefaultLockProviderRegistry(properties.getDefaultProvider(), providers);
+    }
+
+    @Bean
+    @ConditionalOnBean(LockProviderRegistry.class)
+    @ConditionalOnMissingBean
+    public DistributedLockClient distributedLockClient(
+            LockProviderRegistry providerRegistry,
+            OwnerTokenGenerator ownerTokenGenerator,
+            LockWaiterFactory waiterFactory,
+            LockWatchdog watchdog,
+            LockEventPublisher eventPublisher,
+            LockMetricsRecorder metricsRecorder,
+            LockNameValidator lockNameValidator,
+            LockNamePatternResolver patternResolver,
+            ObjectProvider<Clock> clockProvider
+    ) {
+        return new DefaultDistributedLockClient(providerRegistry, ownerTokenGenerator, waiterFactory, watchdog,
+                eventPublisher, metricsRecorder, lockNameValidator, patternResolver,
+                clockProvider.getIfAvailable(Clock::systemUTC));
+    }
 }

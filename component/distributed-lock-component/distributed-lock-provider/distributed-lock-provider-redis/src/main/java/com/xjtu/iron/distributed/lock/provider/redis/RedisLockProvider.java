@@ -1,15 +1,15 @@
 package com.xjtu.iron.distributed.lock.provider.redis;
 
-import com.xjtu.iron.distributed.lock.core.spi.request.LockAcquireRequest;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockCheckResponse;
-import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.core.spi.LockProviderCapabilities;
+import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
 import com.xjtu.iron.distributed.lock.core.spi.request.LockReleaseRequest;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
 import com.xjtu.iron.distributed.lock.core.spi.request.LockRenewRequest;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockCheckResponse;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
 import com.xjtu.iron.distributed.lock.core.spi.response.LockRenewResponse;
 
 import java.time.Duration;
@@ -18,42 +18,30 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * Redis 分布式锁 Provider。
- *
- * <p>该 Provider 通过 Lua 脚本实现 acquire / release / renew / check 的原子操作。Redis 客户端细节由
- * {@link RedisLockScriptExecutor} 屏蔽，因此本类不直接依赖 Jedis、Lettuce 或 Spring Data Redis。</p>
- *
- * <p>一期能力边界：</p>
- * <ul>
- *     <li>支持 ownerToken。</li>
- *     <li>支持 Lua 安全释放。</li>
- *     <li>支持 Lua 安全续期。</li>
- *     <li>不支持 fencing token。</li>
- *     <li>不支持 Pub/Sub 等待和公平锁。</li>
- * </ul>
- */
+/** Redis 分布式锁 Provider。 */
 public final class RedisLockProvider implements LockProvider {
 
-    /** Lua 脚本执行器。 */
     private final RedisLockScriptExecutor scriptExecutor;
-
-    /** Redis 物理 key 构造器。 */
     private final RedisLockKeyBuilder keyBuilder;
+    private final RedisScriptResultParser resultParser;
 
     public RedisLockProvider(RedisLockScriptExecutor scriptExecutor) {
-        this(scriptExecutor, new RedisLockKeyBuilder());
+        this(scriptExecutor, new RedisLockKeyBuilder(), new RedisScriptResultParser());
     }
 
     public RedisLockProvider(RedisLockScriptExecutor scriptExecutor, RedisLockKeyBuilder keyBuilder) {
+        this(scriptExecutor, keyBuilder, new RedisScriptResultParser());
+    }
+
+    public RedisLockProvider(RedisLockScriptExecutor scriptExecutor, RedisLockKeyBuilder keyBuilder,
+                             RedisScriptResultParser resultParser) {
         this.scriptExecutor = Objects.requireNonNull(scriptExecutor, "scriptExecutor must not be null");
         this.keyBuilder = Objects.requireNonNull(keyBuilder, "keyBuilder must not be null");
+        this.resultParser = Objects.requireNonNull(resultParser, "resultParser must not be null");
     }
 
     @Override
-    public String providerName() {
-        return RedisLockConstants.PROVIDER_NAME;
-    }
+    public String providerName() { return RedisLockConstants.PROVIDER_NAME; }
 
     @Override
     public LockAcquireResponse acquire(LockAcquireRequest request) {
@@ -70,10 +58,9 @@ public final class RedisLockProvider implements LockProvider {
                 "0"
         );
         try {
-            Object raw = scriptExecutor.execute(RedisLockScripts.ACQUIRE, keys, args);
-            List<?> values = asList(raw);
-            long flag = asLong(values.get(0));
-            if (flag == 1L) {
+            RedisScriptResultParser.AcquireResult result = resultParser.parseAcquire(
+                    scriptExecutor.execute(RedisLockScripts.ACQUIRE, keys, args));
+            if (result.getFlag() == 1L) {
                 Instant acquiredAt = Instant.now();
                 LockLease lease = LockLease.builder()
                         .providerName(providerName())
@@ -87,7 +74,7 @@ public final class RedisLockProvider implements LockProvider {
                         .build();
                 return LockAcquireResponse.acquired(lease);
             }
-            Duration ttl = values.size() > 1 ? Duration.ofMillis(Math.max(0L, asLong(values.get(1)))) : null;
+            Duration ttl = Duration.ofMillis(Math.max(0L, result.getRemainingTtlMillis()));
             return LockAcquireResponse.notAcquired(ttl);
         } catch (Throwable e) {
             return LockAcquireResponse.failed(e);
@@ -98,16 +85,10 @@ public final class RedisLockProvider implements LockProvider {
     public LockReleaseResponse release(LockReleaseRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         try {
-            Object raw = scriptExecutor.execute(RedisLockScripts.RELEASE,
-                    Arrays.asList(request.getLockKey()),
-                    Arrays.asList(request.getOwnerToken()));
-            long result = asLong(raw);
-            if (result == 1L) {
-                return LockReleaseResponse.released();
-            }
-            if (result == -1L) {
-                return LockReleaseResponse.notFound();
-            }
+            long result = resultParser.parseLong(scriptExecutor.execute(RedisLockScripts.RELEASE,
+                    Arrays.asList(request.getLockKey()), Arrays.asList(request.getOwnerToken())));
+            if (result == 1L) { return LockReleaseResponse.released(); }
+            if (result == -1L) { return LockReleaseResponse.notFound(); }
             return LockReleaseResponse.notOwner();
         } catch (Throwable e) {
             return LockReleaseResponse.failed(e);
@@ -118,16 +99,11 @@ public final class RedisLockProvider implements LockProvider {
     public LockRenewResponse renew(LockRenewRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         try {
-            Object raw = scriptExecutor.execute(RedisLockScripts.RENEW,
+            long result = resultParser.parseLong(scriptExecutor.execute(RedisLockScripts.RENEW,
                     Arrays.asList(request.getLockKey()),
-                    Arrays.asList(request.getOwnerToken(), String.valueOf(request.getLeaseTime().toMillis())));
-            long result = asLong(raw);
-            if (result == 1L) {
-                return LockRenewResponse.renewed(Instant.now().plus(request.getLeaseTime()));
-            }
-            if (result == -1L) {
-                return LockRenewResponse.notFound();
-            }
+                    Arrays.asList(request.getOwnerToken(), String.valueOf(request.getLeaseTime().toMillis()))));
+            if (result == 1L) { return LockRenewResponse.renewed(Instant.now().plus(request.getLeaseTime())); }
+            if (result == -1L) { return LockRenewResponse.notFound(); }
             return LockRenewResponse.notOwner();
         } catch (Throwable e) {
             return LockRenewResponse.failed(e);
@@ -138,16 +114,10 @@ public final class RedisLockProvider implements LockProvider {
     public LockCheckResponse check(LockCheckRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         try {
-            Object raw = scriptExecutor.execute(RedisLockScripts.CHECK,
-                    Arrays.asList(request.getLockKey()),
-                    Arrays.asList(request.getOwnerToken()));
-            long result = asLong(raw);
-            if (result == 1L) {
-                return LockCheckResponse.held();
-            }
-            if (result == -1L) {
-                return LockCheckResponse.notFound();
-            }
+            long result = resultParser.parseLong(scriptExecutor.execute(RedisLockScripts.CHECK,
+                    Arrays.asList(request.getLockKey()), Arrays.asList(request.getOwnerToken())));
+            if (result == 1L) { return LockCheckResponse.held(); }
+            if (result == -1L) { return LockCheckResponse.notFound(); }
             return LockCheckResponse.notOwner();
         } catch (Throwable e) {
             return LockCheckResponse.failed(e);
@@ -163,28 +133,5 @@ public final class RedisLockProvider implements LockProvider {
                 .fairLockSupported(false)
                 .reentrantSupported(false)
                 .build();
-    }
-
-    private static List<?> asList(Object raw) {
-        if (raw instanceof List) {
-            return (List<?>) raw;
-        }
-        if (raw instanceof Object[]) {
-            return Arrays.asList((Object[]) raw);
-        }
-        throw new IllegalArgumentException("redis script result is not a list: " + raw);
-    }
-
-    private static long asLong(Object value) {
-        if (value == null) {
-            return 0L;
-        }
-        if (value instanceof Number) {
-            return ((Number) value).longValue();
-        }
-        if (value instanceof byte[]) {
-            return Long.parseLong(new String((byte[]) value));
-        }
-        return Long.parseLong(String.valueOf(value));
     }
 }

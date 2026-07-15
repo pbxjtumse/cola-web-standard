@@ -144,6 +144,7 @@ public final class LockResult<T> {
         this.status = Objects.requireNonNull(builder.status, "status must not be null");
         this.stage = Objects.requireNonNull(builder.stage, "stage must not be null");
         this.acquired = builder.acquired;
+        LockStatusStageRules.validate(this.status, this.stage, this.acquired);
         this.value = builder.value;
         this.handle = builder.handle;
         this.error = builder.error;
@@ -197,16 +198,30 @@ public final class LockResult<T> {
 
     /**
      * 创建未获取到锁结果。
+     *
+     * <p>stage 只能是 ACQUIRE 或 WAIT。waitTime=0 首次抢锁失败时使用 ACQUIRE；
+     * waitTime&gt;0 等待超时后仍未获取到锁时使用 WAIT。</p>
      */
-    public static <T> LockResult<T> notAcquired(String lockName, String lockKey, Duration waitDuration) {
+    public static <T> LockResult<T> notAcquired(String lockName, String lockKey, LockStage stage, Duration waitDuration) {
+        if (stage != LockStage.ACQUIRE && stage != LockStage.WAIT) {
+            throw new IllegalArgumentException("NOT_ACQUIRED stage must be ACQUIRE or WAIT");
+        }
         return LockResult.<T>builder()
                 .status(LockStatus.NOT_ACQUIRED)
-                .stage(LockStage.WAIT)
+                .stage(stage)
                 .acquired(false)
                 .lockName(lockName)
                 .lockKey(lockKey)
                 .waitDuration(waitDuration)
                 .build();
+    }
+
+    /**
+     * @deprecated 请使用带 LockStage 参数的 notAcquired 方法，避免把 NO_WAIT 场景误标为 WAIT 阶段。
+     */
+    @Deprecated
+    public static <T> LockResult<T> notAcquired(String lockName, String lockKey, Duration waitDuration) {
+        return notAcquired(lockName, lockKey, LockStage.WAIT, waitDuration);
     }
 
     /**
