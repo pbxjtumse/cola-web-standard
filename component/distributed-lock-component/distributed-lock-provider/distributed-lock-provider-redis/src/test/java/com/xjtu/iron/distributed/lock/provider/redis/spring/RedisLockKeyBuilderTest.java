@@ -1,7 +1,9 @@
-package com.xjtu.iron.distributed.lock.provider.redis;
+package com.xjtu.iron.distributed.lock.provider.redis.spring;
 
-import org.junit.jupiter.api.Test;
+import com.xjtu.iron.distributed.lock.provider.redis.RedisLockKeyBuilder;
+import org.testng.annotations.Test;
 
+import static junit.framework.Assert.assertEquals;
 import static org.junit.jupiter.api.Assertions.*;
 
 class RedisLockKeyBuilderTest {

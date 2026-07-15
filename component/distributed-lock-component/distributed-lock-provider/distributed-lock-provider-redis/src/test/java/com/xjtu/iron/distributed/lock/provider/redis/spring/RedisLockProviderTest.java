@@ -1,14 +1,14 @@
-package com.xjtu.iron.distributed.lock.provider.redis;
+package com.xjtu.iron.distributed.lock.provider.redis.spring;
 
 import com.xjtu.iron.distributed.lock.api.LockOptions;
 import com.xjtu.iron.distributed.lock.core.spi.request.*;
 import com.xjtu.iron.distributed.lock.core.spi.response.*;
 import com.xjtu.iron.distributed.lock.core.spi.status.*;
+import com.xjtu.iron.distributed.lock.provider.redis.RedisLockProvider;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
