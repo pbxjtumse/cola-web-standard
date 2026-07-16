@@ -4,8 +4,6 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 
-import static junit.framework.Assert.assertEquals;
-import static junit.framework.Assert.assertFalse;
 import static org.junit.jupiter.api.Assertions.*;
 
 class LockOptionsTest {

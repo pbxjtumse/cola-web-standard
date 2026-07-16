@@ -12,8 +12,17 @@
     <packaging>jar</packaging>
     <name>cache-integration-observability</name>
     <dependencies>
-        <dependency><groupId>com.xjtu.iron</groupId><artifactId>cache-api</artifactId></dependency>
-        <dependency><groupId>com.xjtu.iron</groupId><artifactId>cache-core</artifactId></dependency>
-        <dependency><groupId>io.micrometer</groupId><artifactId>micrometer-core</artifactId></dependency>
+        <dependency>
+            <groupId>com.xjtu.iron</groupId>
+            <artifactId>cache-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.xjtu.iron</groupId>
+            <artifactId>cache-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+        </dependency>
     </dependencies>
 </project>

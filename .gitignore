@@ -19,6 +19,7 @@ __MACOSX/
 *.iml
 *.ipr
 out/
+.fastRequest/
 
 ### NetBeans ###
 nbproject/private/
@@ -28,4 +29,5 @@ dist/
 nbdist/
 bin/
 doc/
-.DS_Store
+.DS_Store/
+.fastRequest/

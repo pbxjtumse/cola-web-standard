@@ -1,20 +1,17 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<?xml version='1.0' encoding='UTF-8'?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
     <parent>
         <groupId>com.xjtu.iron</groupId>
         <artifactId>component</artifactId>
         <version>1.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-
     <artifactId>cache-component</artifactId>
     <packaging>pom</packaging>
     <name>cache-component</name>
     <description>XJTU Iron cache component parent module.</description>
-
     <modules>
         <module>cache-api</module>
         <module>cache-core</module>
@@ -24,53 +21,4 @@
         <module>cache-spring-boot-starter</module>
         <module>cache-demo</module>
     </modules>
-
-    <properties>
-        <java.version>17</java.version>
-        <spring-boot.version>3.5.14</spring-boot.version>
-        <caffeine.version>3.2.4</caffeine.version>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.release>${java.version}</maven.compiler.release>
-    </properties>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-dependencies</artifactId>
-                <version>${spring-boot.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <dependency>
-                <groupId>com.github.ben-manes.caffeine</groupId>
-                <artifactId>caffeine</artifactId>
-                <version>${caffeine.version}</version>
-            </dependency>
-            <dependency><groupId>com.xjtu.iron</groupId><artifactId>cache-api</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>com.xjtu.iron</groupId><artifactId>cache-core</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>com.xjtu.iron</groupId><artifactId>cache-config</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>com.xjtu.iron</groupId><artifactId>cache-provider-caffeine</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>com.xjtu.iron</groupId><artifactId>cache-provider-redis</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>com.xjtu.iron</groupId><artifactId>cache-provider-composite</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>com.xjtu.iron</groupId><artifactId>cache-integration-observability</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>com.xjtu.iron</groupId><artifactId>cache-integration-governance</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>com.xjtu.iron</groupId><artifactId>cache-spring-boot-starter</artifactId><version>${project.version}</version></dependency>
-        </dependencies>
-    </dependencyManagement>
-
-    <build>
-        <pluginManagement>
-            <plugins>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.13.0</version>
-                    <configuration>
-                        <release>${java.version}</release>
-                    </configuration>
-                </plugin>
-            </plugins>
-        </pluginManagement>
-    </build>
 </project>
