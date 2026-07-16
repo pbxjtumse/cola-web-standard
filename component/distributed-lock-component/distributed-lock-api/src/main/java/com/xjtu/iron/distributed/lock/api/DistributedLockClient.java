@@ -78,7 +78,7 @@ public interface DistributedLockClient {
      * @return 加锁结果。
      */
     default LockResult<LockHandle> tryLock(String lockName) {
-        return tryLock(lockName, LockOptions.defaults());
+        return tryLock(lockName, null);
     }
 
     /**
@@ -128,7 +128,7 @@ public interface DistributedLockClient {
      * @return 锁模板执行结果。
      */
     default <T> LockResult<T> execute(String lockName, LockCallback<T> callback) {
-        return execute(lockName, LockOptions.defaults(), callback);
+        return execute(lockName, null, callback);
     }
 
     /**
@@ -158,7 +158,7 @@ public interface DistributedLockClient {
      * @return 锁模板执行结果。
      */
     default LockResult<Void> execute(String lockName, LockRunnable runnable) {
-        return execute(lockName, LockOptions.defaults(), runnable);
+        return execute(lockName, null, runnable);
     }
 
 }

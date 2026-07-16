@@ -46,16 +46,13 @@ public final class RedisLockProvider implements LockProvider {
     @Override
     public LockAcquireResponse acquire(LockAcquireRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        if (request.getOptions().isFencingRequired()) {
-            return LockAcquireResponse.failed(new UnsupportedOperationException("Redis fencing token is not supported in phase one"));
-        }
         String lockKey = keyBuilder.buildLockKey(request.getNamespace(), request.getLockName());
         String fencingKey = keyBuilder.buildFencingKey(request.getNamespace(), request.getLockName());
         List<String> keys = Arrays.asList(lockKey, fencingKey);
         List<String> args = Arrays.asList(
                 request.getOwnerToken(),
                 String.valueOf(request.getOptions().getLeaseTime().toMillis()),
-                "0"
+                request.getOptions().isFencingRequired() ? "1" : "0"
         );
         try {
             RedisScriptResultParser.AcquireResult result = resultParser.parseAcquire(
@@ -68,6 +65,7 @@ public final class RedisLockProvider implements LockProvider {
                         .lockName(request.getLockName())
                         .lockKey(lockKey)
                         .ownerToken(request.getOwnerToken())
+                        .fencingToken(result.getFencingToken())
                         .leaseTime(request.getOptions().getLeaseTime())
                         .acquiredAt(acquiredAt)
                         .expireAt(acquiredAt.plus(request.getOptions().getLeaseTime()))
@@ -128,7 +126,7 @@ public final class RedisLockProvider implements LockProvider {
     public LockProviderCapabilities capabilities() {
         return LockProviderCapabilities.builder()
                 .autoRenewSupported(true)
-                .fencingTokenSupported(false)
+                .fencingTokenSupported(true)
                 .pubSubWaitSupported(false)
                 .fairLockSupported(false)
                 .reentrantSupported(false)

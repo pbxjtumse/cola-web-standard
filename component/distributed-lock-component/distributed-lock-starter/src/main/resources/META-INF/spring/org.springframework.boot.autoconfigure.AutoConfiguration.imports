@@ -1,0 +1,3 @@
+com.xjtu.iron.distributed.lock.starter.configuration.RedisDistributedLockAutoConfiguration
+com.xjtu.iron.distributed.lock.starter.configuration.DistributedLockAutoConfiguration
+com.xjtu.iron.distributed.lock.starter.configuration.DistributedLockActuatorAutoConfiguration

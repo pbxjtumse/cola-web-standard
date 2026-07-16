@@ -1,6 +1,7 @@
 package com.xjtu.iron.distributed.lock.starter.configuration;
 
 import com.xjtu.iron.distributed.lock.api.DistributedLockClient;
+import com.xjtu.iron.distributed.lock.api.LockOptions;
 import com.xjtu.iron.distributed.lock.core.DefaultDistributedLockClient;
 import com.xjtu.iron.distributed.lock.core.event.LockEventPublisher;
 import com.xjtu.iron.distributed.lock.core.metrics.LockMetricsRecorder;
@@ -30,6 +31,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.time.Clock;
 import java.util.List;
@@ -77,6 +79,12 @@ public class DistributedLockAutoConfiguration {
     @ConditionalOnMissingBean(LockMetricsRecorder.class)
     public LockMetricsRecorder noOpLockMetricsRecorder() { return new NoOpLockMetricsRecorder(); }
 
+    @Bean(name = "distributedLockDefaultOptions")
+    @ConditionalOnMissingBean(name = "distributedLockDefaultOptions")
+    public LockOptions distributedLockDefaultOptions(DistributedLockProperties properties) {
+        return properties.toLockOptions();
+    }
+
     @Bean
     @ConditionalOnBean(LockProvider.class)
     @ConditionalOnMissingBean
@@ -96,10 +104,11 @@ public class DistributedLockAutoConfiguration {
             LockMetricsRecorder metricsRecorder,
             LockNameValidator lockNameValidator,
             LockNamePatternResolver patternResolver,
+            @Qualifier("distributedLockDefaultOptions") LockOptions defaultOptions,
             ObjectProvider<Clock> clockProvider
     ) {
         return new DefaultDistributedLockClient(providerRegistry, ownerTokenGenerator, waiterFactory, watchdog,
                 eventPublisher, metricsRecorder, lockNameValidator, patternResolver,
-                clockProvider.getIfAvailable(Clock::systemUTC));
+                defaultOptions, clockProvider.getIfAvailable(Clock::systemUTC));
     }
 }

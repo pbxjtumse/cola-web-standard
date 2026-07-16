@@ -63,6 +63,7 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
     private final LockEventFactory eventFactory;
     private final LockMetricsFacade metricsFacade;
     private final LockNameValidator lockNameValidator;
+    private final LockOptions defaultOptions;
     private final Clock clock;
     private final LockResultResolver resultResolver;
 
@@ -77,9 +78,25 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
             LockNamePatternResolver patternResolver,
             Clock clock
     ) {
+        this(providerRegistry, ownerTokenGenerator, waiterFactory, watchdog, eventPublisher, metricsRecorder,
+                lockNameValidator, patternResolver, LockOptions.defaults(), clock);
+    }
+
+    public DefaultDistributedLockClient(
+            LockProviderRegistry providerRegistry,
+            OwnerTokenGenerator ownerTokenGenerator,
+            LockWaiterFactory waiterFactory,
+            LockWatchdog watchdog,
+            LockEventPublisher eventPublisher,
+            LockMetricsRecorder metricsRecorder,
+            LockNameValidator lockNameValidator,
+            LockNamePatternResolver patternResolver,
+            LockOptions defaultOptions,
+            Clock clock
+    ) {
         this(providerRegistry, ownerTokenGenerator, waiterFactory, watchdog, eventPublisher,
                 new LockEventFactory(), new LockMetricsFacade(metricsRecorder, patternResolver),
-                lockNameValidator, clock, new LockResultResolver());
+                lockNameValidator, defaultOptions, clock, new LockResultResolver());
     }
 
     public DefaultDistributedLockClient(
@@ -94,6 +111,23 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
             Clock clock,
             LockResultResolver resultResolver
     ) {
+        this(providerRegistry, ownerTokenGenerator, waiterFactory, watchdog, eventPublisher,
+                eventFactory, metricsFacade, lockNameValidator, LockOptions.defaults(), clock, resultResolver);
+    }
+
+    public DefaultDistributedLockClient(
+            LockProviderRegistry providerRegistry,
+            OwnerTokenGenerator ownerTokenGenerator,
+            LockWaiterFactory waiterFactory,
+            LockWatchdog watchdog,
+            LockEventPublisher eventPublisher,
+            LockEventFactory eventFactory,
+            LockMetricsFacade metricsFacade,
+            LockNameValidator lockNameValidator,
+            LockOptions defaultOptions,
+            Clock clock,
+            LockResultResolver resultResolver
+    ) {
         this.providerRegistry = Objects.requireNonNull(providerRegistry, "providerRegistry must not be null");
         this.ownerTokenGenerator = Objects.requireNonNull(ownerTokenGenerator, "ownerTokenGenerator must not be null");
         this.waiterFactory = Objects.requireNonNull(waiterFactory, "waiterFactory must not be null");
@@ -102,6 +136,8 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
         this.eventFactory = Objects.requireNonNull(eventFactory, "eventFactory must not be null");
         this.metricsFacade = Objects.requireNonNull(metricsFacade, "metricsFacade must not be null");
         this.lockNameValidator = Objects.requireNonNull(lockNameValidator, "lockNameValidator must not be null");
+        this.defaultOptions = defaultOptions == null ? LockOptions.defaults() : defaultOptions;
+        this.defaultOptions.validate();
         this.clock = clock == null ? Clock.systemUTC() : clock;
         this.resultResolver = Objects.requireNonNull(resultResolver, "resultResolver must not be null");
     }
@@ -170,7 +206,7 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
         }
         DefaultLockHandle handle = (DefaultLockHandle) acquireResult.handle()
                 .orElseThrow(() -> new IllegalStateException("acquired result has no handle"));
-        LockOptions actualOptions = options == null ? LockOptions.defaults() : options;
+        LockOptions actualOptions = defaultOptions(options);
         if (actualOptions.isAutoRenew()) {
             watchdog.start(handle, actualOptions);
         }
@@ -215,9 +251,13 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
 
     private LockOptions validate(String lockName, LockOptions options) {
         lockNameValidator.validate(lockName);
-        LockOptions actualOptions = options == null ? LockOptions.defaults() : options;
+        LockOptions actualOptions = defaultOptions(options);
         actualOptions.validate();
         return actualOptions;
+    }
+
+    private LockOptions defaultOptions(LockOptions options) {
+        return options == null ? defaultOptions : options;
     }
 
     private LockProvider selectProvider(LockOptions options) { return providerRegistry.getProvider(options.getProviderName()); }
