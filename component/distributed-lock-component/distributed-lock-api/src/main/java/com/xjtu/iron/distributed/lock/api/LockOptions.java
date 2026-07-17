@@ -190,7 +190,7 @@ public final class LockOptions {
      * 指定 fencing token Provider 名称。
      *
      * <p>
-     * 一期可以先保留字段，二期支持 Redis INCR 或 DB sequence 后再启用。
+     * Redis Provider 已支持 Redis INCR fencing；独立 DB sequence Provider 仍属于二期扩展。
      * </p>
      */
     private final String fencingTokenProviderName;

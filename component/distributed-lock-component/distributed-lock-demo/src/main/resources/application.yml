@@ -1,0 +1,48 @@
+server:
+  port: 18090
+
+spring:
+  application:
+    name: distributed-lock-demo
+  data:
+    redis:
+      host: www.xjtu-iron.online
+      port: 30379
+      password: 765YSa77TA
+      database: 0
+      timeout: 2s
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+xjtu:
+  iron:
+    distributed-lock:
+      enabled: true
+      default-provider: redis
+      namespace: demo
+      lease-time: 30s
+      wait-time: 0s
+      auto-renew: false
+      # renew-interval 为空时由 LockOptions 按 lease-time / 3 自动推导。
+      # renew-interval: 10s
+      max-renew-time: 10m
+      fencing-required: false
+      # fencing-token-provider-name: redis
+      fail-on-lock-lost: true
+      redis:
+        enabled: true
+        key-prefix: iron:lock
+        release-channel-prefix: iron:lock:release
+        fencing-key-suffix: fence
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      show-details: always

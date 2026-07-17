@@ -33,7 +33,7 @@ import java.util.concurrent.*;
 
 @AutoConfiguration
 @EnableConfigurationProperties(GovernanceProperties.class)
-@ConditionalOnProperty(prefix = "governance", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "xjtu.iron.governance", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class GovernanceAutoConfiguration {
 
     @Bean

@@ -1,0 +1,91 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: cola-web-standard
+
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://127.0.0.1:3306/test?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: IronHikariPool
+      minimum-idle: ${MYSQL_POOL_MIN_IDLE:5}
+      maximum-pool-size: ${MYSQL_POOL_MAX_SIZE:20}
+      connection-timeout: ${MYSQL_CONNECTION_TIMEOUT:30000}
+      idle-timeout: ${MYSQL_IDLE_TIMEOUT:600000}
+      max-lifetime: ${MYSQL_MAX_LIFETIME:1800000}
+
+  # 最终应用统一提供 Redis 连接。缓存、分布式锁以及未来幂等组件默认复用该连接。
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DATABASE:0}
+      username: ${REDIS_USERNAME:}
+      password: ${REDIS_PASSWORD:}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:3s}
+      timeout: ${REDIS_TIMEOUT:3s}
+      client-type: lettuce
+      lettuce:
+        shutdown-timeout: 100ms
+        pool:
+          enabled: true
+          max-active: ${REDIS_POOL_MAX_ACTIVE:16}
+          max-idle: ${REDIS_POOL_MAX_IDLE:8}
+          min-idle: ${REDIS_POOL_MIN_IDLE:2}
+          max-wait: ${REDIS_POOL_MAX_WAIT:2s}
+
+xjtu:
+  iron:
+    cache:
+      enabled: true
+      application:
+        name: ${spring.application.name}
+        instance-id: ${CACHE_INSTANCE_ID:${HOSTNAME:local}}
+      event:
+        enabled: false
+        channel: xjtu:iron:cache:event
+        publish-failure-policy: IGNORE
+      caffeine:
+        enabled: true
+        default-maximum-size: 10000
+      redis:
+        enabled: true
+        key-prefix: "iron:cache:"
+    distributed-lock:
+      enabled: true
+      default-provider: redis
+      namespace: default
+      lease-time: 30s
+      wait-time: 0s
+      auto-renew: false
+      # 为空时由 LockOptions 按 lease-time / 3 推导。
+      # renew-interval: 10s
+      max-renew-time: 10m
+      fencing-required: false
+      # 独立 fencing provider 尚未接入主流程，当前 Redis fencing 由 Redis Provider 内部 INCR 生成。
+      # fencing-token-provider-name: jdbc-sequence
+      fail-on-lock-lost: true
+      redis:
+        enabled: true
+        key-prefix: iron:lock
+        release-channel-prefix: iron:lock:release
+        fencing-key-suffix: fence
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  config: classpath:logback-spring.xml
+  level:
+    root: INFO
+    com.xjtu.iron: INFO

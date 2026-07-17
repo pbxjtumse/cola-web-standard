@@ -19,7 +19,7 @@ public final class RedisLockKeyBuilder {
     /** Redis 释放通知 channel 前缀。二期 PUBSUB_BACKOFF 才会使用。 */
     private final String releaseChannelPrefix;
 
-    /** fencing key 后缀。二期 fencingToken 启用时使用。 */
+    /** fencing key 后缀。Redis INCR fencing 启用时使用。 */
     private final String fencingKeySuffix;
 
     public RedisLockKeyBuilder() {

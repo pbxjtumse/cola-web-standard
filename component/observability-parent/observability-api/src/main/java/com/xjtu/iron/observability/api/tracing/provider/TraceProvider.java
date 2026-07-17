@@ -34,7 +34,7 @@ public interface TraceProvider {
     /**
      * Provider 类型。
      *
-     * <p>用于和配置项 xy.observability.provider 匹配。</p>
+     * <p>用于和配置项 xjtu.iron.observability.provider 匹配。</p>
      *
      * <p>例如：</p>
      * <pre>

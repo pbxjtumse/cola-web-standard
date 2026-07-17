@@ -174,7 +174,7 @@
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-spring-boot-starter</artifactId>
+                <artifactId>cache-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

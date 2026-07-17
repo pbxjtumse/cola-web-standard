@@ -18,7 +18,7 @@
         <module>cache-config</module>
         <module>cache-provider</module>
         <module>cache-integrations</module>
-        <module>cache-spring-boot-starter</module>
+        <module>cache-starter</module>
         <module>cache-demo</module>
     </modules>
 </project>

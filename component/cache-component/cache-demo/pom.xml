@@ -14,7 +14,7 @@
     <dependencies>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
-            <artifactId>cache-spring-boot-starter</artifactId>
+            <artifactId>cache-starter</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

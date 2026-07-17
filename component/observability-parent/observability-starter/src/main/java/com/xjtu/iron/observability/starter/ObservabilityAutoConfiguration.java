@@ -22,7 +22,7 @@ import java.util.List;
 @AutoConfiguration
 @EnableConfigurationProperties(ObservabilityProperties.class)
 @ConditionalOnProperty(
-        prefix = "xy.observability",
+        prefix = "xjtu.iron.observability",
         name = "enabled",
         havingValue = "true",
         matchIfMissing = true

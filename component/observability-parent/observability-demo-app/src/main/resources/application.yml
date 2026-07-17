@@ -2,17 +2,15 @@ spring:
   application:
     name: observability-demo-app
 
-xy:
-  observability:
-    enabled: true
-
-    provider: otel
-    agent-type: otel
-
-    service-name: observability-demo-app
-    instrumentation-scope-name: xjtu-iron-observability
-
-    web-mdc-enabled: true
-    method-tracing-enabled: true
-    method-mdc-enabled: true
-    template-mdc-enabled: true
+xjtu:
+  iron:
+    observability:
+      enabled: true
+      provider: otel
+      agent-type: otel
+      service-name: observability-demo-app
+      instrumentation-scope-name: xjtu-iron-observability
+      web-mdc-enabled: true
+      method-tracing-enabled: true
+      method-mdc-enabled: true
+      template-mdc-enabled: true
