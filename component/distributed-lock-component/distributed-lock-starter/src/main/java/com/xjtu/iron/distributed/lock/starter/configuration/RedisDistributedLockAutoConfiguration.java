@@ -19,7 +19,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @AutoConfiguration(after = RedisAutoConfiguration.class)
 @EnableConfigurationProperties(RedisDistributedLockProperties.class)
 @ConditionalOnClass(StringRedisTemplate.class)
-@ConditionalOnProperty(prefix = "iron.distributed-lock.redis", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "xjtu.iron.distributed-lock.redis", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class RedisDistributedLockAutoConfiguration {
 
     @Bean

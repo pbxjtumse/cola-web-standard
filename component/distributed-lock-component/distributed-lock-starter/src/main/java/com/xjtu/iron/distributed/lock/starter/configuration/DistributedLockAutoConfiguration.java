@@ -39,7 +39,7 @@ import java.util.List;
 /** 分布式锁核心自动配置。 */
 @AutoConfiguration(after = RedisDistributedLockAutoConfiguration.class)
 @EnableConfigurationProperties(DistributedLockProperties.class)
-@ConditionalOnProperty(prefix = "iron.distributed-lock", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "xjtu.iron.distributed-lock", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class DistributedLockAutoConfiguration {
 
     @Bean

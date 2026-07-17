@@ -21,3 +21,8 @@ component/
     ├── default-lock-handle-structure.puml
     └── lock-options-structure.puml
 ```
+
+## 配置与可观测性
+
+- 配置说明：见 `docs/configuration.md`
+- 指标说明：见 `docs/metrics.md`

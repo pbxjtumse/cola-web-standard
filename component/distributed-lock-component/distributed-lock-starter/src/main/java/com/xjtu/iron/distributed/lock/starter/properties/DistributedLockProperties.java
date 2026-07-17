@@ -14,7 +14,7 @@ import java.time.Duration;
  * {@code spring.data.redis.*} 配置。
  * </p>
  */
-@ConfigurationProperties(prefix = "iron.distributed-lock")
+@ConfigurationProperties(prefix = "xjtu.iron.distributed-lock")
 public class DistributedLockProperties {
 
     /** 是否启用分布式锁自动配置。 */
@@ -35,22 +35,45 @@ public class DistributedLockProperties {
     /** 默认是否开启 watchdog 自动续期。 */
     private boolean autoRenew = LockOptions.DEFAULT_AUTO_RENEW;
 
+    /** 默认 watchdog 续期间隔。为空时由 LockOptions 按 leaseTime / 3 自动推导。 */
+    private Duration renewInterval;
+
     /** 默认最大自动续期时间。 */
     private Duration maxRenewTime = LockOptions.DEFAULT_MAX_RENEW_TIME;
+
+    /** 默认是否要求 fencing token。 */
+    private boolean fencingRequired = LockOptions.DEFAULT_FENCING_REQUIRED;
+
+    /** 默认 fencing token Provider 名称。为空时由底层 LockProvider 自己处理。 */
+    private String fencingTokenProviderName;
 
     /** 明确失锁后，execute 是否返回 LOCK_LOST。 */
     private boolean failOnLockLost = LockOptions.DEFAULT_FAIL_ON_LOCK_LOST;
 
+    /**
+     * 把 starter 配置转换为默认 LockOptions。
+     *
+     * <p>
+     * 该默认选项用于 {@code tryLock(lockName)} 和 {@code execute(lockName, callback)}
+     * 这类没有显式传入 LockOptions 的 API。
+     * </p>
+     */
     public LockOptions toLockOptions() {
-        return LockOptions.builder()
+        LockOptions.Builder builder = LockOptions.builder()
                 .namespace(namespace)
                 .providerName(defaultProvider)
                 .leaseTime(leaseTime)
                 .waitTime(waitTime)
                 .autoRenew(autoRenew)
                 .maxRenewTime(maxRenewTime)
-                .failOnLockLost(failOnLockLost)
-                .build();
+                .fencingRequired(fencingRequired)
+                .fencingTokenProviderName(fencingTokenProviderName)
+                .failOnLockLost(failOnLockLost);
+
+        if (renewInterval != null) {
+            builder.renewInterval(renewInterval);
+        }
+        return builder.build();
     }
 
     public boolean isEnabled() {
@@ -101,12 +124,36 @@ public class DistributedLockProperties {
         this.autoRenew = autoRenew;
     }
 
+    public Duration getRenewInterval() {
+        return renewInterval;
+    }
+
+    public void setRenewInterval(Duration renewInterval) {
+        this.renewInterval = renewInterval;
+    }
+
     public Duration getMaxRenewTime() {
         return maxRenewTime;
     }
 
     public void setMaxRenewTime(Duration maxRenewTime) {
         this.maxRenewTime = maxRenewTime;
+    }
+
+    public boolean isFencingRequired() {
+        return fencingRequired;
+    }
+
+    public void setFencingRequired(boolean fencingRequired) {
+        this.fencingRequired = fencingRequired;
+    }
+
+    public String getFencingTokenProviderName() {
+        return fencingTokenProviderName;
+    }
+
+    public void setFencingTokenProviderName(String fencingTokenProviderName) {
+        this.fencingTokenProviderName = fencingTokenProviderName;
     }
 
     public boolean isFailOnLockLost() {

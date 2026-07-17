@@ -36,7 +36,9 @@ class DistributedLockAutoConfigurationTest {
                         "iron.distributed-lock.lease-time=45s",
                         "iron.distributed-lock.wait-time=2s",
                         "iron.distributed-lock.auto-renew=true",
+                        "iron.distributed-lock.renew-interval=15s",
                         "iron.distributed-lock.max-renew-time=2m",
+                        "iron.distributed-lock.fencing-required=true",
                         "iron.distributed-lock.fail-on-lock-lost=false")
                 .run(context -> {
                     LockOptions options = context.getBean("distributedLockDefaultOptions", LockOptions.class);
@@ -44,7 +46,9 @@ class DistributedLockAutoConfigurationTest {
                     assertThat(options.getLeaseTime()).isEqualTo(Duration.ofSeconds(45));
                     assertThat(options.getWaitTime()).isEqualTo(Duration.ofSeconds(2));
                     assertThat(options.isAutoRenew()).isTrue();
+                    assertThat(options.getRenewInterval()).isEqualTo(Duration.ofSeconds(15));
                     assertThat(options.getMaxRenewTime()).isEqualTo(Duration.ofMinutes(2));
+                    assertThat(options.isFencingRequired()).isTrue();
                     assertThat(options.isFailOnLockLost()).isFalse();
                 });
     }
