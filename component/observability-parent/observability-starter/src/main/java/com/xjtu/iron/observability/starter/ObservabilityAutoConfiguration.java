@@ -101,7 +101,7 @@ public class ObservabilityAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnProperty(
-            prefix = "xy.observability",
+            prefix = "xjtu.iron.observability",
             name = "method-tracing-enabled",
             havingValue = "true",
             matchIfMissing = true
@@ -118,7 +118,7 @@ public class ObservabilityAutoConfiguration {
     @ConditionalOnClass(OncePerRequestFilter.class)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
     @ConditionalOnProperty(
-            prefix = "xy.observability",
+            prefix = "xjtu.iron.observability",
             name = "web-mdc-enabled",
             havingValue = "true",
             matchIfMissing = true

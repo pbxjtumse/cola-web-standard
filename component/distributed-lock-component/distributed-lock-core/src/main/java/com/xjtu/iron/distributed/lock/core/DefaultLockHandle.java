@@ -22,6 +22,7 @@ import com.xjtu.iron.distributed.lock.core.watchdog.WatchdogLockHandle;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalLong;
 
 /**
@@ -64,6 +65,7 @@ public final class DefaultLockHandle implements WatchdogLockHandle {
     @Override public String lockKey() { return lease.getLockKey(); }
     @Override public String ownerToken() { return lease.getOwnerToken(); }
     @Override public OptionalLong fencingToken() { return lease.fencingToken(); }
+    @Override public Optional<String> fencingTokenProviderName() { return lease.fencingTokenProviderName(); }
     @Override public Instant acquiredAt() { return lease.getAcquiredAt(); }
     @Override public Duration leaseTime() { return lease.getLeaseTime(); }
     @Override public Instant expireAt() { return lease.getExpireAt(); }

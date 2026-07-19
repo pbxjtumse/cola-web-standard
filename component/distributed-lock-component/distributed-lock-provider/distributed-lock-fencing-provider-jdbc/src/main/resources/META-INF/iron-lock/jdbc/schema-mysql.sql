@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS iron_lock_fencing_token (
+    namespace VARCHAR(128) NOT NULL,
+    lock_name VARCHAR(512) NOT NULL,
+    current_token BIGINT NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (namespace, lock_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

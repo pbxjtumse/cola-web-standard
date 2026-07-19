@@ -55,7 +55,7 @@ public final class LockStatusStageRules {
                 if (stage == LockStage.ACQUIRE) {
                     return !acquired;
                 }
-                return (stage == LockStage.RENEW || stage == LockStage.CHECK) && acquired;
+                return (stage == LockStage.FENCING || stage == LockStage.RENEW || stage == LockStage.CHECK) && acquired;
             default:
                 return false;
         }

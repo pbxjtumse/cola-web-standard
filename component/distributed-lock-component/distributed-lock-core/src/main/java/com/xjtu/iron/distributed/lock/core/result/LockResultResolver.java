@@ -53,6 +53,7 @@ public final class LockResultResolver {
                 .lockKey(handle.lockKey())
                 .ownerToken(handle.ownerToken())
                 .fencingToken(handle.fencingToken().isPresent() ? handle.fencingToken().getAsLong() : null)
+                .fencingTokenProviderName(handle.fencingTokenProviderName().orElse(null))
                 .waitDuration(waitDuration)
                 .holdDuration(holdDuration)
                 .build();

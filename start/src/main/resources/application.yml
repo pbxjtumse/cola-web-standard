@@ -10,6 +10,7 @@ spring:
     username: ${MYSQL_USERNAME:root}
     password: ${MYSQL_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
+
     hikari:
       pool-name: IronHikariPool
       minimum-idle: ${MYSQL_POOL_MIN_IDLE:5}
@@ -18,7 +19,7 @@ spring:
       idle-timeout: ${MYSQL_IDLE_TIMEOUT:600000}
       max-lifetime: ${MYSQL_MAX_LIFETIME:1800000}
 
-  # 最终应用统一提供 Redis 连接。缓存、分布式锁以及未来幂等组件默认复用该连接。
+  # 全应用统一 Redis 连接
   data:
     redis:
       host: ${REDIS_HOST:127.0.0.1}
@@ -28,7 +29,7 @@ spring:
       password: ${REDIS_PASSWORD:}
       connect-timeout: ${REDIS_CONNECT_TIMEOUT:3s}
       timeout: ${REDIS_TIMEOUT:3s}
-      client-type: lettuce
+
       lettuce:
         shutdown-timeout: 100ms
         pool:
@@ -40,46 +41,63 @@ spring:
 
 xjtu:
   iron:
+    # ==============================
+    # 缓存组件语义
+    # ==============================
     cache:
       enabled: true
-      application:
-        name: ${spring.application.name}
-        instance-id: ${CACHE_INSTANCE_ID:${HOSTNAME:local}}
-      event:
-        enabled: false
-        channel: xjtu:iron:cache:event
-        publish-failure-policy: IGNORE
-      caffeine:
-        enabled: true
-        default-maximum-size: 10000
+
+      # 以下结构需要与你当前缓存组件的
+      # @ConfigurationProperties 字段保持一致。
       redis:
         enabled: true
-        key-prefix: "iron:cache:"
+        key-prefix: iron:cache
+
+
+      caffeine:
+        enabled: true
+
+    # ==============================
+    # 分布式锁组件语义
+    # ==============================
     distributed-lock:
       enabled: true
       default-provider: redis
+
       namespace: default
       lease-time: 30s
       wait-time: 0s
       auto-renew: false
-      # 为空时由 LockOptions 按 lease-time / 3 推导。
+
+      # 为空时按照 lease-time / 3 自动推导
       # renew-interval: 10s
+
       max-renew-time: 10m
       fencing-required: false
-      # 独立 fencing provider 尚未接入主流程，当前 Redis fencing 由 Redis Provider 内部 INCR 生成。
-      # fencing-token-provider-name: jdbc-sequence
+      fencing-token-provider-name:
       fail-on-lock-lost: true
+
       redis:
         enabled: true
         key-prefix: iron:lock
         release-channel-prefix: iron:lock:release
         fencing-key-suffix: fence
 
+      fencing:
+        jdbc:
+          enabled: ${JDBC_FENCING_ENABLED:false}
+          table-name: iron_lock_fencing_token
+          max-retries: 5
+          initialize-schema: ${JDBC_FENCING_INITIALIZE_SCHEMA:false}
+          schema-platform: mysql
+
+
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics,prometheus
+
   endpoint:
     health:
       show-details: always

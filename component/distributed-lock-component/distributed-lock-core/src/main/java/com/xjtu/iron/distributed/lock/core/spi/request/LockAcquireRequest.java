@@ -25,6 +25,9 @@ public final class LockAcquireRequest {
     /** 锁选项。 */
     private final LockOptions options;
 
+    /** 是否要求 LockProvider 在原子加锁流程中生成原生 fencing token。 */
+    private final boolean nativeFencingRequired;
+
     /** 扩展属性。 */
     private final Map<String, String> attributes;
 
@@ -32,6 +35,9 @@ public final class LockAcquireRequest {
         this.lockName = requireText(builder.lockName, "lockName");
         this.ownerToken = requireText(builder.ownerToken, "ownerToken");
         this.options = Objects.requireNonNull(builder.options, "options must not be null");
+        this.nativeFencingRequired = builder.nativeFencingRequired == null
+                ? this.options.isFencingRequired()
+                : builder.nativeFencingRequired;
         this.attributes = Collections.unmodifiableMap(new LinkedHashMap<>(builder.attributes));
     }
 
@@ -55,6 +61,10 @@ public final class LockAcquireRequest {
         return options.getNamespace();
     }
 
+    public boolean isNativeFencingRequired() {
+        return nativeFencingRequired;
+    }
+
     public Map<String, String> getAttributes() {
         return attributes;
     }
@@ -71,6 +81,7 @@ public final class LockAcquireRequest {
         private String lockName;
         private String ownerToken;
         private LockOptions options;
+        private Boolean nativeFencingRequired;
         private Map<String, String> attributes = new LinkedHashMap<>();
 
         private Builder() {
@@ -89,6 +100,11 @@ public final class LockAcquireRequest {
 
         public Builder options(LockOptions options) {
             this.options = options;
+            return this;
+        }
+
+        public Builder nativeFencingRequired(boolean nativeFencingRequired) {
+            this.nativeFencingRequired = nativeFencingRequired;
             return this;
         }
 

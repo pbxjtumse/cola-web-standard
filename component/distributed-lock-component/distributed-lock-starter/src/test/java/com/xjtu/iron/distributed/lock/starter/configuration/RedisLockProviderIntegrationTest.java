@@ -63,6 +63,31 @@ class RedisLockProviderIntegrationTest {
     }
 
     @Test
+    void nativeRedisFencingTokenShouldIncreaseForEachSuccessfulLease() {
+        String lockName = "integration:fencing:1";
+        LockOptions options = LockOptions.builder()
+                .leaseTime(Duration.ofSeconds(5))
+                .fencingRequired(true)
+                .build();
+
+        LockAcquireResponse first = provider.acquire(LockAcquireRequest.builder()
+                .lockName(lockName).ownerToken("owner-1").options(options)
+                .nativeFencingRequired(true).build());
+        assertTrue(first.isAcquired());
+        long firstToken = first.getLease().fencingToken().orElseThrow();
+        assertEquals(LockReleaseStatus.RELEASED,
+                provider.release(LockReleaseRequest.fromLease(first.getLease())).getStatus());
+
+        LockAcquireResponse second = provider.acquire(LockAcquireRequest.builder()
+                .lockName(lockName).ownerToken("owner-2").options(options)
+                .nativeFencingRequired(true).build());
+        assertTrue(second.isAcquired());
+        long secondToken = second.getLease().fencingToken().orElseThrow();
+        assertTrue(secondToken > firstToken);
+        provider.release(LockReleaseRequest.fromLease(second.getLease()));
+    }
+
+    @Test
     void acquireRenewCheckAndReleaseShouldUseLuaAtomically() {
         LockAcquireRequest acquireRequest = LockAcquireRequest.builder()
                 .lockName("integration:job:1")
@@ -87,39 +112,4 @@ class RedisLockProviderIntegrationTest {
         assertEquals(LockReleaseStatus.RELEASED, provider.release(LockReleaseRequest.fromLease(acquired.getLease())).getStatus());
         assertEquals(LockCheckStatus.NOT_FOUND, provider.check(LockCheckRequest.fromLease(acquired.getLease())).getStatus());
     }
-    @Test
-    void redisIncrFencingTokenShouldIncreaseAfterReleaseAndReacquire() {
-        LockOptions options = LockOptions.builder()
-                .namespace("integration")
-                .leaseTime(Duration.ofSeconds(5))
-                .waitTime(Duration.ZERO)
-                .fencingRequired(true)
-                .build();
-
-        LockAcquireResponse first = provider.acquire(LockAcquireRequest.builder()
-                .lockName("fencing:job:1")
-                .ownerToken("owner-first")
-                .options(options)
-                .build());
-        assertTrue(first.isAcquired());
-        assertTrue(first.getLease().fencingToken().isPresent());
-        long firstToken = first.getLease().fencingToken().getAsLong();
-        assertEquals(LockReleaseStatus.RELEASED,
-                provider.release(LockReleaseRequest.fromLease(first.getLease())).getStatus());
-
-        LockAcquireResponse second = provider.acquire(LockAcquireRequest.builder()
-                .lockName("fencing:job:1")
-                .ownerToken("owner-second")
-                .options(options)
-                .build());
-        assertTrue(second.isAcquired());
-        assertTrue(second.getLease().fencingToken().isPresent());
-        long secondToken = second.getLease().fencingToken().getAsLong();
-
-        assertTrue(secondToken > firstToken,
-                "fencing token must increase across successful acquisitions");
-        assertEquals(LockReleaseStatus.RELEASED,
-                provider.release(LockReleaseRequest.fromLease(second.getLease())).getStatus());
-    }
-
 }

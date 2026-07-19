@@ -126,6 +126,9 @@ public final class LockResult<T> {
      */
     private final Long fencingToken;
 
+    /** fencing token 来源 Provider。 */
+    private final String fencingTokenProviderName;
+
     /**
      * 获取锁等待耗时。
      */
@@ -152,6 +155,7 @@ public final class LockResult<T> {
         this.lockKey = builder.lockKey;
         this.ownerToken = builder.ownerToken;
         this.fencingToken = builder.fencingToken;
+        this.fencingTokenProviderName = builder.fencingTokenProviderName;
         this.waitDuration = builder.waitDuration;
         this.holdDuration = builder.holdDuration;
     }
@@ -176,6 +180,7 @@ public final class LockResult<T> {
                 .lockKey(handle.lockKey())
                 .ownerToken(handle.ownerToken())
                 .fencingToken(handle.fencingToken().isPresent() ? handle.fencingToken().getAsLong() : null)
+                .fencingTokenProviderName(handle.fencingTokenProviderName().orElse(null))
                 .waitDuration(waitDuration)
                 .build();
     }
@@ -243,7 +248,8 @@ public final class LockResult<T> {
         builder.lockName(handle.lockName())
                 .lockKey(handle.lockKey())
                 .ownerToken(handle.ownerToken())
-                .fencingToken(handle.fencingToken().isPresent() ? handle.fencingToken().getAsLong() : null);
+                .fencingToken(handle.fencingToken().isPresent() ? handle.fencingToken().getAsLong() : null)
+                .fencingTokenProviderName(handle.fencingTokenProviderName().orElse(null));
     }
 
     public LockStatus status() {
@@ -314,6 +320,10 @@ public final class LockResult<T> {
         return Optional.ofNullable(fencingToken);
     }
 
+    public Optional<String> fencingTokenProviderName() {
+        return Optional.ofNullable(fencingTokenProviderName);
+    }
+
     public Duration waitDuration() {
         return waitDuration;
     }
@@ -335,6 +345,7 @@ public final class LockResult<T> {
         private String lockKey;
         private String ownerToken;
         private Long fencingToken;
+        private String fencingTokenProviderName;
         private Duration waitDuration;
         private Duration holdDuration;
 
@@ -388,6 +399,11 @@ public final class LockResult<T> {
 
         public Builder<T> fencingToken(Long fencingToken) {
             this.fencingToken = fencingToken;
+            return this;
+        }
+
+        public Builder<T> fencingTokenProviderName(String fencingTokenProviderName) {
+            this.fencingTokenProviderName = fencingTokenProviderName;
             return this;
         }
 
