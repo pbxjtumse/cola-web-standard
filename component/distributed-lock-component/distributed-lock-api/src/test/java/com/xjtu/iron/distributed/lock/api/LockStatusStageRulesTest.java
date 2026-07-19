@@ -23,4 +23,12 @@ class LockStatusStageRulesTest {
                 .acquired(true)
                 .build());
     }
+
+    @Test
+    void providerErrorAtFencingShouldBeValidAfterLockWasAcquired() {
+        assertTrue(LockStatusStageRules.isValid(
+                LockStatus.PROVIDER_ERROR, LockStage.FENCING, true));
+        assertFalse(LockStatusStageRules.isValid(
+                LockStatus.PROVIDER_ERROR, LockStage.FENCING, false));
+    }
 }

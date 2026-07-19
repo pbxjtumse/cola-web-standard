@@ -32,6 +32,14 @@ public final class MicrometerLockMetricsRecorder implements LockMetricsRecorder 
     public void recordLost(String provider, String namespace) {
         registry.counter("iron.lock.lost", "provider", safe(provider), "namespace", safe(namespace)).increment();
     }
+    @Override
+    public void recordFencing(String lockProvider, String fencingProvider, String namespace, boolean success, Duration duration) {
+        registry.timer("iron.lock.fencing",
+                "lock.provider", safe(lockProvider),
+                "fencing.provider", safe(fencingProvider),
+                "namespace", safe(namespace),
+                "success", String.valueOf(success)).record(duration);
+    }
     private static Tags tags(String provider, String namespace, String lock) { return Tags.of("provider", safe(provider), "namespace", safe(namespace), "lock", safe(lock)); }
     private static String safe(String value) { return value == null ? "unknown" : value; }
 }

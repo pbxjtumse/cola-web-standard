@@ -1,8 +1,10 @@
 package com.xjtu.iron.distributed.lock.starter.configuration;
 
+import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenProviderRegistry;
 import com.xjtu.iron.distributed.lock.core.spi.LockProviderRegistry;
 import com.xjtu.iron.distributed.lock.starter.health.DistributedLockHealthIndicator;
 import com.xjtu.iron.distributed.lock.starter.properties.DistributedLockProperties;
+import com.xjtu.iron.distributed.lock.starter.properties.JdbcFencingTokenProperties;
 import com.xjtu.iron.distributed.lock.starter.properties.RedisDistributedLockProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.actuate.health.HealthIndicator;
@@ -22,9 +24,16 @@ public class DistributedLockActuatorAutoConfiguration {
     @ConditionalOnMissingBean(name = "distributedLockHealthIndicator")
     public DistributedLockHealthIndicator distributedLockHealthIndicator(
             LockProviderRegistry providerRegistry,
+            FencingTokenProviderRegistry fencingRegistry,
             DistributedLockProperties properties,
-            ObjectProvider<RedisDistributedLockProperties> redisPropertiesProvider
+            ObjectProvider<RedisDistributedLockProperties> redisPropertiesProvider,
+            ObjectProvider<JdbcFencingTokenProperties> jdbcPropertiesProvider
     ) {
-        return new DistributedLockHealthIndicator(providerRegistry, properties, redisPropertiesProvider.getIfAvailable());
+        return new DistributedLockHealthIndicator(
+                providerRegistry,
+                fencingRegistry,
+                properties,
+                redisPropertiesProvider.getIfAvailable(),
+                jdbcPropertiesProvider.getIfAvailable());
     }
 }

@@ -14,7 +14,9 @@ public class DistributedLockEventLogger {
 
     @EventListener
     public void onLockEvent(LockEvent event) {
-        log.info("distributed lock event type={}, stage={}, status={}, provider={}, lockName={}",
-                event.eventType(), event.stage(), event.stage(), event.providerName(), event.lockName());
+        log.info("distributed lock event type={}, stage={}, status={}, lockProvider={}, "
+                        + "fencingProvider={}, lockName={}, fencingToken={}",
+                event.eventType(), event.stage(), event.status(), event.providerName(),
+                event.fencingTokenProviderName(), event.lockName(), event.fencingToken());
     }
 }

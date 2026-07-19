@@ -42,6 +42,23 @@ class RedisLockProviderTest {
     }
 
     @Test
+    void externalFencingPlanShouldDisableNativeRedisIncr() {
+        RedisLockProvider provider = new RedisLockProvider((script, keys, args) -> {
+            assertEquals("0", args.get(2));
+            return Arrays.asList(1L, "");
+        });
+        LockAcquireResponse response = provider.acquire(LockAcquireRequest.builder()
+                .lockName("job:external-fencing")
+                .ownerToken("token")
+                .options(LockOptions.builder().fencingRequired(true)
+                        .fencingTokenProviderName("jdbc-sequence").build())
+                .nativeFencingRequired(false)
+                .build());
+        assertTrue(response.isAcquired());
+        assertTrue(response.getLease().fencingToken().isEmpty());
+    }
+
+    @Test
     void releaseNotOwnerShouldMapToNotOwner() {
         RedisLockProvider provider = new RedisLockProvider((script, keys, args) -> 0L);
         LockReleaseResponse response = provider.release(LockReleaseRequest.builder()

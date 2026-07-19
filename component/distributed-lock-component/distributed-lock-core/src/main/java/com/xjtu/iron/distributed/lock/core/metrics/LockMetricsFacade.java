@@ -39,4 +39,9 @@ public final class LockMetricsFacade {
     public void recordLost(LockLease lease) {
         recorder.recordLost(lease.getProviderName(), lease.getNamespace());
     }
+
+    public void recordFencing(String lockProvider, String fencingProvider, String namespace,
+                              boolean success, Duration duration) {
+        recorder.recordFencing(lockProvider, fencingProvider, namespace, success, duration);
+    }
 }

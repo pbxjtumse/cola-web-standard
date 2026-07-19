@@ -1,0 +1,180 @@
+package com.xjtu.iron.distributed.lock.core;
+
+import com.xjtu.iron.distributed.lock.api.LockHandle;
+import com.xjtu.iron.distributed.lock.api.LockOptions;
+import com.xjtu.iron.distributed.lock.api.LockResult;
+import com.xjtu.iron.distributed.lock.api.LockStage;
+import com.xjtu.iron.distributed.lock.api.LockStatus;
+import com.xjtu.iron.distributed.lock.core.event.LockEventFactory;
+import com.xjtu.iron.distributed.lock.core.event.NoOpLockEventPublisher;
+import com.xjtu.iron.distributed.lock.core.fencing.DefaultFencingTokenProviderRegistry;
+import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenCoordinator;
+import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenProvider;
+import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenRequest;
+import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenResponse;
+import com.xjtu.iron.distributed.lock.core.metrics.LockMetricsFacade;
+import com.xjtu.iron.distributed.lock.core.metrics.NoOpLockMetricsRecorder;
+import com.xjtu.iron.distributed.lock.core.name.DefaultLockNamePatternResolver;
+import com.xjtu.iron.distributed.lock.core.name.DefaultLockNameValidator;
+import com.xjtu.iron.distributed.lock.core.registry.DefaultLockProviderRegistry;
+import com.xjtu.iron.distributed.lock.core.result.LockResultResolver;
+import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
+import com.xjtu.iron.distributed.lock.core.spi.LockProviderCapabilities;
+import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockReleaseRequest;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockRenewRequest;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockCheckResponse;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockRenewResponse;
+import com.xjtu.iron.distributed.lock.core.token.DefaultOwnerTokenGenerator;
+import com.xjtu.iron.distributed.lock.core.wait.LockWaiterFactory;
+import com.xjtu.iron.distributed.lock.core.watchdog.NoOpLockWatchdog;
+import org.junit.jupiter.api.Test;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class DefaultDistributedLockClientFencingTest {
+
+    @Test
+    void externalProviderShouldEnrichLeaseAndDisableNativeFencing() {
+        FakeLockProvider lockProvider = new FakeLockProvider(false);
+        DefaultDistributedLockClient client = client(lockProvider, issuedProvider(42L));
+
+        LockResult<LockHandle> result = client.tryLock("order:1",
+                LockOptions.builder().fencingRequired(true)
+                        .fencingTokenProviderName("jdbc-sequence").build());
+
+        assertThat(result.status()).isEqualTo(LockStatus.ACQUIRED);
+        assertThat(result.fencingToken()).contains(42L);
+        assertThat(result.fencingTokenProviderName()).contains("jdbc-sequence");
+        assertThat(lockProvider.lastRequest.isNativeFencingRequired()).isFalse();
+    }
+
+    @Test
+    void externalTokenMustNotBeReturnedWhenLeaseWasLostDuringIssuing() {
+        FakeLockProvider lockProvider = new FakeLockProvider(false);
+        lockProvider.checkResponse = LockCheckResponse.notOwner();
+        DefaultDistributedLockClient client = client(lockProvider, issuedProvider(42L));
+
+        LockResult<LockHandle> result = client.tryLock("order:lost",
+                LockOptions.builder().fencingRequired(true)
+                        .fencingTokenProviderName("jdbc-sequence").build());
+
+        assertThat(result.status()).isEqualTo(LockStatus.LOCK_LOST);
+        assertThat(result.stage()).isEqualTo(LockStage.CHECK);
+        assertThat(result.acquired()).isTrue();
+        assertThat(result.handle()).isEmpty();
+        assertThat(result.fencingToken()).contains(42L);
+    }
+
+    @Test
+    void externalProviderFailureShouldReleaseLockAndReturnFencingProviderError() {
+        FakeLockProvider lockProvider = new FakeLockProvider(false);
+        DefaultDistributedLockClient client = client(lockProvider, failedProvider());
+
+        LockResult<String> result = client.execute("order:1",
+                LockOptions.builder().fencingRequired(true)
+                        .fencingTokenProviderName("jdbc-sequence").build(),
+                handle -> "must-not-run");
+
+        assertThat(result.status()).isEqualTo(LockStatus.PROVIDER_ERROR);
+        assertThat(result.stage()).isEqualTo(LockStage.FENCING);
+        assertThat(result.acquired()).isTrue();
+        assertThat(result.handle()).isEmpty();
+        assertThat(lockProvider.releaseCount).isEqualTo(1);
+    }
+
+    private DefaultDistributedLockClient client(
+            FakeLockProvider lockProvider,
+            FencingTokenProvider tokenProvider
+    ) {
+        return new DefaultDistributedLockClient(
+                new DefaultLockProviderRegistry("redis", List.of(lockProvider)),
+                new DefaultOwnerTokenGenerator(),
+                new LockWaiterFactory(),
+                new NoOpLockWatchdog(),
+                new NoOpLockEventPublisher(),
+                new LockEventFactory(),
+                new LockMetricsFacade(new NoOpLockMetricsRecorder(), new DefaultLockNamePatternResolver()),
+                new DefaultLockNameValidator(),
+                LockOptions.defaults(),
+                Clock.systemUTC(),
+                new LockResultResolver(),
+                new FencingTokenCoordinator(
+                        new DefaultFencingTokenProviderRegistry(List.of(tokenProvider))));
+    }
+
+    private FencingTokenProvider issuedProvider(long token) {
+        return new FencingTokenProvider() {
+            @Override public String providerName() { return "jdbc-sequence"; }
+            @Override public boolean supports(FencingTokenRequest request) { return true; }
+            @Override public FencingTokenResponse nextToken(FencingTokenRequest request) {
+                return FencingTokenResponse.issued(token);
+            }
+        };
+    }
+
+    private FencingTokenProvider failedProvider() {
+        return new FencingTokenProvider() {
+            @Override public String providerName() { return "jdbc-sequence"; }
+            @Override public boolean supports(FencingTokenRequest request) { return true; }
+            @Override public FencingTokenResponse nextToken(FencingTokenRequest request) {
+                return FencingTokenResponse.failed(new IllegalStateException("db unavailable"));
+            }
+        };
+    }
+
+    private static final class FakeLockProvider implements LockProvider {
+        private final boolean nativeFencing;
+        private int releaseCount;
+        private LockAcquireRequest lastRequest;
+        private LockCheckResponse checkResponse = LockCheckResponse.held();
+
+        private FakeLockProvider(boolean nativeFencing) {
+            this.nativeFencing = nativeFencing;
+        }
+
+        @Override public String providerName() { return "redis"; }
+
+        @Override
+        public LockAcquireResponse acquire(LockAcquireRequest request) {
+            this.lastRequest = request;
+            LockLease.Builder builder = LockLease.builder()
+                    .providerName("redis")
+                    .namespace(request.getNamespace())
+                    .lockName(request.getLockName())
+                    .lockKey("key")
+                    .ownerToken(request.getOwnerToken())
+                    .leaseTime(request.getOptions().getLeaseTime())
+                    .acquiredAt(Instant.now());
+            if (request.isNativeFencingRequired()) {
+                builder.fencingToken(1L).fencingTokenProviderName("redis");
+            }
+            return LockAcquireResponse.acquired(builder.build());
+        }
+
+        @Override public LockReleaseResponse release(LockReleaseRequest request) {
+            releaseCount++;
+            return LockReleaseResponse.released();
+        }
+        @Override public LockRenewResponse renew(LockRenewRequest request) {
+            return LockRenewResponse.renewed(Instant.now());
+        }
+        @Override public LockCheckResponse check(LockCheckRequest request) {
+            return checkResponse;
+        }
+        @Override public LockProviderCapabilities capabilities() {
+            return LockProviderCapabilities.builder()
+                    .autoRenewSupported(true)
+                    .fencingTokenSupported(nativeFencing)
+                    .build();
+        }
+    }
+}

@@ -72,8 +72,8 @@ public final class LockOptions {
      * 默认是否要求 fencing token。
      *
      * <p>
-     * 一期默认不要求 fencing token。
-     * fencing token 能力建议二期引入。
+     * 默认不要求 fencing token。
+     * 二期已支持 Redis 原生 INCR 与独立 JDBC sequence Provider。
      * </p>
      */
     public static final boolean DEFAULT_FENCING_REQUIRED = false;
@@ -190,7 +190,9 @@ public final class LockOptions {
      * 指定 fencing token Provider 名称。
      *
      * <p>
-     * Redis Provider 已支持 Redis INCR fencing；独立 DB sequence Provider 仍属于二期扩展。
+     * 为空时优先使用锁 Provider 的原生 fencing；
+     * 指定当前锁 Provider 名称（例如 redis）时强制使用原生 fencing；
+     * 指定独立 Provider 名称（例如 jdbc-sequence）时使用外部发号。
      * </p>
      */
     private final String fencingTokenProviderName;

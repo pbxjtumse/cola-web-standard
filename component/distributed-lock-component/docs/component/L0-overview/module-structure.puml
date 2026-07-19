@@ -9,6 +9,7 @@ package "distributed-lock-component" as root {
 
   package "distributed-lock-provider" as provider {
     package "distributed-lock-provider-redis" as redis
+    package "distributed-lock-fencing-provider-jdbc" as jdbc_fencing
   }
 
   package "distributed-lock-starter" as starter
@@ -20,7 +21,9 @@ redis ..> api : use API/SPI model
 redis ..> core : use core SPI/model
 starter ..> api : expose beans
 starter ..> core : auto-config core
+jdbc_fencing ..> core : implement fencing SPI
 starter ..> redis : auto-config Redis provider
+starter ..> jdbc_fencing : auto-config JDBC fencing
 demo ..> starter : use starter
 
 note right of api
@@ -36,7 +39,12 @@ end note
 
 note right of redis
   Redis Provider：
-  一期默认底层实现。
+  一期互斥锁与二期原生 INCR fencing。
+end note
+
+note right of jdbc_fencing
+  JDBC Fencing Provider：
+  二期独立数据库发号实现。
 end note
 
 @enduml

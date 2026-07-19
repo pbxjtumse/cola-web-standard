@@ -71,6 +71,9 @@ public final class LockEvent {
      */
     private final Long fencingToken;
 
+    /** fencing token 来源 Provider。 */
+    private final String fencingTokenProviderName;
+
     /**
      * 异常信息。
      */
@@ -91,6 +94,7 @@ public final class LockEvent {
         this.providerName = builder.providerName;
         this.ownerToken = builder.ownerToken;
         this.fencingToken = builder.fencingToken;
+        this.fencingTokenProviderName = builder.fencingTokenProviderName;
         this.error = builder.error;
         this.timestamp = builder.timestamp == null ? Instant.now() : builder.timestamp;
     }
@@ -135,6 +139,10 @@ public final class LockEvent {
         return fencingToken;
     }
 
+    public String fencingTokenProviderName() {
+        return fencingTokenProviderName;
+    }
+
     public Throwable error() {
         return error;
     }
@@ -162,6 +170,8 @@ public final class LockEvent {
         private String ownerToken;
 
         private Long fencingToken;
+
+        private String fencingTokenProviderName;
 
         private Throwable error;
 
@@ -212,6 +222,11 @@ public final class LockEvent {
 
         public Builder fencingToken(Long fencingToken) {
             this.fencingToken = fencingToken;
+            return this;
+        }
+
+        public Builder fencingTokenProviderName(String fencingTokenProviderName) {
+            this.fencingTokenProviderName = fencingTokenProviderName;
             return this;
         }
 

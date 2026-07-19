@@ -1,0 +1,77 @@
+@startuml
+!include ../../_common/style.puml
+
+title Fencing Token 二期扩展组件图
+
+left to right direction
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "API" {
+  class LockOptions
+  interface LockHandle
+  class LockResult
+  class FencingTokenGuard
+}
+
+package "Core Fencing" {
+  class FencingTokenCoordinator
+  class FencingTokenPlan
+  enum FencingTokenMode {
+    NONE
+    NATIVE
+    EXTERNAL
+  }
+  interface FencingTokenProvider
+  interface FencingTokenProviderRegistry
+  class DefaultFencingTokenProviderRegistry
+  class FencingTokenRequest
+  class FencingTokenResponse
+}
+
+package "Lock Provider" {
+  interface LockProvider
+  class RedisLockProvider
+}
+
+package "External Fencing Provider" {
+  class JdbcSequenceFencingTokenProvider
+  class JdbcFencingTokenSchemaInitializer
+}
+
+package "Business Resource" {
+  class FencedRepository
+  database BusinessDB
+}
+
+LockOptions --> FencingTokenCoordinator : fencingRequired\nproviderName
+FencingTokenCoordinator --> FencingTokenPlan : select
+FencingTokenPlan --> FencingTokenMode
+FencingTokenCoordinator --> LockProvider : inspect capabilities
+FencingTokenCoordinator --> FencingTokenProviderRegistry : select external
+DefaultFencingTokenProviderRegistry ..|> FencingTokenProviderRegistry
+FencingTokenProviderRegistry o-- FencingTokenProvider
+JdbcSequenceFencingTokenProvider ..|> FencingTokenProvider
+RedisLockProvider ..|> LockProvider
+JdbcFencingTokenSchemaInitializer --> BusinessDB : create token table
+JdbcSequenceFencingTokenProvider --> BusinessDB : increment token row
+LockHandle --> FencingTokenGuard : token
+FencingTokenGuard --> FencedRepository : conditional write
+FencedRepository --> BusinessDB : last_fencing_token < token
+LockResult --> LockHandle
+
+note bottom of FencingTokenCoordinator
+  选择顺序：
+  1. 未要求 -> NONE
+  2. 显式 redis -> NATIVE
+  3. 显式 jdbc-sequence -> EXTERNAL
+  4. 未显式时优先锁 Provider 原生能力
+  5. 无原生能力时使用唯一外部 Provider
+end note
+
+note bottom of FencedRepository
+  Fencing 的最终安全边界在业务资源。
+  只生成 token 而不做条件更新没有保护作用。
+end note
+
+@enduml

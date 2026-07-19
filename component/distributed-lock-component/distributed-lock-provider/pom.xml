@@ -12,5 +12,6 @@
     <name>distributed-lock-provider</name>
     <modules>
         <module>distributed-lock-provider-redis</module>
+        <module>distributed-lock-fencing-provider-jdbc</module>
     </modules>
 </project>

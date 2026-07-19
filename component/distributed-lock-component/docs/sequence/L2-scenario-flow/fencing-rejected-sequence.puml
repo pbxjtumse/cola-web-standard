@@ -1,0 +1,29 @@
+@startuml
+!include ../../_common/style.puml
+
+title 旧 Owner 写入被 Fencing Token 拒绝
+
+participant Client as DefaultDistributedLockClient
+participant Callback
+participant Guard as FencingTokenGuard
+participant Repository
+database DB
+participant Handle as DefaultLockHandle
+
+Client -> Callback : doWithLock(handle token=10)
+Callback -> Guard : requireAccepted(handle, conditionalWrite)
+Guard -> Repository : updateIfNewer(token=10)
+Repository -> DB : UPDATE ... WHERE last_token < 10
+DB --> Repository : affectedRows=0\n(current token=11)
+Repository --> Guard : false
+Guard --> Callback : throw FencingTokenRejectedException
+Callback --> Client : exception
+Client -> Handle : releaseWithOutcome()
+Client --> Client : LockResult(FENCING_REJECTED, FENCING, acquired=true)
+
+note right of DB
+  拒绝发生在最终资源端，
+  因此即使旧进程恢复也不能覆盖新结果。
+end note
+
+@enduml

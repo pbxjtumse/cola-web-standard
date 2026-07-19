@@ -63,6 +63,7 @@ public class DistributedLockDemoController {
         body.put("value", result.value().orElse(null));
         body.put("ownerToken", result.ownerToken());
         body.put("fencingToken", result.fencingToken().orElse(null));
+        body.put("fencingTokenProvider", result.fencingTokenProviderName().orElse(null));
         return body;
     }
 }

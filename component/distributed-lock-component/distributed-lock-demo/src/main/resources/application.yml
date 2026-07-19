@@ -1,22 +1,35 @@
 server:
-  port: 18090
+  port: ${SERVER_PORT:18090}
 
 spring:
   application:
     name: distributed-lock-demo
+
+  # Demo 作为独立应用负责提供 Redis 连接；starter/core/provider 不携带连接配置。
   data:
     redis:
-      host: www.xjtu-iron.online
-      port: 30379
-      password: 765YSa77TA
-      database: 0
-      timeout: 2s
+      host: ${REDIS_HOST:www.xjtu-iron.online}
+      port: ${REDIS_PORT:30379}
+      username: ${REDIS_USERNAME:}
+      password: ${REDIS_PASSWORD:765YSa77TA}
+      database: ${REDIS_DATABASE:0}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:3s}
+      timeout: ${REDIS_TIMEOUT:3s}
       lettuce:
         pool:
           enabled: true
-          max-active: 16
-          max-idle: 8
-          min-idle: 2
+          max-active: ${REDIS_POOL_MAX_ACTIVE:16}
+          max-idle: ${REDIS_POOL_MAX_IDLE:8}
+          min-idle: ${REDIS_POOL_MIN_IDLE:2}
+          max-wait: ${REDIS_POOL_MAX_WAIT:2s}
+
+  # 仅在启用 JDBC fencing demo 时真正使用。
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://127.0.0.1:3306/test?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
 xjtu:
   iron:
     distributed-lock:
@@ -26,17 +39,28 @@ xjtu:
       lease-time: 30s
       wait-time: 0s
       auto-renew: false
-      # renew-interval 为空时由 LockOptions 按 lease-time / 3 自动推导。
-      # renew-interval: 10s
+      # renew-interval 为空时由 LockOptions 按 lease-time / 3 推导。
       max-renew-time: 10m
       fencing-required: false
-      # fencing-token-provider-name: redis
+      # 默认 API 是否强制使用外部 fencing Provider。留空时 Redis 使用原生 INCR。
+      fencing-token-provider-name:
       fail-on-lock-lost: true
+
       redis:
         enabled: true
         key-prefix: iron:lock
         release-channel-prefix: iron:lock:release
         fencing-key-suffix: fence
+
+      fencing:
+        jdbc:
+          # 默认关闭，普通 Redis fencing demo 不需要数据库发号。
+          enabled: ${JDBC_FENCING_ENABLED:false}
+          table-name: iron_lock_fencing_token
+          max-retries: 5
+          # Demo 可自动建表；生产建议关闭并使用 Flyway/Liquibase。
+          initialize-schema: ${JDBC_FENCING_INITIALIZE_SCHEMA:true}
+          schema-platform: mysql
 
 management:
   endpoints:

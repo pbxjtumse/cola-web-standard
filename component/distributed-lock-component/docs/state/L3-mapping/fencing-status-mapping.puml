@@ -1,0 +1,55 @@
+@startuml
+!include ../../_common/style.puml
+
+title Fencing Token 状态映射
+
+left to right direction
+skinparam classAttributeIconSize 0
+hide empty members
+
+enum FencingTokenStatus <<Core SPI>> {
+  ISSUED
+  NOT_SUPPORTED
+  PROVIDER_ERROR
+}
+
+enum LockStatus <<API Final Status>> {
+  ACQUIRED
+  SUCCESS
+  PROVIDER_ERROR
+  FENCING_REJECTED
+}
+
+enum LockStage <<API Stage>> {
+  ACQUIRE
+  EXECUTE
+  FENCING
+}
+
+class LockRuntime {
+  acquired
+  callbackExecuted
+}
+
+FencingTokenStatus ..> LockStatus : Core 映射
+FencingTokenStatus ..> LockStage : stage=FENCING
+FencingTokenStatus ..> LockRuntime
+
+note right of FencingTokenStatus
+  ISSUED
+    -> tryLock 最终 ACQUIRED
+    -> execute 可进入 callback
+
+  NOT_SUPPORTED / PROVIDER_ERROR
+    -> status=PROVIDER_ERROR
+    -> stage=FENCING
+    -> acquired=true
+    -> callbackExecuted=false
+
+  业务资源条件写入拒绝
+    -> status=FENCING_REJECTED
+    -> stage=FENCING
+    -> acquired=true
+end note
+
+@enduml

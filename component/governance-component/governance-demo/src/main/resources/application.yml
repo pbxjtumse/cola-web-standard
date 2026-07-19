@@ -15,10 +15,12 @@ xjtu:
         timeout:
           enabled: true
           timeout: 1s
+
         retry:
           enabled: false
           max-attempts: 1
           wait-duration: 100ms
+
         circuit-breaker:
           enabled: true
           failure-rate-threshold: 50
@@ -28,10 +30,12 @@ xjtu:
           minimum-number-of-calls: 10
           wait-duration-in-open-state: 10s
           permitted-number-of-calls-in-half-open-state: 3
+
         bulkhead:
           enabled: true
           max-concurrent-calls: 50
           max-wait-duration: 0ms
+
         rate-limit:
           enabled: false
           limit-for-period: 100
@@ -43,10 +47,12 @@ xjtu:
           timeout:
             enabled: true
             timeout: 1s
+
           retry:
             enabled: true
             max-attempts: 2
             wait-duration: 100ms
+
           circuit-breaker:
             enabled: true
             failure-rate-threshold: 50
@@ -56,10 +62,12 @@ xjtu:
             minimum-number-of-calls: 5
             wait-duration-in-open-state: 10s
             permitted-number-of-calls-in-half-open-state: 2
+
           bulkhead:
             enabled: true
             max-concurrent-calls: 10
             max-wait-duration: 0ms
+
           rate-limit:
             enabled: true
             limit-for-period: 20
@@ -70,9 +78,11 @@ xjtu:
           timeout:
             enabled: true
             timeout: 800ms
+
           retry:
             enabled: false
             max-attempts: 1
+
           circuit-breaker:
             enabled: true
             failure-rate-threshold: 50
@@ -82,6 +92,7 @@ xjtu:
             minimum-number-of-calls: 3
             wait-duration-in-open-state: 10s
             permitted-number-of-calls-in-half-open-state: 2
+
           bulkhead:
             enabled: true
             max-concurrent-calls: 5

@@ -52,7 +52,7 @@ public final class RedisLockProvider implements LockProvider {
         List<String> args = Arrays.asList(
                 request.getOwnerToken(),
                 String.valueOf(request.getOptions().getLeaseTime().toMillis()),
-                request.getOptions().isFencingRequired() ? "1" : "0"
+                request.isNativeFencingRequired() ? "1" : "0"
         );
         try {
             RedisScriptResultParser.AcquireResult result = resultParser.parseAcquire(
@@ -66,6 +66,7 @@ public final class RedisLockProvider implements LockProvider {
                         .lockKey(lockKey)
                         .ownerToken(request.getOwnerToken())
                         .fencingToken(result.getFencingToken())
+                        .fencingTokenProviderName(result.getFencingToken() == null ? null : providerName())
                         .leaseTime(request.getOptions().getLeaseTime())
                         .acquiredAt(acquiredAt)
                         .expireAt(acquiredAt.plus(request.getOptions().getLeaseTime()))

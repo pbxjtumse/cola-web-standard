@@ -66,6 +66,12 @@ public enum LockEventType {
      */
     RELEASE_FAILED,
 
+    /** fencing token 成功生成。 */
+    FENCING_TOKEN_ISSUED,
+
+    /** fencing token 生成失败。 */
+    FENCING_TOKEN_FAILED,
+
     /**
      * fencing token 被业务资源拒绝。
      */

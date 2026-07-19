@@ -49,7 +49,7 @@ package "API Result\n(distributed-lock-api)" as api_result {
 
   class LockRuntimeState <<Core Runtime>> {
     lost
-    released
+    releaseAttempted
   }
 
   enum LockStatus <<API Final Status>> {
@@ -77,7 +77,7 @@ package "API Result\n(distributed-lock-api)" as api_result {
 }
 
 provider_status ..> LockResult : Core 映射为\nstatus + stage + acquired
-provider_status ..> LockRuntimeState : 部分结果更新\nlost / released
+provider_status ..> LockRuntimeState : 部分结果更新\nlost / releaseAttempted
 
 LockResult --> LockStatus : final status
 LockResult --> LockStage : occurred stage
@@ -114,7 +114,7 @@ note as release_note
   Release Mapping
 
   RELEASED
-  -> runtime.released=true
+  -> runtime.releaseAttempted=true
   -> 不改变原始业务结果
 
   NOT_FOUND / NOT_OWNER
@@ -205,6 +205,10 @@ note as combo_note
 
   PROVIDER_ERROR
   -> stage=ACQUIRE, acquired=false
+
+  PROVIDER_ERROR
+  -> stage=FENCING, acquired=true
+  -> 已拿锁，但 fencing 发号失败
 
   PROVIDER_ERROR
   -> stage=RENEW, acquired=true

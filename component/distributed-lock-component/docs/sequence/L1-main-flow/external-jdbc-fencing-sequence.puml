@@ -1,0 +1,48 @@
+@startuml
+!include ../../_common/style.puml
+
+title 外部 JDBC Fencing Token 主流程
+
+participant Client as DefaultDistributedLockClient
+participant Coordinator as FencingTokenCoordinator
+participant RedisProvider as RedisLockProvider
+participant Redis
+participant JdbcProvider as JdbcSequenceFencingTokenProvider
+database DB
+participant Handle as DefaultLockHandle
+participant Callback
+
+Client -> Coordinator : plan(lockProvider, options)
+Coordinator --> Client : EXTERNAL(jdbc-sequence)
+Client -> RedisProvider : acquire(nativeFencingRequired=false)
+RedisProvider -> Redis : EVAL acquire.lua
+Redis --> RedisProvider : ACQUIRED(ownerToken)
+RedisProvider --> Client : LockLease(no fencing token)
+
+Client -> JdbcProvider : nextToken(namespace, lockName)
+JdbcProvider -> DB : BEGIN
+JdbcProvider -> DB : UPDATE token = token + 1
+alt row does not exist
+  JdbcProvider -> DB : INSERT token = 1
+  alt duplicate key
+    JdbcProvider -> DB : ROLLBACK
+    JdbcProvider -> DB : retry UPDATE
+  end
+end
+JdbcProvider -> DB : SELECT current_token
+JdbcProvider -> DB : COMMIT
+DB --> JdbcProvider : token=N
+JdbcProvider --> Client : ISSUED(N)
+Client -> Client : lease.withFencingToken(N, jdbc-sequence)
+Client -> RedisProvider : check(ownerToken)
+RedisProvider -> Redis : EVAL check.lua
+Redis --> RedisProvider : HELD
+RedisProvider --> Client : HELD
+Client -> Handle : create
+Client -> Callback : doWithLock(handle)
+Callback -> DB : UPDATE ... WHERE last_token < N
+DB --> Callback : affected rows
+Callback --> Client : value / FencingTokenRejectedException
+Client -> Handle : releaseWithOutcome()
+
+@enduml

@@ -58,6 +58,7 @@ package "Provider SPI 层" as spi_layer {
 package "Provider 实现层" as impl_layer {
   class RedisLockProvider <<phase1>>
   interface FencingTokenProvider <<phase2>>
+  class JdbcSequenceFencingTokenProvider <<phase2>>
   class ZkLockProvider <<phase3>>
   class EtcdLockProvider <<phase3>>
 }
@@ -78,6 +79,7 @@ LockWatchdog <|.. ScheduledLockWatchdog
 
 ' Provider 扩展关系
 LockProvider <|.. RedisLockProvider
+FencingTokenProvider <|.. JdbcSequenceFencingTokenProvider
 LockProvider <|.. ZkLockProvider
 LockProvider <|.. EtcdLockProvider
 
@@ -122,7 +124,7 @@ legend right
 
   Provider 实现层：
   RedisLockProvider 是一期实现。
-  FencingTokenProvider 是二期扩展。
+  FencingTokenProvider 与 JDBC sequence 是二期实现。
   ZK / Etcd 是三期强协调扩展。
 
   Redis Provider 细节：

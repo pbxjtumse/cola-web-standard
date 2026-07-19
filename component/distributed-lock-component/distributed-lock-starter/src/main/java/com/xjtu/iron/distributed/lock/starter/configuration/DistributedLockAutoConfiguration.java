@@ -3,7 +3,13 @@ package com.xjtu.iron.distributed.lock.starter.configuration;
 import com.xjtu.iron.distributed.lock.api.DistributedLockClient;
 import com.xjtu.iron.distributed.lock.api.LockOptions;
 import com.xjtu.iron.distributed.lock.core.DefaultDistributedLockClient;
+import com.xjtu.iron.distributed.lock.core.event.LockEventFactory;
 import com.xjtu.iron.distributed.lock.core.event.LockEventPublisher;
+import com.xjtu.iron.distributed.lock.core.fencing.DefaultFencingTokenProviderRegistry;
+import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenCoordinator;
+import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenProvider;
+import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenProviderRegistry;
+import com.xjtu.iron.distributed.lock.core.metrics.LockMetricsFacade;
 import com.xjtu.iron.distributed.lock.core.metrics.LockMetricsRecorder;
 import com.xjtu.iron.distributed.lock.core.metrics.NoOpLockMetricsRecorder;
 import com.xjtu.iron.distributed.lock.core.name.DefaultLockNamePatternResolver;
@@ -11,6 +17,7 @@ import com.xjtu.iron.distributed.lock.core.name.DefaultLockNameValidator;
 import com.xjtu.iron.distributed.lock.core.name.LockNamePatternResolver;
 import com.xjtu.iron.distributed.lock.core.name.LockNameValidator;
 import com.xjtu.iron.distributed.lock.core.registry.DefaultLockProviderRegistry;
+import com.xjtu.iron.distributed.lock.core.result.LockResultResolver;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.core.spi.LockProviderRegistry;
 import com.xjtu.iron.distributed.lock.core.token.DefaultOwnerTokenGenerator;
@@ -21,6 +28,7 @@ import com.xjtu.iron.distributed.lock.core.watchdog.ScheduledLockWatchdog;
 import com.xjtu.iron.distributed.lock.starter.event.SpringLockEventPublisher;
 import com.xjtu.iron.distributed.lock.starter.metrics.MicrometerLockMetricsRecorder;
 import com.xjtu.iron.distributed.lock.starter.properties.DistributedLockProperties;
+import com.xjtu.iron.distributed.lock.starter.properties.JdbcFencingTokenProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -37,8 +45,8 @@ import java.time.Clock;
 import java.util.List;
 
 /** 分布式锁核心自动配置。 */
-@AutoConfiguration(after = RedisDistributedLockAutoConfiguration.class)
-@EnableConfigurationProperties(DistributedLockProperties.class)
+@AutoConfiguration(after = {RedisDistributedLockAutoConfiguration.class, JdbcFencingTokenAutoConfiguration.class})
+@EnableConfigurationProperties({DistributedLockProperties.class, JdbcFencingTokenProperties.class})
 @ConditionalOnProperty(prefix = "xjtu.iron.distributed-lock", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class DistributedLockAutoConfiguration {
 
@@ -92,6 +100,28 @@ public class DistributedLockAutoConfiguration {
         return new DefaultLockProviderRegistry(properties.getDefaultProvider(), providers);
     }
 
+
+    @Bean
+    @ConditionalOnMissingBean
+    public FencingTokenProviderRegistry fencingTokenProviderRegistry(
+            List<FencingTokenProvider> providers,
+            DistributedLockProperties properties
+    ) {
+        String configuredName = properties.getFencingTokenProviderName();
+        boolean configuredExternalProvider = configuredName != null
+                && providers.stream().anyMatch(provider -> configuredName.equals(provider.providerName()));
+        return new DefaultFencingTokenProviderRegistry(
+                configuredExternalProvider ? configuredName : null, providers);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public FencingTokenCoordinator fencingTokenCoordinator(
+            FencingTokenProviderRegistry registry
+    ) {
+        return new FencingTokenCoordinator(registry);
+    }
+
     @Bean
     @ConditionalOnBean(LockProviderRegistry.class)
     @ConditionalOnMissingBean
@@ -105,10 +135,13 @@ public class DistributedLockAutoConfiguration {
             LockNameValidator lockNameValidator,
             LockNamePatternResolver patternResolver,
             @Qualifier("distributedLockDefaultOptions") LockOptions defaultOptions,
+            FencingTokenCoordinator fencingTokenCoordinator,
             ObjectProvider<Clock> clockProvider
     ) {
-        return new DefaultDistributedLockClient(providerRegistry, ownerTokenGenerator, waiterFactory, watchdog,
-                eventPublisher, metricsRecorder, lockNameValidator, patternResolver,
-                defaultOptions, clockProvider.getIfAvailable(Clock::systemUTC));
+        return new DefaultDistributedLockClient(
+                providerRegistry, ownerTokenGenerator, waiterFactory, watchdog, eventPublisher,
+                new LockEventFactory(), new LockMetricsFacade(metricsRecorder, patternResolver),
+                lockNameValidator, defaultOptions, clockProvider.getIfAvailable(Clock::systemUTC),
+                new LockResultResolver(), fencingTokenCoordinator);
     }
 }

@@ -1,0 +1,42 @@
+@startuml
+!include ../../_common/style.puml
+
+title 外部 Fencing Provider 异常时序
+
+participant Client as DefaultDistributedLockClient
+participant LockProvider
+participant FencingProvider
+participant Events
+participant Metrics
+
+Client -> LockProvider : acquire()
+LockProvider --> Client : ACQUIRED lease
+Client -> FencingProvider : nextToken()
+FencingProvider --> Client : PROVIDER_ERROR
+
+Client -> LockProvider : release(lease)
+alt released
+  LockProvider --> Client : RELEASED
+  Client -> Metrics : recordRelease(success=true)
+  Client -> Events : RELEASED
+else lock lost
+  LockProvider --> Client : NOT_FOUND / NOT_OWNER
+  Client -> Metrics : recordRelease(false), recordLost
+  Client -> Events : LOCK_LOST(stage=RELEASE)
+else release error
+  LockProvider --> Client : PROVIDER_ERROR
+  Client -> Client : addSuppressed(releaseError)
+  Client -> Events : RELEASE_FAILED
+end
+
+Client -> Metrics : recordFencing(success=false)
+Client -> Events : FENCING_TOKEN_FAILED
+Client --> Client : LockResult(PROVIDER_ERROR, FENCING, acquired=true)
+
+note right of Client
+  acquired=true 表示曾经拿到锁。
+  因 token 未生成，不返回可用 LockHandle，
+  callback 不会执行。
+end note
+
+@enduml

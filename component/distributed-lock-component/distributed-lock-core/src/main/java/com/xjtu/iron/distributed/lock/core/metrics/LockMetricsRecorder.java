@@ -20,4 +20,11 @@ public interface LockMetricsRecorder {
     void recordRelease(String provider, String namespace, boolean success);
 
     void recordLost(String provider, String namespace);
+
+    /**
+     * 记录 fencing token 生成结果。使用 default 方法保持一期自定义实现兼容。
+     */
+    default void recordFencing(String lockProvider, String fencingProvider, String namespace,
+                               boolean success, Duration duration) {
+    }
 }

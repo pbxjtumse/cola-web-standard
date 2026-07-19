@@ -61,7 +61,7 @@ public class ObservabilityProperties {
      *
      * <p>它表示“这条自定义 Span 是由哪套 SDK 创建的”，不是服务名。</p>
      */
-    private String instrumentationScopeName = "xy-observability";
+    private String instrumentationScopeName = "xjtu-iron-observability";
 
     /**
      * 是否启用请求级 MDC。
