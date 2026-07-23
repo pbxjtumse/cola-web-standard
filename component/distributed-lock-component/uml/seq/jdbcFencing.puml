@@ -1,0 +1,120 @@
+@startuml
+title JDBC External Fencing 发号时序图
+
+actor Biz as biz
+participant "DistributedLockClient\n(DefaultDistributedLockClient)" as client
+participant "FencingTokenCoordinator" as coordinator
+participant "LockWaiter\n(NO_WAIT/BACKOFF)" as waiter
+participant "RedisLockProvider" as redisProvider
+participant "RedisLockScriptExecutor" as scriptExecutor
+database "Redis" as redis
+participant "JdbcSequenceFencingTokenProvider" as jdbcProvider
+database "Fencing DB\niron_lock_fencing_token" as fencingDb
+participant "LockHandle" as handle
+participant "Business Callback" as callback
+database "Business DB\nresource table" as bizdb
+
+biz -> client : execute(lockName, options, callback)
+
+client -> coordinator : plan(redisProvider, options)
+coordinator --> client : FencingTokenPlan(mode=EXTERNAL,\nproviderName=jdbc-sequence)
+
+client -> client : generate ownerToken
+
+client -> client : build LockAcquireRequest\nnativeFencingRequired=false
+
+client -> waiter : waitForLock(request, redisProvider)
+
+waiter -> redisProvider : acquire(request)
+
+redisProvider -> redisProvider : build lockKey / fencingKey
+
+redisProvider -> scriptExecutor : execute(acquire.lua,\nKEYS=[lockKey, fencingKey],\nARGV=[ownerToken, leaseMillis, "0"])
+
+scriptExecutor -> redis : EVAL acquire.lua
+
+alt lock not exists
+    redis -> redis : PSETEX lockKey leaseMillis ownerToken
+    redis --> scriptExecutor : {1, ""}
+    scriptExecutor --> redisProvider : raw result
+    redisProvider -> redisProvider : build LockLease\nwithout fencingToken
+    redisProvider --> waiter : LockAcquireResponse.ACQUIRED(lease)
+else lock exists
+    redis --> scriptExecutor : {0, pttl}
+    scriptExecutor --> redisProvider : raw result
+    redisProvider --> waiter : LockAcquireResponse.NOT_ACQUIRED
+end
+
+waiter --> client : LockAcquireResponse
+
+alt acquired
+    client -> jdbcProvider : nextToken(FencingTokenRequest)
+    jdbcProvider -> fencingDb : BEGIN
+
+    jdbcProvider -> fencingDb : UPDATE current_token = current_token + 1\nWHERE namespace=? AND lock_name=?
+
+    alt update one row
+        jdbcProvider -> fencingDb : SELECT current_token
+        fencingDb --> jdbcProvider : token
+        jdbcProvider -> fencingDb : COMMIT
+        jdbcProvider --> client : FencingTokenResponse.ISSUED(token)
+    else update zero row
+        jdbcProvider -> fencingDb : INSERT current_token = 1
+
+        alt insert success
+            jdbcProvider -> fencingDb : COMMIT
+            jdbcProvider --> client : FencingTokenResponse.ISSUED(1)
+        else duplicate key
+            jdbcProvider -> fencingDb : ROLLBACK
+            jdbcProvider -> jdbcProvider : retry UPDATE
+        end
+    end
+
+    client -> client : lease.withFencingToken(token,\n"jdbc-sequence")
+
+    client -> redisProvider : check(leaseRef)
+    redisProvider -> scriptExecutor : execute(check.lua,\nKEYS=[lockKey],\nARGV=[ownerToken])
+    scriptExecutor -> redis : EVAL check.lua
+
+    alt still owner
+        redis --> scriptExecutor : 1
+        scriptExecutor --> redisProvider : HELD
+        redisProvider --> client : LockCheckResponse.HELD
+
+        client -> client : create LockHandle(leaseWithToken)
+
+        client -> callback : doWithLock(handle)
+        callback -> handle : fencingToken()
+        handle --> callback : token
+
+        callback -> bizdb : UPDATE resource\nSET payload=?, last_fencing_token=token\nWHERE resource_key=?\nAND last_fencing_token < token
+
+        alt token accepted
+            bizdb --> callback : updated rows = 1
+            callback --> client : business result
+            client -> handle : unlock()
+            handle -> redisProvider : release(ownerToken)
+            redisProvider -> scriptExecutor : execute(release.lua)
+            scriptExecutor -> redis : EVAL release.lua
+            redis --> scriptExecutor : 1
+            redisProvider --> handle : RELEASED
+            client --> biz : LockResult.SUCCESS\nfencingToken=token
+        else stale token rejected
+            bizdb --> callback : updated rows = 0
+            callback --> client : FencingTokenRejectedException
+            client -> handle : unlock()
+            client --> biz : LockResult.FENCING_REJECTED\nstage=FENCING
+        end
+
+    else lock lost during JDBC issuance
+        redis --> scriptExecutor : -1 or 0
+        scriptExecutor --> redisProvider : NOT_FOUND / NOT_OWNER
+        redisProvider --> client : LockCheckResponse.lockLost
+        client --> biz : LockResult.LOCK_LOST\nstage=CHECK\ncallback not executed
+    end
+
+else not acquired
+    client --> biz : LockResult.NOT_ACQUIRED
+end
+
+@enduml

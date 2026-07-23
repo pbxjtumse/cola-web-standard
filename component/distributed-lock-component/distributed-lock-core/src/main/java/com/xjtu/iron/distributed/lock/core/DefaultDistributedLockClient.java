@@ -531,11 +531,7 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
         return providerRegistry.getProvider(options.getProviderName());
     }
 
-    private void validateProviderCapabilities(
-            LockProvider provider,
-            LockOptions options,
-            FencingTokenPlan fencingPlan
-    ) {
+    private void validateProviderCapabilities(LockProvider provider, LockOptions options, FencingTokenPlan fencingPlan) {
         if (options.isAutoRenew() && !provider.capabilities().isAutoRenewSupported()) {
             throw new IllegalArgumentException(
                     "provider does not support auto renew: " + provider.providerName());

@@ -24,6 +24,7 @@ public final class BackoffLockWaiter implements LockWaiter {
         LockAcquireResponse lastResponse = null;
         while (Instant.now(context.getClock()).isBefore(deadline) || attempt == 0) {
             attempt++;
+            //尝试获取锁的关键信息
             lastResponse = context.getProvider().acquire(context.getRequest());
             if (lastResponse.isAcquired() || lastResponse.hasError()) {
                 return lastResponse;

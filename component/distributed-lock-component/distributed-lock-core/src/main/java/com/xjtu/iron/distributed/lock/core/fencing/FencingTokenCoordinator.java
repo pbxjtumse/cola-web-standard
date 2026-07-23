@@ -63,11 +63,7 @@ public final class FencingTokenCoordinator {
                                 + lockProvider.providerName()));
     }
 
-    public FencingTokenResponse issueExternal(
-            FencingTokenPlan plan,
-            LockLease lease,
-            LockOptions options
-    ) {
+    public FencingTokenResponse issueExternal(FencingTokenPlan plan, LockLease lease, LockOptions options) {
         if (!plan.isExternal()) {
             throw new IllegalArgumentException("plan must be EXTERNAL");
         }
