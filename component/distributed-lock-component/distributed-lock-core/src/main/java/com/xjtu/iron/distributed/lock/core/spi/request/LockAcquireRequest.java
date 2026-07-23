@@ -35,9 +35,15 @@ public final class LockAcquireRequest {
         this.lockName = requireText(builder.lockName, "lockName");
         this.ownerToken = requireText(builder.ownerToken, "ownerToken");
         this.options = Objects.requireNonNull(builder.options, "options must not be null");
-        this.nativeFencingRequired = builder.nativeFencingRequired == null
-                ? this.options.isFencingRequired()
-                : builder.nativeFencingRequired;
+        /*
+         * 默认必须是 false。
+         *
+         * fencingRequired 表示“业务需要 token”；nativeFencingRequired 表示“本次 acquire
+         * 是否要求 LockProvider 原生发号”。二者不是一回事。是否原生发号只能由
+         * FencingTokenCoordinator 选出的 FencingTokenPlan 决定，不能简单等于 options.isFencingRequired()。
+         */
+        this.nativeFencingRequired = builder.nativeFencingRequired != null
+                && builder.nativeFencingRequired;
         this.attributes = Collections.unmodifiableMap(new LinkedHashMap<>(builder.attributes));
     }
 

@@ -13,8 +13,7 @@ public interface FencingTokenProviderRegistry {
     Optional<FencingTokenProvider> defaultProvider();
 
     default FencingTokenProvider getRequired(String providerName) {
-        return findProvider(providerName)
-                .orElseThrow(() -> new IllegalArgumentException(
+        return findProvider(providerName).orElseThrow(() -> new IllegalArgumentException(
                         "fencing token provider not found: " + providerName));
     }
 

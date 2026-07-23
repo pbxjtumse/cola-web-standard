@@ -58,7 +58,19 @@ class FencingTokenCoordinatorTest {
         assertThatThrownBy(() -> coordinator.plan(lockProvider(false),
                 LockOptions.builder().fencingRequired(true).build()))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("no default external provider");
+                .hasMessageContaining("configure fencingTokenProviderName explicitly");
+    }
+
+    @Test
+    void shouldNotGuessDefaultExternalProviderWhenProviderNameIsMissing() {
+        FencingTokenProvider external = provider("jdbc-sequence", 10L);
+        FencingTokenCoordinator coordinator = new FencingTokenCoordinator(
+                new DefaultFencingTokenProviderRegistry(List.of(external)));
+
+        assertThatThrownBy(() -> coordinator.plan(lockProvider(false),
+                LockOptions.builder().fencingRequired(true).build()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("configure fencingTokenProviderName explicitly");
     }
 
     private FencingTokenProvider provider(String name, long token) {

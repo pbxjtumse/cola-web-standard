@@ -5,6 +5,7 @@
 - `configuration.md`：连接、锁语义和 JDBC fencing 配置。
 - `metrics.md`：Micrometer 指标与告警建议。
 - `phase2-fencing-token.md`：二期完整设计、失败语义和业务防旧写模板。
+- `v24-balanced-client-refactor.md`：Client、acquire、execute 的平衡拆分与合并说明。
 
 ## Component Diagrams
 

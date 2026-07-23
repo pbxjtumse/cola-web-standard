@@ -15,8 +15,7 @@ import java.util.Objects;
  *     <li>LockOptions 显式指定当前锁 Provider 名称：NATIVE；</li>
  *     <li>LockOptions 显式指定独立 Provider：EXTERNAL；</li>
  *     <li>未显式指定且锁 Provider 支持原生 fencing：NATIVE；</li>
- *     <li>注册表存在唯一或默认独立 Provider：EXTERNAL；</li>
- *     <li>否则参数校验失败。</li>
+ *     <li>未显式指定且锁 Provider 不支持原生 fencing：参数校验失败，要求业务显式指定独立 Provider。</li>
  * </ol>
  */
 public final class FencingTokenCoordinator {
@@ -43,8 +42,7 @@ public final class FencingTokenCoordinator {
             if (explicitProviderName.equals(lockProvider.providerName())) {
                 if (!lockProvider.capabilities().isFencingTokenSupported()) {
                     throw new IllegalArgumentException(
-                            "lock provider does not support native fencing token: "
-                                    + lockProvider.providerName());
+                            "lock provider does not support native fencing token: "+lockProvider.providerName());
                 }
                 return FencingTokenPlan.nativeProvider();
             }
@@ -55,12 +53,10 @@ public final class FencingTokenCoordinator {
             return FencingTokenPlan.nativeProvider();
         }
 
-        return registry.defaultProvider()
-                .map(FencingTokenPlan::external)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "fencing token is required, but lock provider has no native support "
-                                + "and no default external provider is configured: "
-                                + lockProvider.providerName()));
+        throw new IllegalArgumentException(
+                "fencing token is required, but lock provider has no native support. "
+                        + "Please configure fencingTokenProviderName explicitly, for example jdbc-sequence: "
+                        + lockProvider.providerName());
     }
 
     public FencingTokenResponse issueExternal(FencingTokenPlan plan, LockLease lease, LockOptions options) {
