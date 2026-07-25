@@ -9,6 +9,7 @@ import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
 import com.xjtu.iron.distributed.lock.core.spi.status.LockCheckStatus;
 import com.xjtu.iron.distributed.lock.core.spi.status.LockReleaseStatus;
 import com.xjtu.iron.distributed.lock.core.spi.status.LockRenewStatus;
+import com.xjtu.iron.distributed.lock.provider.redis.RedisLockProvider;
 import com.xjtu.iron.distributed.lock.starter.redis.StringRedisTemplateRedisLockScriptExecutor;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
