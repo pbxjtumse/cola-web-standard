@@ -31,7 +31,12 @@ package "API 层\n(distributed-lock-api)" as api_layer {
 package "Core 层\n(distributed-lock-core)" as core_layer {
 
   class DefaultDistributedLockClient
+  class LockAcquisitionService
+  class LockExecutionTemplate
   class DefaultLockHandle
+
+  interface LockAcquireOutcomeHandlerRegistry
+  interface FencingTokenFlowRegistry
 
   class LockRuntimeState {
     - lost
@@ -83,13 +88,21 @@ FencingTokenProvider <|.. JdbcSequenceFencingTokenProvider
 LockProvider <|.. ZkLockProvider
 LockProvider <|.. EtcdLockProvider
 
-' Client 主依赖
-DefaultDistributedLockClient --> LockOptions
-DefaultDistributedLockClient --> LockResult
-DefaultDistributedLockClient --> OwnerTokenGenerator
-DefaultDistributedLockClient --> LockWaiter
-DefaultDistributedLockClient --> LockWatchdog
-DefaultDistributedLockClient --> LockProvider
+' Client 门面与两条主流程
+DefaultDistributedLockClient --> LockAcquisitionService
+DefaultDistributedLockClient --> LockExecutionTemplate
+
+LockAcquisitionService --> LockOptions
+LockAcquisitionService --> LockResult
+LockAcquisitionService --> OwnerTokenGenerator
+LockAcquisitionService --> LockWaiter
+LockAcquisitionService --> LockProvider
+LockAcquisitionService --> LockAcquireOutcomeHandlerRegistry
+
+LockExecutionTemplate --> LockAcquisitionService
+LockExecutionTemplate --> LockWatchdog
+LockExecutionTemplate --> LockResult
+LockAcquireOutcomeHandlerRegistry --> FencingTokenFlowRegistry
 
 ' Handle 主依赖
 DefaultLockHandle --> LockLease
@@ -97,14 +110,15 @@ DefaultLockHandle --> LockRuntimeState
 DefaultLockHandle --> LockProvider
 
 ' 事件和指标作为横切能力，用虚线表达
-DefaultDistributedLockClient ..> LockEventPublisher
-DefaultDistributedLockClient ..> LockMetricsRecorder
+LockAcquisitionService ..> LockEventPublisher
+LockExecutionTemplate ..> LockEventPublisher
+LockExecutionTemplate ..> LockMetricsRecorder
 DefaultLockHandle ..> LockEventPublisher
 DefaultLockHandle ..> LockMetricsRecorder
 
 ' Provider 能力
 RedisLockProvider --> LockProviderCapability
-DefaultDistributedLockClient ..> FencingTokenProvider : phase2 optional
+FencingTokenFlowRegistry ..> FencingTokenProvider : phase2 optional
 
 legend right
   == 图说明 ==
@@ -115,9 +129,10 @@ legend right
   LockHandle 是一次成功加锁后的租约句柄。
 
   Core 层：
-  负责 tryLock / execute 编排，
-  包括校验、加锁、等待、callback、
-  watchdog、unlock、事件、指标和结果收敛。
+  DefaultDistributedLockClient 仅作为门面。
+  LockAcquisitionService 负责 tryLock；
+  LockExecutionTemplate 负责 callback、watchdog、
+  release、事件、指标和结果收敛。
 
   Provider SPI 层：
   定义底层锁实现的统一扩展点。

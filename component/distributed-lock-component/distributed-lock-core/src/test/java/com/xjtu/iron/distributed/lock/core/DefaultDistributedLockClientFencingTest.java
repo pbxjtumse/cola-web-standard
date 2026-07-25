@@ -5,19 +5,9 @@ import com.xjtu.iron.distributed.lock.api.LockOptions;
 import com.xjtu.iron.distributed.lock.api.LockResult;
 import com.xjtu.iron.distributed.lock.api.LockStage;
 import com.xjtu.iron.distributed.lock.api.LockStatus;
-import com.xjtu.iron.distributed.lock.core.event.LockEventFactory;
-import com.xjtu.iron.distributed.lock.core.event.NoOpLockEventPublisher;
-import com.xjtu.iron.distributed.lock.core.fencing.DefaultFencingTokenProviderRegistry;
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenCoordinator;
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenProvider;
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenRequest;
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenResponse;
-import com.xjtu.iron.distributed.lock.core.metrics.LockMetricsFacade;
-import com.xjtu.iron.distributed.lock.core.metrics.NoOpLockMetricsRecorder;
-import com.xjtu.iron.distributed.lock.core.name.DefaultLockNamePatternResolver;
-import com.xjtu.iron.distributed.lock.core.name.DefaultLockNameValidator;
-import com.xjtu.iron.distributed.lock.core.registry.DefaultLockProviderRegistry;
-import com.xjtu.iron.distributed.lock.core.result.LockResultResolver;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.core.spi.LockProviderCapabilities;
 import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
@@ -29,12 +19,8 @@ import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
 import com.xjtu.iron.distributed.lock.core.spi.response.LockCheckResponse;
 import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
 import com.xjtu.iron.distributed.lock.core.spi.response.LockRenewResponse;
-import com.xjtu.iron.distributed.lock.core.token.DefaultOwnerTokenGenerator;
-import com.xjtu.iron.distributed.lock.core.wait.LockWaiterFactory;
-import com.xjtu.iron.distributed.lock.core.watchdog.NoOpLockWatchdog;
 import org.junit.jupiter.api.Test;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 
@@ -95,20 +81,9 @@ class DefaultDistributedLockClientFencingTest {
             FakeLockProvider lockProvider,
             FencingTokenProvider tokenProvider
     ) {
-        return new DefaultDistributedLockClient(
-                new DefaultLockProviderRegistry("redis", List.of(lockProvider)),
-                new DefaultOwnerTokenGenerator(),
-                new LockWaiterFactory(),
-                new NoOpLockWatchdog(),
-                new NoOpLockEventPublisher(),
-                new LockEventFactory(),
-                new LockMetricsFacade(new NoOpLockMetricsRecorder(), new DefaultLockNamePatternResolver()),
-                new DefaultLockNameValidator(),
-                LockOptions.defaults(),
-                Clock.systemUTC(),
-                new LockResultResolver(),
-                new FencingTokenCoordinator(
-                        new DefaultFencingTokenProviderRegistry(List.of(tokenProvider))));
+        return (DefaultDistributedLockClient) TestDistributedLockClients.create(
+                lockProvider,
+                List.of(tokenProvider));
     }
 
     private FencingTokenProvider issuedProvider(long token) {

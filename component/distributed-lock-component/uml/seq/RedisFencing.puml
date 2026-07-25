@@ -1,0 +1,74 @@
+@startuml
+title Redis Native Fencing 发号时序图
+
+actor Biz as biz
+participant "DistributedLockClient\n(DefaultDistributedLockClient)" as client
+participant "FencingTokenCoordinator" as coordinator
+participant "LockWaiter\n(NO_WAIT/BACKOFF)" as waiter
+participant "RedisLockProvider" as redisProvider
+participant "RedisLockScriptExecutor" as scriptExecutor
+database "Redis" as redis
+participant "LockHandle" as handle
+participant "Business Callback" as callback
+database "Business DB" as bizdb
+
+biz -> client : execute(lockName, options, callback)
+
+client -> coordinator : plan(redisProvider, options)
+coordinator --> client : FencingTokenPlan(mode=NATIVE,\nproviderName=redis)
+
+client -> client : generate ownerToken
+
+client -> client : build LockAcquireRequest\nnativeFencingRequired=true
+
+client -> waiter : waitForLock(request, redisProvider)
+
+waiter -> redisProvider : acquire(request)
+
+redisProvider -> redisProvider : build lockKey / fencingKey
+
+redisProvider -> scriptExecutor : execute(acquire.lua,\nKEYS=[lockKey, fencingKey],\nARGV=[ownerToken, leaseMillis, "1"])
+
+scriptExecutor -> redis : EVAL acquire.lua
+
+alt lock not exists
+    redis -> redis : INCR fencingKey
+    redis -> redis : PSETEX lockKey leaseMillis ownerToken
+    redis --> scriptExecutor : {1, fencingToken}
+    scriptExecutor --> redisProvider : raw result
+    redisProvider -> redisProvider : parse result
+    redisProvider -> redisProvider : build LockLease\nwith fencingToken\nproviderName=redis
+    redisProvider --> waiter : LockAcquireResponse.ACQUIRED(lease)
+else lock exists
+    redis --> scriptExecutor : {0, pttl}
+    scriptExecutor --> redisProvider : raw result
+    redisProvider --> waiter : LockAcquireResponse.NOT_ACQUIRED
+end
+
+waiter --> client : LockAcquireResponse
+
+alt acquired
+    client -> client : create LockHandle(lease)
+    client -> callback : doWithLock(handle)
+    callback -> handle : fencingToken()
+    handle --> callback : token
+
+    callback -> bizdb : UPDATE resource\nWHERE last_fencing_token < token
+    bizdb --> callback : updated rows
+
+    callback --> client : business result
+
+    client -> handle : unlock()
+    handle -> redisProvider : release(ownerToken)
+    redisProvider -> scriptExecutor : execute(release.lua)
+    scriptExecutor -> redis : EVAL release.lua\ncompare ownerToken then DEL
+    redis --> scriptExecutor : 1
+    scriptExecutor --> redisProvider : RELEASED
+    redisProvider --> handle : RELEASED
+
+    client --> biz : LockResult.SUCCESS\nfencingToken=token
+else not acquired
+    client --> biz : LockResult.NOT_ACQUIRED
+end
+
+@enduml

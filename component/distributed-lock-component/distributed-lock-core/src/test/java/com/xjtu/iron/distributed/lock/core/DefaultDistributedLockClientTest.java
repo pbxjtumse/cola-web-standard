@@ -1,26 +1,29 @@
 package com.xjtu.iron.distributed.lock.core;
 
-import com.xjtu.iron.distributed.lock.api.*;
-import com.xjtu.iron.distributed.lock.core.event.NoOpLockEventPublisher;
-import com.xjtu.iron.distributed.lock.core.metrics.NoOpLockMetricsRecorder;
-import com.xjtu.iron.distributed.lock.core.name.DefaultLockNamePatternResolver;
-import com.xjtu.iron.distributed.lock.core.name.DefaultLockNameValidator;
-import com.xjtu.iron.distributed.lock.core.registry.DefaultLockProviderRegistry;
-import com.xjtu.iron.distributed.lock.core.spi.*;
+import com.xjtu.iron.distributed.lock.api.DistributedLockClient;
+import com.xjtu.iron.distributed.lock.api.LockHandle;
+import com.xjtu.iron.distributed.lock.api.LockOptions;
+import com.xjtu.iron.distributed.lock.api.LockResult;
+import com.xjtu.iron.distributed.lock.api.LockStage;
+import com.xjtu.iron.distributed.lock.api.LockStatus;
+import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
+import com.xjtu.iron.distributed.lock.core.spi.LockProviderCapabilities;
 import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
-import com.xjtu.iron.distributed.lock.core.spi.request.*;
-import com.xjtu.iron.distributed.lock.core.spi.response.*;
-import com.xjtu.iron.distributed.lock.core.token.DefaultOwnerTokenGenerator;
-import com.xjtu.iron.distributed.lock.core.wait.LockWaiterFactory;
-import com.xjtu.iron.distributed.lock.core.watchdog.NoOpLockWatchdog;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockReleaseRequest;
+import com.xjtu.iron.distributed.lock.core.spi.request.LockRenewRequest;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockCheckResponse;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
+import com.xjtu.iron.distributed.lock.core.spi.response.LockRenewResponse;
 import org.junit.jupiter.api.Test;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DefaultDistributedLockClientTest {
 
@@ -46,11 +49,7 @@ class DefaultDistributedLockClientTest {
     }
 
     private static DistributedLockClient client(FakeProvider provider) {
-        return new DefaultDistributedLockClient(
-                new DefaultLockProviderRegistry("redis", Collections.singletonList(provider)),
-                new DefaultOwnerTokenGenerator(), new LockWaiterFactory(), new NoOpLockWatchdog(),
-                new NoOpLockEventPublisher(), new NoOpLockMetricsRecorder(), new DefaultLockNameValidator(),
-                new DefaultLockNamePatternResolver(), Clock.systemUTC());
+        return TestDistributedLockClients.create(provider);
     }
 
     private static final class FakeProvider implements LockProvider {
