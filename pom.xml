@@ -394,11 +394,6 @@
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
-                <artifactId>message-component</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
                 <artifactId>observability-api</artifactId>
                 <version>${project.version}</version>
             </dependency>

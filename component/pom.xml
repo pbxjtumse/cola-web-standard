@@ -18,5 +18,6 @@
         <module>cache-component</module>
         <module>concurrency-component</module>
         <module>distributed-lock-component</module>
+        <module>message-component</module>
     </modules>
 </project>
