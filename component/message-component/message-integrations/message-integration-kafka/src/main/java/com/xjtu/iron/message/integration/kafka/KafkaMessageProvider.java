@@ -1,15 +1,15 @@
 package com.xjtu.iron.message.integration.kafka;
 
 import com.xjtu.iron.message.api.ConsumeDecision;
-import com.xjtu.iron.message.api.MessageConsumer;
 import com.xjtu.iron.message.api.SendFailureType;
 import com.xjtu.iron.message.api.SendStatus;
-import com.xjtu.iron.message.api.spi.MessageCapability;
-import com.xjtu.iron.message.api.spi.MessageProvider;
-import com.xjtu.iron.message.api.spi.ProviderInboundMessage;
-import com.xjtu.iron.message.api.spi.ProviderSendRequest;
-import com.xjtu.iron.message.api.spi.ProviderSendResult;
-import com.xjtu.iron.message.api.spi.ProviderSubscription;
+import com.xjtu.iron.message.spi.MessageCapability;
+import com.xjtu.iron.message.spi.MessageProvider;
+import com.xjtu.iron.message.spi.ProviderInboundMessage;
+import com.xjtu.iron.message.spi.ProviderSendRequest;
+import com.xjtu.iron.message.spi.ProviderSendResult;
+import com.xjtu.iron.message.spi.ProviderSubscription;
+import com.xjtu.iron.message.spi.ProviderSubscriptionRequest;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -22,6 +22,9 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
@@ -32,6 +35,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,56 +48,57 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 基于 Kafka 原生 Java Client 的基础消息 Provider。
+ * 基于 Kafka 原生 Java Client 的一期普通消息 Provider。
  *
- * <p>第一版使用手动提交 offset：业务 SUCCESS 后提交当前记录的下一个 offset，
- * 业务 RETRY 时 seek 回当前 offset 并短暂退避。</p>
+ * <p>Consumer 关闭自动提交，只有 core 返回 SUCCESS 后才提交当前记录的下一个 offset。
+ * RETRY 时 seek 回当前 offset 并执行固定退避。</p>
  */
 public final class KafkaMessageProvider implements MessageProvider {
 
-    /** Provider 对外稳定名称。 */
+    /** Provider 稳定名称。 */
     public static final String NAME = "kafka";
 
-    /** Kafka Provider 基础配置。 */
+    /** Kafka 配置。 */
     private final KafkaMessageProviderConfig config;
 
-    /** 线程安全的 Kafka Producer。 */
+    /** 线程安全且可复用的 Kafka Producer。 */
     private final Producer<String, byte[]> producer;
 
-    /** 保存当前 Provider 创建的全部 Consumer Worker。 */
-    private final ConcurrentMap<String, KafkaConsumerWorker> workers = new ConcurrentHashMap<>();
+    /** 当前 Provider 创建的全部 Consumer Worker。 */
+    private final ConcurrentMap<String, KafkaConsumerWorker> workers =
+            new ConcurrentHashMap<>();
 
-    /** 标记 Provider 是否已经关闭。 */
+    /** Provider 关闭状态。 */
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     /**
-     * 创建 Kafka Provider 并初始化 Producer。
+     * 创建 Kafka Provider。
      *
-     * @param config Kafka 基础配置
+     * @param config Kafka 配置
      */
     public KafkaMessageProvider(KafkaMessageProviderConfig config) {
         // 配置不能为空。
         this.config = java.util.Objects.requireNonNull(config, "config must not be null");
-        // 创建 Kafka Producer 原生配置。
+        // 创建 Producer 配置 Map。
         Map<String, Object> properties = new LinkedHashMap<>();
-        // 设置 Broker 地址。
-        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServers());
-        // 设置客户端标识。
-        properties.put(ProducerConfig.CLIENT_ID_CONFIG, config.clientId());
-        // 消息键统一使用 String。
-        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        // 消息体在 core 已经序列化为 byte[]。
-        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        // 第一版要求获得全部同步副本确认后再报告成功。
-        properties.putIfAbsent(ProducerConfig.ACKS_CONFIG, "all");
-        // 允许调用方显式覆盖或增加 Kafka 原生配置。
+        // 先合并调用方原生配置，后续稳定公共配置拥有最终优先级。
         properties.putAll(config.producerProperties());
-        // 创建可复用 Producer。
+        // 写入 Bootstrap Server，禁止原生 Map 悄悄覆盖稳定字段。
+        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServers());
+        // 写入 clientId。
+        properties.put(ProducerConfig.CLIENT_ID_CONFIG, config.clientId());
+        // 强制 key 使用 String 序列化器，与公共 key 模型一致。
+        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        // 强制 value 使用 byte[]，业务序列化已经在 core 完成。
+        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        // 公共 CONFIRMED 语义要求所有同步副本确认。
+        properties.put(ProducerConfig.ACKS_CONFIG, "all");
+        // 创建 Kafka Producer。
         this.producer = new KafkaProducer<>(properties);
     }
 
     /**
-     * 返回 Kafka Provider 名称。
+     * 返回 Provider 名称。
      */
     @Override
     public String name() {
@@ -102,80 +107,89 @@ public final class KafkaMessageProvider implements MessageProvider {
     }
 
     /**
-     * 返回基础发布与消费能力。
+     * 返回一期公共能力。
      */
     @Override
     public Set<MessageCapability> capabilities() {
-        // 第一期只声明两项公共能力。
+        // Kafka Provider 支持普通发布和普通消费。
         return Set.of(
                 MessageCapability.BASIC_PUBLISH,
                 MessageCapability.BASIC_CONSUME);
     }
 
     /**
-     * 使用 Kafka Producer 异步发送消息。
+     * 异步发送普通 Kafka 记录。
      */
     @Override
     public CompletionStage<ProviderSendResult> send(ProviderSendRequest request) {
-        // Provider 关闭后返回明确失败。
+        // Provider 关闭后返回明确本地失败。
         if (closed.get()) {
-            // 通过标准结果表达状态。
-            return CompletableFuture.completedFuture(ProviderSendResult.of(
+            // 不再调用已关闭 Producer。
+            return CompletableFuture.completedFuture(ProviderSendResult.failed(
                     SendStatus.FAILED,
                     SendFailureType.CLIENT_ERROR,
                     "Kafka provider is closed"));
         }
-        // 创建 Kafka 原生记录；第一版逻辑目的地直接映射 Topic。
+        // 创建 Kafka ProducerRecord。
         ProducerRecord<String, byte[]> record = new ProducerRecord<>(
-                request.destination().logicalName(),
+                request.destination().physicalName(),
                 request.key(),
-                request.payload());
-        // 将统一消息头复制到 Kafka Headers。
-        request.headers().forEach((key, value) -> {
-            // Kafka Header 值是 byte[]，统一使用 UTF-8 编码。
-            record.headers().add(key, value.getBytes(StandardCharsets.UTF_8));
-        });
-        // 创建由回调完成的标准结果 Future。
+                request.body());
+        // 将线级字符串消息头编码为 UTF-8 Kafka Header。
+        request.headers().forEach((name, value) ->
+                record.headers().add(
+                        name,
+                        value.getBytes(StandardCharsets.UTF_8)));
+        // 创建公共结果 Future。
         CompletableFuture<ProviderSendResult> resultFuture = new CompletableFuture<>();
-        // 调用 Kafka 异步发送。
+        // 发起 Kafka 异步发送。
         producer.send(record, (metadata, exception) -> {
-            // Kafka 回调提供异常时执行统一分类。
+            // 异常分支进行保守分类。
             if (exception != null) {
-                // 完成标准失败、拒绝或不确定结果。
+                // 完成非成功结果。
                 resultFuture.complete(classifySendFailure(exception));
-                // 异常分支结束。
+                // 结束回调。
                 return;
             }
-            // 组合 Topic、Partition 和 Offset 作为便于诊断的原生位置标识。
-            String nativeMessageId = metadata.topic()
-                    + "-" + metadata.partition()
-                    + "@" + metadata.offset();
-            // Kafka Broker 已返回成功 metadata，映射为 CONFIRMED。
-            resultFuture.complete(ProviderSendResult.confirmed(nativeMessageId));
+            // 组合 Topic、Partition 和 Offset 作为原生位置标识。
+            String providerMessageId = metadata.topic()
+                    + "-"
+                    + metadata.partition()
+                    + "@"
+                    + metadata.offset();
+            // 构造诊断元数据。
+            Map<String, String> resultMetadata = Map.of(
+                    "topic", metadata.topic(),
+                    "partition", Integer.toString(metadata.partition()),
+                    "offset", Long.toString(metadata.offset()));
+            // Broker 返回 RecordMetadata 后标记明确确认。
+            resultFuture.complete(ProviderSendResult.confirmed(
+                    providerMessageId,
+                    resultMetadata));
         });
-        // 返回异步标准结果。
+        // 返回异步结果。
         return resultFuture;
     }
 
     /**
-     * 创建并启动一个专用 Kafka Consumer Worker。
+     * 创建并启动一个 Kafka Consumer Worker。
      */
     @Override
-    public MessageConsumer subscribe(ProviderSubscription subscription) {
-        // Provider 关闭后不允许创建新消费者。
+    public ProviderSubscription subscribe(ProviderSubscriptionRequest request) {
+        // Provider 关闭后拒绝创建新消费者。
         if (closed.get()) {
-            // 消费者属于启动资源，直接失败比返回无效句柄更安全。
+            // 直接抛出启动错误。
             throw new IllegalStateException("Kafka provider is closed");
         }
-        // 为当前消费者创建内部唯一标识。
+        // 创建内部 Worker ID。
         String workerId = UUID.randomUUID().toString();
         // 创建 Worker。
-        KafkaConsumerWorker worker = new KafkaConsumerWorker(workerId, subscription);
-        // 先登记 Worker，确保 Provider.close 可以发现它。
+        KafkaConsumerWorker worker = new KafkaConsumerWorker(workerId, request);
+        // 先登记 Worker，保证并发 close 能发现它。
         workers.put(workerId, worker);
         // 启动专用 poll 线程。
         worker.start();
-        // 返回 Worker 作为统一关闭句柄。
+        // 返回 Worker 作为关闭句柄。
         return worker;
     }
 
@@ -184,121 +198,142 @@ public final class KafkaMessageProvider implements MessageProvider {
      */
     @Override
     public void close() {
-        // 只允许第一次调用执行关闭。
+        // 只允许第一次关闭执行资源释放。
         if (closed.compareAndSet(false, true)) {
             // 通知全部 Worker 停止。
             workers.values().forEach(KafkaConsumerWorker::close);
-            // 清空 Worker 注册表。
+            // 清空注册表。
             workers.clear();
-            // 给 Producer 一个有限关闭时间。
+            // 在有限时间内关闭 Producer。
             producer.close(Duration.ofSeconds(5));
         }
     }
 
     /**
-     * 将 Kafka 发送异常转换为 Provider 标准结果。
+     * 分类 Kafka 发送异常。
      */
     private static ProviderSendResult classifySendFailure(Exception exception) {
-        // 超时发生时无法可靠证明 Broker 是否已经写入，因此返回 UNKNOWN。
-        if (exception instanceof TimeoutException) {
-            // 使用统一超时分类。
-            return ProviderSendResult.of(
-                    SendStatus.UNKNOWN,
-                    SendFailureType.TIMEOUT,
-                    exception.getMessage());
-        }
-        // 认证和授权失败属于明确拒绝。
-        if (exception instanceof AuthenticationException
-                || exception instanceof AuthorizationException) {
-            // 不应对权限问题进行普通发送重试。
-            return ProviderSendResult.of(
+        // 认证失败属于明确拒绝。
+        if (exception instanceof AuthenticationException) {
+            // 返回认证错误。
+            return ProviderSendResult.failed(
                     SendStatus.REJECTED,
                     SendFailureType.AUTHENTICATION_ERROR,
                     exception.getMessage());
         }
-        // 其他 Kafka 回调异常按客户端或网络失败处理。
-        return ProviderSendResult.of(
+        // 授权失败属于明确拒绝。
+        if (exception instanceof AuthorizationException) {
+            // 返回权限错误。
+            return ProviderSendResult.failed(
+                    SendStatus.REJECTED,
+                    SendFailureType.AUTHORIZATION_ERROR,
+                    exception.getMessage());
+        }
+        // 非法 Topic 和超大记录属于明确拒绝。
+        if (exception instanceof InvalidTopicException
+                || exception instanceof RecordTooLargeException) {
+            // Broker 或客户端已经明确拒绝请求。
+            return ProviderSendResult.failed(
+                    SendStatus.REJECTED,
+                    SendFailureType.BROKER_REJECTED,
+                    exception.getMessage());
+        }
+        // 超时或可重试异常无法可靠证明 Broker 未写入。
+        if (exception instanceof TimeoutException
+                || exception instanceof RetriableException) {
+            // 使用 UNKNOWN 防止上层无条件重发。
+            return ProviderSendResult.failed(
+                    SendStatus.UNKNOWN,
+                    exception instanceof TimeoutException
+                            ? SendFailureType.TIMEOUT
+                            : SendFailureType.NETWORK_ERROR,
+                    exception.getMessage());
+        }
+        // 其他异常按明确客户端失败处理。
+        return ProviderSendResult.failed(
                 SendStatus.FAILED,
                 SendFailureType.CLIENT_ERROR,
                 exception.getMessage());
     }
 
     /**
-     * 将 Kafka Headers 转换为统一字符串消息头。
+     * 将 Kafka Headers 转换为统一字符串 Map。
      */
     private static Map<String, String> toHeaders(ConsumerRecord<String, byte[]> record) {
-        // 使用有序映射，重复 Header 保留最后一个值。
+        // 使用有序 Map，重复 Header 保留最后一个值。
         Map<String, String> headers = new LinkedHashMap<>();
-        // 遍历 Kafka 原生 Header。
+        // 遍历 Kafka Header。
         for (Header header : record.headers()) {
-            // null Header 值按空字符串处理，避免构造 Map 时出现 null。
+            // null 字节值按空字符串处理。
             String value = header.value() == null
                     ? ""
                     : new String(header.value(), StandardCharsets.UTF_8);
-            // 写入标准映射。
+            // 写入统一字符串消息头。
             headers.put(header.key(), value);
         }
-        // 返回由 ProviderInboundMessage 再次防御复制的映射。
+        // 返回可由 ProviderInboundMessage 防御复制的 Map。
         return headers;
     }
 
     /**
-     * 每个业务订阅对应一个 KafkaConsumer 和一个专用 poll 线程。
+     * 每个业务订阅对应一个 KafkaConsumer 和专用 poll 线程。
      */
-    private final class KafkaConsumerWorker implements MessageConsumer, Runnable {
+    private final class KafkaConsumerWorker implements ProviderSubscription, Runnable {
 
-        /** Worker 内部唯一标识。 */
+        /** Worker ID。 */
         private final String workerId;
 
-        /** Provider 订阅定义。 */
-        private final ProviderSubscription subscription;
+        /** Provider 订阅请求。 */
+        private final ProviderSubscriptionRequest request;
 
-        /** KafkaConsumer 只能在当前 Worker 线程中使用。 */
+        /** 只能由 Worker 线程使用的 KafkaConsumer。 */
         private final KafkaConsumer<String, byte[]> consumer;
 
         /** 专用 poll 线程。 */
         private final Thread thread;
 
-        /** 标记 Worker 是否正在运行。 */
+        /** Worker 运行状态。 */
         private final AtomicBoolean running = new AtomicBoolean(true);
 
         /**
          * 创建 Kafka Consumer Worker。
          */
-        private KafkaConsumerWorker(String workerId, ProviderSubscription subscription) {
-            // 保存 Worker 标识。
+        private KafkaConsumerWorker(
+                String workerId,
+                ProviderSubscriptionRequest request) {
+            // 保存 Worker ID。
             this.workerId = workerId;
-            // 保存订阅定义。
-            this.subscription = subscription;
-            // 创建 Consumer 原生配置。
+            // 保存订阅请求。
+            this.request = request;
+            // 创建 Consumer 配置。
             Map<String, Object> properties = new LinkedHashMap<>();
-            // 设置 Broker 地址。
+            // 先合并调用方原生配置，稳定公共配置在后面拥有最终优先级。
+            properties.putAll(config.consumerProperties());
+            // 写入 Broker 地址。
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServers());
-            // 设置业务消费组。
-            properties.put(ConsumerConfig.GROUP_ID_CONFIG, subscription.consumerGroup());
-            // 每个 Worker 使用独立客户端标识。
+            // 写入业务消费组。
+            properties.put(ConsumerConfig.GROUP_ID_CONFIG, request.consumerGroup());
+            // 为每个 Worker 生成独立 clientId。
             properties.put(
                     ConsumerConfig.CLIENT_ID_CONFIG,
                     config.clientId() + "-consumer-" + workerId);
-            // 消息键反序列化为 String。
+            // 强制 key 使用 String 反序列化器。
             properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-            // 消息体保留 byte[] 交给 core 反序列化。
-            properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-            // 禁止自动提交，确保业务 SUCCESS 后才推进 offset。
+            // 强制 value 保持 byte[] 交给 core 反序列化。
+            properties.put(
+                    ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                    ByteArrayDeserializer.class);
+            // 禁止自动提交，确保业务成功后再推进 offset。
             properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-            // 没有历史 offset 时从最早位置开始，便于开发验证。
+            // 未找到历史位点时默认从最早开始，生产环境可通过原生配置覆盖。
             properties.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-            // 允许调用方覆盖或增加 Consumer 原生配置。
-            properties.putAll(config.consumerProperties());
-            // 强制禁止自动提交，避免扩展配置破坏组件语义。
-            properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
             // 创建 KafkaConsumer。
             this.consumer = new KafkaConsumer<>(properties);
-            // 创建专用守护线程。
+            // 创建守护线程。
             this.thread = new Thread(
                     this,
-                    "iron-message-kafka-" + subscription.consumerGroup() + "-" + workerId);
-            // 设置为守护线程。
+                    "iron-message-kafka-" + request.consumerGroup() + "-" + workerId);
+            // 守护线程不阻止 JVM 正常退出。
             this.thread.setDaemon(true);
         }
 
@@ -306,7 +341,7 @@ public final class KafkaMessageProvider implements MessageProvider {
          * 启动 Worker。
          */
         private void start() {
-            // 启动专用 poll 线程。
+            // 启动专用线程。
             thread.start();
         }
 
@@ -315,73 +350,76 @@ public final class KafkaMessageProvider implements MessageProvider {
          */
         @Override
         public void run() {
-            // KafkaConsumer 必须在使用线程中订阅 Topic。
-            consumer.subscribe(List.of(subscription.destination().logicalName()));
-            // 持续 poll 直到关闭。
+            // KafkaConsumer 必须在使用它的线程中订阅 Topic。
+            consumer.subscribe(List.of(request.destination().physicalName()));
+            // 捕获 wakeup 关闭信号。
             try {
-                // 外层循环处理持续消费。
+                // 持续拉取直到关闭。
                 while (running.get()) {
-                    // 拉取一批 Kafka 记录。
+                    // 拉取一批消息。
                     ConsumerRecords<String, byte[]> records = consumer.poll(config.pollTimeout());
-                    // 按 Kafka 返回顺序逐条处理。
-                    for (ConsumerRecord<String, byte[]> record : records) {
-                        // 关闭请求到达时尽快停止处理新记录。
-                        if (!running.get()) {
-                            // 跳出当前批次。
+                    // 按分区分别处理，单个分区失败不能让其他分区已拉取记录被静默越过。
+                    for (TopicPartition partition : records.partitions()) {
+                        // 当前分区内保持 offset 顺序。
+                        for (ConsumerRecord<String, byte[]> record : records.records(partition)) {
+                            // 关闭后不再处理新消息。
+                            if (!running.get()) {
+                                // 跳出当前分区。
+                                break;
+                            }
+                            // 构造 Provider 入站元数据。
+                            Map<String, String> metadata = Map.of(
+                                    "topic", record.topic(),
+                                    "partition", Integer.toString(record.partition()),
+                                    "offset", Long.toString(record.offset()),
+                                    "timestamp", Long.toString(record.timestamp()));
+                            // 构造统一 Provider 入站消息。
+                            ProviderInboundMessage inbound = new ProviderInboundMessage(
+                                    record.topic() + "-" + record.partition() + "@" + record.offset(),
+                                    record.key(),
+                                    toHeaders(record),
+                                    record.value(),
+                                    1,
+                                    Instant.now(),
+                                    metadata);
+                            // 默认 RETRY，防止监听器异常误提交 offset。
+                            ConsumeDecision decision = ConsumeDecision.RETRY;
+                            // 调用 core 监听器。
+                            try {
+                                // 获取业务消费决策。
+                                decision = request.listener().onMessage(inbound);
+                            } catch (RuntimeException ignored) {
+                                // 异常保持 RETRY。
+                            }
+                            // SUCCESS 时提交当前分区下一条 offset。
+                            if (decision == ConsumeDecision.SUCCESS) {
+                                // Kafka 提交语义是下一条待消费 offset。
+                                OffsetAndMetadata nextOffset =
+                                        new OffsetAndMetadata(record.offset() + 1);
+                                // 只提交当前分区，避免覆盖其他分区未完成的进度。
+                                consumer.commitSync(Map.of(partition, nextOffset));
+                                // 继续处理当前分区下一条记录。
+                                continue;
+                            }
+                            // RETRY 时仅回退当前分区到失败记录。
+                            consumer.seek(partition, record.offset());
+                            // 固定退避避免高速空转。
+                            sleep(config.retryBackoff());
+                            // 当前分区不能越过失败记录，但其他分区仍可继续处理。
                             break;
                         }
-                        // 将 Kafka 记录转换为统一入站消息。
-                        ProviderInboundMessage inboundMessage = new ProviderInboundMessage(
-                                subscription.destination(),
-                                record.topic() + "-" + record.partition() + "@" + record.offset(),
-                                record.key(),
-                                toHeaders(record),
-                                record.value(),
-                                1);
-                        // 默认按 RETRY 处理，避免监听器异常导致误提交。
-                        ConsumeDecision decision = ConsumeDecision.RETRY;
-                        // 调用 core 监听器。
-                        try {
-                            // 获取最终业务消费决策。
-                            decision = subscription.listener().onMessage(inboundMessage);
-                        } catch (RuntimeException ignored) {
-                            // 异常保持 RETRY，二期再接入异常分类和死信。
-                        }
-                        // SUCCESS 时仅提交当前分区当前记录的下一个 offset。
-                        if (decision == ConsumeDecision.SUCCESS) {
-                            // 构造当前分区标识。
-                            TopicPartition partition = new TopicPartition(
-                                    record.topic(),
-                                    record.partition());
-                            // offset 提交语义是“下一条待消费记录”。
-                            OffsetAndMetadata nextOffset = new OffsetAndMetadata(record.offset() + 1);
-                            // 同步提交确保 ACK 结果明确后再继续。
-                            consumer.commitSync(Map.of(partition, nextOffset));
-                            // 当前记录处理完成，继续下一条。
-                            continue;
-                        }
-                        // RETRY 时把当前分区位置退回当前记录。
-                        TopicPartition partition = new TopicPartition(
-                                record.topic(),
-                                record.partition());
-                        // 下一次 poll 将重新读取当前记录。
-                        consumer.seek(partition, record.offset());
-                        // 执行本地短暂退避，避免业务故障时高速空转。
-                        sleep(config.retryBackoff());
-                        // 当前批次后续记录不能越过失败记录继续提交。
-                        break;
                     }
                 }
             } catch (WakeupException exception) {
-                // 只有运行状态仍为 true 时才代表非关闭导致的异常。
+                // 正常关闭时忽略 WakeupException。
                 if (running.get()) {
-                    // 第一版直接结束 Worker；二期增加统一消费事件和重启治理。
+                    // 非关闭 wakeup 继续抛出，暴露 Consumer Worker 异常退出。
                     throw exception;
                 }
             } finally {
-                // KafkaConsumer 必须由使用它的同一线程关闭。
+                // KafkaConsumer 必须由当前使用线程关闭。
                 consumer.close(Duration.ofSeconds(5));
-                // 从 Provider 注册表移除当前 Worker。
+                // 从 Provider Worker 表移除。
                 workers.remove(workerId, this);
             }
         }
@@ -391,30 +429,30 @@ public final class KafkaMessageProvider implements MessageProvider {
          */
         @Override
         public void close() {
-            // 只在第一次关闭时唤醒 poll。
+            // 仅第一次关闭执行 wakeup。
             if (running.compareAndSet(true, false)) {
-                // wakeup 是跨线程终止 KafkaConsumer.poll 的标准方式。
+                // wakeup 用于安全中断阻塞中的 poll。
                 consumer.wakeup();
             }
         }
 
         /**
-         * 执行可中断退避。
+         * 执行固定退避。
          */
         private void sleep(Duration duration) {
-            // 零退避无需休眠。
+            // 零退避直接返回。
             if (duration.isZero()) {
-                // 直接返回。
+                // 不执行 Thread.sleep。
                 return;
             }
-            // 使用毫秒级休眠。
+            // 捕获线程中断。
             try {
-                // 阻塞当前 Consumer Worker。
+                // 使用毫秒级退避。
                 Thread.sleep(duration.toMillis());
             } catch (InterruptedException exception) {
                 // 恢复中断标记。
                 Thread.currentThread().interrupt();
-                // 停止后续消费循环。
+                // 请求结束 Worker。
                 running.set(false);
             }
         }

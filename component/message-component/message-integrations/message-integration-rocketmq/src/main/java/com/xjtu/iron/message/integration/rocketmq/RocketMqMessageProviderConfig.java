@@ -1,82 +1,100 @@
 package com.xjtu.iron.message.integration.rocketmq;
 
 import java.time.Duration;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * 表示 RocketMQ 5.x gRPC Java Client 的基础配置。
+ * 表示 RocketMQ 5.x gRPC Java Client 的一期基础配置。
  *
- * @param endpoints RocketMQ Proxy 或接入端点
- * @param topics 当前 Producer 预声明的普通消息 Topic 集合
+ * @param endpoints gRPC Proxy 接入地址
+ * @param topics Producer 启动时预声明的物理 Topic
+ * @param requestTimeout 客户端请求超时
+ * @param maxAttempts RocketMQ 客户端内部最大尝试次数
  * @param accessKey 可选访问密钥
- * @param secretKey 可选私有密钥
- * @param requestTimeout 普通 RPC 请求超时时间
- * @param maxAttempts Producer 内部最大发送尝试次数
+ * @param secretKey 可选访问密钥
  */
 public record RocketMqMessageProviderConfig(
         String endpoints,
         Set<String> topics,
-        String accessKey,
-        String secretKey,
         Duration requestTimeout,
-        int maxAttempts) {
+        int maxAttempts,
+        String accessKey,
+        String secretKey) {
 
     /**
-     * 执行配置校验和默认值处理。
+     * 校验并复制 RocketMQ 配置。
      */
     public RocketMqMessageProviderConfig {
-        // 接入端点不能为空。
+        // endpoints 必须存在。
         if (endpoints == null || endpoints.isBlank()) {
-            // RocketMQ 客户端无法在无端点时启动。
+            // 没有 Proxy 地址无法建立客户端连接。
             throw new IllegalArgumentException("endpoints must not be blank");
         }
-        // Topic 集合至少包含一个普通 Topic。
+        // 去除地址首尾空白。
+        endpoints = endpoints.trim();
+        // Topic 集合不能为空。
         if (topics == null || topics.isEmpty()) {
-            // Producer 预声明 Topic 有利于启动阶段发现配置错误。
-            throw new IllegalArgumentException("topics must not be empty");
+            // gRPC Producer Builder 要求预声明发送 Topic。
+            throw new IllegalArgumentException("at least one RocketMQ topic is required");
         }
-        // Topic 集合转换为不可变副本。
-        topics = Set.copyOf(topics);
-        // accessKey 与 secretKey 必须同时存在或同时缺失。
-        boolean hasAccessKey = accessKey != null && !accessKey.isBlank();
-        // 判断 secretKey 是否存在。
-        boolean hasSecretKey = secretKey != null && !secretKey.isBlank();
-        // 两者不一致属于配置错误。
-        if (hasAccessKey != hasSecretKey) {
-            // 禁止半配置认证信息。
-            throw new IllegalArgumentException("accessKey and secretKey must be configured together");
+        // 逐个标准化 Topic。
+        LinkedHashSet<String> normalizedTopics = new LinkedHashSet<>();
+        // 遍历配置 Topic。
+        for (String topic : topics) {
+            // Topic 不能为空。
+            if (topic == null || topic.isBlank()) {
+                // 空 Topic 属于启动配置错误。
+                throw new IllegalArgumentException("RocketMQ topic must not be blank");
+            }
+            // 保存标准化 Topic。
+            normalizedTopics.add(topic.trim());
         }
-        // 未指定请求超时时使用三秒。
-        requestTimeout = requestTimeout == null ? Duration.ofSeconds(3) : requestTimeout;
+        // 保存不可变 Topic Set。
+        topics = Set.copyOf(normalizedTopics);
         // 请求超时必须为正数。
-        if (requestTimeout.isZero() || requestTimeout.isNegative()) {
-            // 非正超时不具备有效 RPC 语义。
+        if (requestTimeout == null || requestTimeout.isZero() || requestTimeout.isNegative()) {
+            // 非正超时无意义。
             throw new IllegalArgumentException("requestTimeout must be positive");
         }
-        // 最大发送尝试次数至少为一次。
-        if (maxAttempts <= 0) {
-            // 零次发送没有意义。
-            throw new IllegalArgumentException("maxAttempts must be positive");
+        // 最大尝试次数至少为 1。
+        if (maxAttempts < 1) {
+            // 客户端必须至少尝试一次。
+            throw new IllegalArgumentException("maxAttempts must be at least 1");
         }
+        // accessKey 和 secretKey 必须同时存在或同时为空。
+        boolean accessKeyPresent = accessKey != null && !accessKey.isBlank();
+        // 判断 secretKey 是否存在。
+        boolean secretKeyPresent = secretKey != null && !secretKey.isBlank();
+        // 仅提供一个凭证字段时拒绝启动。
+        if (accessKeyPresent != secretKeyPresent) {
+            // 防止创建无法认证的客户端。
+            throw new IllegalArgumentException(
+                    "accessKey and secretKey must be configured together");
+        }
+        // 空白凭证统一转换为 null。
+        accessKey = accessKeyPresent ? accessKey.trim() : null;
+        // 空白凭证统一转换为 null。
+        secretKey = secretKeyPresent ? secretKey.trim() : null;
     }
 
     /**
-     * 创建无认证的默认配置。
+     * 创建无鉴权默认配置。
      *
-     * @param endpoints RocketMQ 接入端点
-     * @param topics Topic 集合
+     * @param endpoints gRPC Proxy 地址
+     * @param topics 物理 Topic
      * @return 默认配置
      */
     public static RocketMqMessageProviderConfig defaults(
             String endpoints,
             Set<String> topics) {
-        // 默认请求超时三秒且只尝试一次，可靠性重试留到二期统一治理。
+        // 默认三秒请求超时和三次客户端尝试。
         return new RocketMqMessageProviderConfig(
                 endpoints,
                 topics,
-                null,
-                null,
                 Duration.ofSeconds(3),
-                1);
+                3,
+                null,
+                null);
     }
 }

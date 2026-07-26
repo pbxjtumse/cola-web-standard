@@ -1,77 +1,84 @@
 package com.xjtu.iron.message.core;
 
-import com.xjtu.iron.message.api.spi.MessageProvider;
+import com.xjtu.iron.message.spi.MessageProvider;
 
 import java.util.Collection;
-import java.util.LinkedHashMap;
+import java.util.Collections;
 import java.util.Locale;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Objects;
 
 /**
- * 管理已启用的消息 Provider，并负责按名称选择 Provider。
+ * 保存并选择已经创建的 MessageProvider。
  */
 public final class MessageProviderRegistry implements AutoCloseable {
 
-    /** 按规范化名称保存 Provider。 */
+    /** 按稳定名称保存 Provider。 */
     private final Map<String, MessageProvider> providers;
 
     /**
      * 创建 Provider 注册表。
      *
-     * @param providerCollection 需要注册的 Provider 集合
+     * @param providerCollection Provider 集合
      */
     public MessageProviderRegistry(Collection<? extends MessageProvider> providerCollection) {
         // Provider 集合不能为空。
-        Objects.requireNonNull(providerCollection, "providerCollection must not be null");
-        // 使用有序映射，保证关闭顺序和诊断输出稳定。
-        Map<String, MessageProvider> actualProviders = new LinkedHashMap<>();
-        // 逐个检查并注册 Provider。
-        for (MessageProvider provider : providerCollection) {
-            // Provider 实例不能为空。
-            Objects.requireNonNull(provider, "provider must not be null");
-            // 名称执行统一规范化，避免 Kafka 与 kafka 被当作两个 Provider。
-            String providerName = normalize(provider.name());
-            // Provider 名称不能为空。
-            if (providerName.isBlank()) {
-                // 空名称会让路由行为不可预测，因此启动阶段立即失败。
-                throw new IllegalArgumentException("provider name must not be blank");
-            }
-            // 同名 Provider 属于配置错误，不允许后注册者静默覆盖。
-            MessageProvider previous = actualProviders.putIfAbsent(providerName, provider);
-            // 检测重复 Provider。
-            if (previous != null) {
-                // 明确指出冲突名称，便于启动排障。
-                throw new IllegalArgumentException("duplicate provider name: " + providerName);
-            }
-        }
-        // 至少需要一个 Provider 才能构成可用组件。
-        if (actualProviders.isEmpty()) {
-            // 在构造阶段失败优于首次发送时才暴露问题。
+        if (providerCollection == null || providerCollection.isEmpty()) {
+            // 没有 Provider 时组件无法工作。
             throw new IllegalArgumentException("at least one message provider is required");
         }
-        // 保存不可变注册表。
-        this.providers = Map.copyOf(actualProviders);
+        // 使用有序 Map 保持关闭顺序和诊断稳定。
+        Map<String, MessageProvider> mutableProviders = new LinkedHashMap<>();
+        // 逐个注册 Provider。
+        for (MessageProvider provider : providerCollection) {
+            // Provider 实例不能为空。
+            if (provider == null) {
+                // 启动阶段拒绝空 Provider。
+                throw new IllegalArgumentException("message provider must not be null");
+            }
+            // Provider 名称不能为空。
+            String providerName = provider.name();
+            // 校验稳定名称。
+            if (providerName == null || providerName.isBlank()) {
+                // Provider 实现必须返回可用名称。
+                throw new IllegalArgumentException("message provider name must not be blank");
+            }
+            // 去除名称首尾空白。
+            String normalizedName = providerName.trim().toLowerCase(Locale.ROOT);
+            // 同名 Provider 不允许覆盖。
+            MessageProvider previous = mutableProviders.putIfAbsent(normalizedName, provider);
+            // 发现重复时立即失败。
+            if (previous != null) {
+                // 输出冲突名称。
+                throw new IllegalArgumentException("duplicate message provider: " + normalizedName);
+            }
+        }
+        // 保存不可变 Provider Map。
+        this.providers = Collections.unmodifiableMap(new LinkedHashMap<>(mutableProviders));
     }
 
     /**
-     * 根据名称返回 Provider。
+     * 获取指定 Provider。
      *
      * @param providerName Provider 名称
-     * @return 已注册 Provider
+     * @return Provider 实例
      */
     public MessageProvider getRequired(String providerName) {
-        // 统一规范化调用方传入名称。
-        String normalizedName = normalize(providerName);
-        // 查找目标 Provider。
-        MessageProvider provider = providers.get(normalizedName);
-        // 未找到时立即抛出明确异常。
-        if (provider == null) {
-            // 将可用 Provider 一并输出，降低排障成本。
-            throw new IllegalArgumentException(
-                    "message provider not found: " + providerName + ", available=" + providers.keySet());
+        // Provider 名称不能为空。
+        if (providerName == null || providerName.isBlank()) {
+            // 空名称属于路由或调用错误。
+            throw new IllegalArgumentException("providerName must not be blank");
         }
-        // 返回匹配 Provider。
+        // 查找 Provider。
+        MessageProvider provider = providers.get(providerName.trim().toLowerCase(Locale.ROOT));
+        // 不存在时抛出可诊断异常。
+        if (provider == null) {
+            // 附带当前已注册名称。
+            throw new IllegalStateException(
+                    "message provider not found: " + providerName
+                            + ", registered=" + providers.keySet());
+        }
+        // 返回 Provider。
         return provider;
     }
 
@@ -80,28 +87,15 @@ public final class MessageProviderRegistry implements AutoCloseable {
      */
     @Override
     public void close() {
-        // 逐个释放 Provider 持有的网络客户端和消费线程。
-        for (MessageProvider provider : providers.values()) {
-            // 关闭失败不应阻止后续 Provider 继续释放。
+        // 逐个尝试关闭，单个失败不阻断其他资源释放。
+        providers.values().forEach(provider -> {
+            // 捕获关闭阶段运行时异常。
             try {
-                // 调用 Provider 自己的关闭逻辑。
+                // 释放生产者、消费者和网络资源。
                 provider.close();
             } catch (RuntimeException ignored) {
-                // 第一版没有引入日志门面；后续由可观测性集成记录关闭失败。
+                // 一期没有日志集成；二期通过生命周期事件记录关闭异常。
             }
-        }
-    }
-
-    /**
-     * 规范化 Provider 名称。
-     *
-     * @param providerName 原始名称
-     * @return 小写且去除首尾空格的名称
-     */
-    private static String normalize(String providerName) {
-        // null 被转换为空字符串，随后由调用方做明确校验。
-        return providerName == null
-                ? ""
-                : providerName.trim().toLowerCase(Locale.ROOT);
+        });
     }
 }

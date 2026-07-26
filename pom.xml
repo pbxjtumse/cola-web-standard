@@ -414,7 +414,7 @@
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
-                <artifactId>observability-parent</artifactId>
+                <artifactId>observability-component</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

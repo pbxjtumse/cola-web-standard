@@ -3,68 +3,51 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <parent>
-        <groupId>com.xjtu.iron</groupId>
-        <artifactId>component</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
-    </parent>
 
+    <groupId>com.xjtu.iron</groupId>
     <artifactId>message-component</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>message-component</name>
-    <url>http://maven.apache.org</url>
+    <description>统一消息模型、生命周期治理和多消息中间件 Provider 适配组件。</description>
+
     <modules>
-        <module>message-core</module>
         <module>message-api</module>
-        <module>message-provider</module>
+        <module>message-spi</module>
+        <module>message-core</module>
+        <module>message-codec-jackson</module>
         <module>message-integrations</module>
-        <module>message-starter</module>
-        <module>message-demo</module>
         <module>message-testkit</module>
-        <module>message-config</module>
+        <module>message-demo</module>
     </modules>
 
     <properties>
-        <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <kafka.clients.version>4.2.0</kafka.clients.version>
-        <rocketmq.client.java.version>5.2.1</rocketmq.client.java.version>
-        <pulsar.client.version>4.0.12</pulsar.client.version>
-        <maven.compiler.plugin.version>3.14.1</maven.compiler.plugin.version>
+        <maven.compiler.release>17</maven.compiler.release>
+        <maven.compiler.parameters>true</maven.compiler.parameters>
+        <kafka.version>4.3.1</kafka.version>
+        <rocketmq.client.version>5.2.1</rocketmq.client.version>
+        <pulsar.version>4.0.12</pulsar.version>
+        <jackson.version>2.20.0</jackson.version>
+        <junit.version>5.12.2</junit.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>message-api</artifactId>
-                <version>${project.version}</version>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
             <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>message-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>message-testkit</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.kafka</groupId>
-                <artifactId>kafka-clients</artifactId>
-                <version>${kafka.clients.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.rocketmq</groupId>
-                <artifactId>rocketmq-client-java</artifactId>
-                <version>${rocketmq.client.java.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.pulsar</groupId>
-                <artifactId>pulsar-client</artifactId>
-                <version>${pulsar.client.version}</version>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -75,10 +58,18 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>${maven.compiler.plugin.version}</version>
+                    <version>3.14.0</version>
                     <configuration>
                         <release>${maven.compiler.release}</release>
-                        <parameters>true</parameters>
+                        <parameters>${maven.compiler.parameters}</parameters>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.3</version>
+                    <configuration>
+                        <useModulePath>false</useModulePath>
                     </configuration>
                 </plugin>
             </plugins>

@@ -1,33 +1,39 @@
 package com.xjtu.iron.message.api;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 表示一次消息消费所需的非业务上下文。
+ * 表示一次具体消费投递的运行时上下文。
  *
- * @param destination 逻辑消息目的地
- * @param providerName 实际接收消息的 Provider
- * @param nativeMessageId 中间件原生消息标识
- * @param deliveryAttempt 当前投递次数；无法获得时为 1
+ * @param providerName 实际 Provider 名称
+ * @param physicalDestination 实际物理目的地
+ * @param consumerGroup 消费组或订阅名称
+ * @param providerMessageId Provider 原生消息 ID
+ * @param deliveryAttempt 当前投递次数；Provider 无法提供时通常为 1
  * @param receivedAt 组件收到消息的时间
- * @param headers 完整消息头
+ * @param metadata Provider 只读原生诊断元数据
  */
 public record ConsumeContext(
-        MessageDestination destination,
         String providerName,
-        String nativeMessageId,
+        String physicalDestination,
+        String consumerGroup,
+        String providerMessageId,
         int deliveryAttempt,
         Instant receivedAt,
-        Map<String, String> headers) {
+        Map<String, String> metadata) {
 
     /**
-     * 对消息头执行防御性复制。
+     * 统一修正投递次数并复制元数据。
      */
     public ConsumeContext {
-        // 避免 Provider 在业务处理期间修改上下文。
-        headers = headers == null ? Map.of() : Map.copyOf(headers);
-        // 投递次数至少按第一次投递处理。
+        // 对无法提供或非法的次数统一使用 1。
         deliveryAttempt = Math.max(1, deliveryAttempt);
+        // 防止调用方修改 Provider 原始元数据。
+        metadata = metadata == null || metadata.isEmpty()
+                ? Map.of()
+                : Collections.unmodifiableMap(new LinkedHashMap<>(metadata));
     }
 }

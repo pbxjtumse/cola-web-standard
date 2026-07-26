@@ -1,22 +1,28 @@
 package com.xjtu.iron.message.api;
 
 /**
- * 表示发送流程结束或失败时所处的生命周期阶段。
+ * 描述发送生命周期中产生结果或失败的阶段。
  */
 public enum SendStage {
 
-    /** 参数、目的地或 Provider 能力校验阶段。 */
+    /** 校验消息、目的地和发送选项。 */
     VALIDATE,
 
-    /** 消息体序列化阶段。 */
+    /** 补齐消息 ID、时间和上下文。 */
+    ENRICH,
+
+    /** 将逻辑目的地解析为 Provider 和物理目的地。 */
+    RESOLVE,
+
+    /** 将业务消息体序列化为字节。 */
     SERIALIZE,
 
-    /** 调用具体 Provider 发送阶段。 */
+    /** 调用 Provider 客户端发起发送。 */
     SEND,
 
-    /** 等待 Broker 或 Provider 确认阶段。 */
+    /** 等待或处理 Broker 发送确认。 */
     CONFIRM,
 
-    /** 发送流程已完成。 */
+    /** 发送生命周期已经完成。 */
     COMPLETE
 }

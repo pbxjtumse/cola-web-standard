@@ -7,17 +7,20 @@
         <groupId>com.xjtu.iron</groupId>
         <artifactId>message-integrations</artifactId>
         <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>message-integration-rocketmq</artifactId>
-    <name>message-integration-rocketmq</name>
+    <name>Iron Message RocketMQ Integration</name>
     <dependencies>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
-            <artifactId>message-api</artifactId>
+            <artifactId>message-spi</artifactId>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.rocketmq</groupId>
             <artifactId>rocketmq-client-java</artifactId>
+            <version>${rocketmq.client.version}</version>
         </dependency>
     </dependencies>
 </project>

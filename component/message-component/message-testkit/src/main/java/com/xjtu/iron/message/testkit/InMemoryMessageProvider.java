@@ -1,283 +1,436 @@
 package com.xjtu.iron.message.testkit;
 
 import com.xjtu.iron.message.api.ConsumeDecision;
-import com.xjtu.iron.message.api.MessageConsumer;
 import com.xjtu.iron.message.api.SendFailureType;
 import com.xjtu.iron.message.api.SendStatus;
-import com.xjtu.iron.message.api.spi.*;
+import com.xjtu.iron.message.spi.MessageCapability;
+import com.xjtu.iron.message.spi.MessageProvider;
+import com.xjtu.iron.message.spi.ProviderInboundMessage;
+import com.xjtu.iron.message.spi.ProviderSendRequest;
+import com.xjtu.iron.message.spi.ProviderSendResult;
+import com.xjtu.iron.message.spi.ProviderSubscription;
+import com.xjtu.iron.message.spi.ProviderSubscriptionRequest;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 为单元测试和本地示例提供的内存消息 Provider。
+ * 用于单元测试和 Demo 的内存普通消息 Provider。
  *
- * <p>它用于验证 message-core 生命周期，不模拟任何特定 MQ 的完整协议。</p>
+ * <p>该实现只模拟一期公共语义，不模拟真实 Broker 的持久化、副本、重平衡和故障窗口。</p>
  */
 public final class InMemoryMessageProvider implements MessageProvider {
 
-    /** Provider 对外稳定名称。 */
+    /** 默认 Provider 名称。 */
     public static final String NAME = "memory";
 
-    /** 按逻辑目的地保存已注册订阅。 */
-    private final ConcurrentHashMap<String, CopyOnWriteArrayList<Registration>> registrations =
+    /** Provider 名称。 */
+    private final String name;
+
+    /** 最大本地投递次数。 */
+    private final int maxDeliveryAttempts;
+
+    /** RETRY 决策后的固定退避。 */
+    private final Duration retryBackoff;
+
+    /** 按物理目的地和消费组保存订阅。 */
+    private final ConcurrentMap<String, ConcurrentMap<String, GroupSubscriptions>> subscriptions =
             new ConcurrentHashMap<>();
 
-    /** 执行异步投递和重投调度的单线程执行器。 */
-    private final ScheduledExecutorService executor;
+    /** 保存全部已确认发送记录。 */
+    private final CopyOnWriteArrayList<InMemoryMessageRecord> records =
+            new CopyOnWriteArrayList<>();
 
-    /** 失败后的最大额外投递次数。 */
-    private final int maxRedeliveries;
+    /** 异步投递线程池。 */
+    private final ExecutorService deliveryExecutor;
 
-    /** 两次投递之间的等待时间。 */
-    private final Duration redeliveryDelay;
-
-    /** 标记 Provider 是否已经关闭。 */
+    /** Provider 关闭状态。 */
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     /**
-     * 创建使用默认重投参数的内存 Provider。
+     * 创建默认内存 Provider。
      */
     public InMemoryMessageProvider() {
-        // 默认额外重投两次，每次间隔十毫秒。
-        this(2, Duration.ofMillis(10));
+        // 默认最多投递三次，每次间隔十毫秒。
+        this(NAME, 3, Duration.ofMillis(10));
     }
 
     /**
-     * 创建可控制重投参数的内存 Provider。
+     * 创建可配置内存 Provider。
      *
-     * @param maxRedeliveries 最大额外投递次数
-     * @param redeliveryDelay 重投等待时间
+     * @param name Provider 名称
+     * @param maxDeliveryAttempts 最大投递次数
+     * @param retryBackoff 重试退避
      */
-    public InMemoryMessageProvider(int maxRedeliveries, Duration redeliveryDelay) {
-        // 最大重投次数不能为负数。
-        if (maxRedeliveries < 0) {
-            // 负数没有明确含义。
-            throw new IllegalArgumentException("maxRedeliveries must not be negative");
+    public InMemoryMessageProvider(
+            String name,
+            int maxDeliveryAttempts,
+            Duration retryBackoff) {
+        // Provider 名称必须存在。
+        if (name == null || name.isBlank()) {
+            // 拒绝非法名称。
+            throw new IllegalArgumentException("name must not be blank");
         }
-        // 重投间隔不能为空且不能为负数。
-        if (redeliveryDelay == null || redeliveryDelay.isNegative()) {
-            // 无效等待时间应在启动阶段失败。
-            throw new IllegalArgumentException("redeliveryDelay must not be null or negative");
+        // 保存标准化名称。
+        this.name = name.trim();
+        // 最大投递次数至少为 1。
+        if (maxDeliveryAttempts < 1) {
+            // 拒绝无投递配置。
+            throw new IllegalArgumentException("maxDeliveryAttempts must be at least 1");
         }
-        // 保存最大重投次数。
-        this.maxRedeliveries = maxRedeliveries;
-        // 保存重投等待时间。
-        this.redeliveryDelay = redeliveryDelay;
-        // 创建守护线程，避免示例退出时被测试线程阻塞。
-        this.executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
-            // 创建具有可识别名称的消费线程。
-            Thread thread = new Thread(runnable, "iron-message-memory-provider");
-            // 设置为守护线程。
+        // 保存最大投递次数。
+        this.maxDeliveryAttempts = maxDeliveryAttempts;
+        // 退避不能为空或负数。
+        if (retryBackoff == null || retryBackoff.isNegative()) {
+            // 拒绝非法退避。
+            throw new IllegalArgumentException("retryBackoff must not be negative");
+        }
+        // 保存退避。
+        this.retryBackoff = retryBackoff;
+        // 创建命名守护线程工厂。
+        ThreadFactory threadFactory = runnable -> {
+            // 创建投递线程。
+            Thread thread = new Thread(runnable, "iron-message-memory-delivery");
+            // 设置守护线程。
             thread.setDaemon(true);
-            // 返回配置完成的线程。
+            // 返回线程。
             return thread;
-        });
+        };
+        // CachedThreadPool 便于测试多个独立消费组并发投递。
+        this.deliveryExecutor = Executors.newCachedThreadPool(threadFactory);
     }
 
     /**
-     * 返回内存 Provider 名称。
+     * 返回 Provider 名称。
      */
     @Override
     public String name() {
-        // 返回稳定名称。
-        return NAME;
+        // 返回构造时名称。
+        return name;
     }
 
     /**
-     * 返回内存 Provider 支持的基础能力。
+     * 返回一期公共能力。
      */
     @Override
     public Set<MessageCapability> capabilities() {
-        // 内存实现同时支持基础发布和基础消费。
+        // 支持普通发布和普通消费。
         return Set.of(
                 MessageCapability.BASIC_PUBLISH,
                 MessageCapability.BASIC_CONSUME);
     }
 
     /**
-     * 异步确认发送并调度内存投递。
+     * 保存并异步投递消息。
      */
     @Override
     public CompletionStage<ProviderSendResult> send(ProviderSendRequest request) {
-        // Provider 已关闭时返回明确失败结果。
+        // Provider 关闭后返回明确本地失败。
         if (closed.get()) {
-            // 不抛异常，使业务仍获得统一发送结果。
-            return CompletableFuture.completedFuture(ProviderSendResult.of(
+            // 不再接收新消息。
+            return CompletableFuture.completedFuture(ProviderSendResult.failed(
                     SendStatus.FAILED,
                     SendFailureType.CLIENT_ERROR,
                     "in-memory provider is closed"));
         }
-        // 创建模拟中间件原生消息标识。
-        String nativeMessageId = UUID.randomUUID().toString();
-        // 查找当前目的地下全部订阅。
-        List<Registration> destinationRegistrations = registrations.getOrDefault(
-                request.destination().logicalName(),
-                new CopyOnWriteArrayList<>());
-        // 为每个订阅独立调度首次投递。
-        for (Registration registration : destinationRegistrations) {
-            // 首次投递 attempt 从 1 开始。
-            scheduleDelivery(registration, request, nativeMessageId, 1, Duration.ZERO);
-        }
-        // 内存接收完成后立即返回明确确认。
-        return CompletableFuture.completedFuture(
-                ProviderSendResult.confirmed(nativeMessageId));
+        // 生成内存 Provider 消息 ID。
+        String providerMessageId = UUID.randomUUID().toString();
+        // 创建线级历史记录。
+        InMemoryMessageRecord record = new InMemoryMessageRecord(
+                providerMessageId,
+                request.destination().physicalName(),
+                request.messageId(),
+                request.key(),
+                request.headers(),
+                request.body(),
+                Instant.now());
+        // 保存历史记录。
+        records.add(record);
+        // 在确认后异步投递给每个消费组中的一个订阅实例。
+        deliveryExecutor.execute(() -> dispatch(record));
+        // 内存保存完成后立即返回明确确认。
+        return CompletableFuture.completedFuture(ProviderSendResult.confirmed(
+                providerMessageId,
+                Map.of("physicalDestination", request.destination().physicalName())));
     }
 
     /**
-     * 注册一个内存消费者。
+     * 注册内存订阅。
      */
     @Override
-    public MessageConsumer subscribe(ProviderSubscription subscription) {
-        // Provider 已关闭后不允许新增消费者。
+    public ProviderSubscription subscribe(ProviderSubscriptionRequest request) {
+        // Provider 关闭后拒绝新订阅。
         if (closed.get()) {
-            // 启动期配置错误使用异常直接暴露。
+            // 启动阶段直接失败。
             throw new IllegalStateException("in-memory provider is closed");
         }
-        // 创建订阅注册对象。
-        Registration registration = new Registration(subscription);
-        // 按逻辑目的地保存订阅。
-        registrations.computeIfAbsent(
-                subscription.destination().logicalName(),
-                ignored -> new CopyOnWriteArrayList<>())
-                .add(registration);
-        // 返回注册对象本身作为消费者关闭句柄。
-        return registration;
+        // 创建订阅 ID。
+        String subscriptionId = UUID.randomUUID().toString();
+        // 获取物理目的地订阅表。
+        ConcurrentMap<String, GroupSubscriptions> destinationSubscriptions =
+                subscriptions.computeIfAbsent(
+                        request.destination().physicalName(),
+                        ignored -> new ConcurrentHashMap<>());
+        // 获取消费组订阅集合。
+        GroupSubscriptions groupSubscriptions = destinationSubscriptions.computeIfAbsent(
+                request.consumerGroup(),
+                ignored -> new GroupSubscriptions());
+        // 创建订阅状态。
+        SubscriptionState state = new SubscriptionState(subscriptionId, request);
+        // 加入消费组。
+        groupSubscriptions.states().add(state);
+        // 返回关闭句柄。
+        return () -> removeSubscription(
+                request.destination().physicalName(),
+                request.consumerGroup(),
+                state);
     }
 
     /**
-     * 关闭 Provider。
+     * 返回全部已发送记录快照。
+     *
+     * @return 记录快照
+     */
+    public List<InMemoryMessageRecord> records() {
+        // 创建独立列表，防止测试修改内部集合。
+        return List.copyOf(records);
+    }
+
+    /**
+     * 清空已发送记录。
+     */
+    public void clearRecords() {
+        // 清空线程安全记录列表。
+        records.clear();
+    }
+
+    /**
+     * 关闭内存 Provider。
      */
     @Override
     public void close() {
-        // 仅第一次关闭执行资源释放。
+        // 只允许第一次关闭执行清理。
         if (closed.compareAndSet(false, true)) {
-            // 停止接收新的调度任务。
-            executor.shutdownNow();
-            // 清空全部订阅。
-            registrations.clear();
+            // 清空订阅。
+            subscriptions.clear();
+            // 停止异步投递线程池。
+            deliveryExecutor.shutdownNow();
         }
     }
 
     /**
-     * 调度一次消息投递。
+     * 将一条消息投递给全部消费组。
      */
-    private void scheduleDelivery(
-            Registration registration,
-            ProviderSendRequest request,
-            String nativeMessageId,
-            int attempt,
-            Duration delay) {
-        // 关闭后的注册不再投递。
-        if (registration.closed.get() || closed.get()) {
-            // 直接结束当前投递计划。
+    private void dispatch(InMemoryMessageRecord record) {
+        // 获取物理目的地全部消费组。
+        ConcurrentMap<String, GroupSubscriptions> destinationSubscriptions =
+                subscriptions.get(record.physicalDestination());
+        // 没有订阅时消息只保留历史记录。
+        if (destinationSubscriptions == null || destinationSubscriptions.isEmpty()) {
+            // 直接结束投递。
             return;
         }
-        // 将投递任务放入调度线程。
-        executor.schedule(
-                () -> deliver(registration, request, nativeMessageId, attempt),
-                delay.toMillis(),
-                TimeUnit.MILLISECONDS);
+        // 每个消费组独立获得一份消息。
+        destinationSubscriptions.values().forEach(group -> {
+            // 从组内订阅中轮询一个实例。
+            SubscriptionState target = group.next();
+            // 组内暂时没有有效订阅时跳过。
+            if (target == null) {
+                // 结束当前组投递。
+                return;
+            }
+            // 对当前组执行带有限次数的投递。
+            deliverToSubscription(record, target);
+        });
     }
 
     /**
-     * 执行一次实际内存投递。
+     * 投递给单个订阅并处理 RETRY。
      */
-    private void deliver(
-            Registration registration,
-            ProviderSendRequest request,
-            String nativeMessageId,
-            int attempt) {
-        // 消费者或 Provider 已关闭时不再调用业务。
-        if (registration.closed.get() || closed.get()) {
-            // 结束当前任务。
+    private void deliverToSubscription(
+            InMemoryMessageRecord record,
+            SubscriptionState subscription) {
+        // 从第一次投递开始循环。
+        for (int attempt = 1; attempt <= maxDeliveryAttempts; attempt++) {
+            // 订阅已经关闭时停止。
+            if (!subscription.active().get() || closed.get()) {
+                // 结束投递。
+                return;
+            }
+            // 构造 Provider 入站消息。
+            ProviderInboundMessage inbound = new ProviderInboundMessage(
+                    record.providerMessageId(),
+                    record.key(),
+                    record.headers(),
+                    record.body(),
+                    attempt,
+                    Instant.now(),
+                    Map.of("provider", name));
+            // 默认 RETRY。
+            ConsumeDecision decision = ConsumeDecision.RETRY;
+            // 调用 core 监听器。
+            try {
+                // 获取业务决策。
+                decision = subscription.request().listener().onMessage(inbound);
+            } catch (RuntimeException ignored) {
+                // 异常保持 RETRY。
+            }
+            // SUCCESS 时完成当前消费组投递。
+            if (decision == ConsumeDecision.SUCCESS) {
+                // 立即返回。
+                return;
+            }
+            // 最后一次失败后不再本地重试。
+            if (attempt == maxDeliveryAttempts) {
+                // 一期没有死信能力，结束投递。
+                return;
+            }
+            // 执行固定退避。
+            sleep(retryBackoff);
+        }
+    }
+
+    /**
+     * 移除订阅。
+     */
+    private void removeSubscription(
+            String physicalDestination,
+            String consumerGroup,
+            SubscriptionState state) {
+        // 只允许第一次关闭生效。
+        if (!state.active().compareAndSet(true, false)) {
+            // 已关闭时直接返回。
             return;
         }
-        // 创建 Provider 入站消息。
-        ProviderInboundMessage inboundMessage = new ProviderInboundMessage(
-                request.destination(),
-                nativeMessageId,
-                request.key(),
-                request.headers(),
-                request.payload(),
-                attempt);
-        // 默认采用 RETRY，确保监听器异常不会被误判成功。
-        ConsumeDecision decision = ConsumeDecision.RETRY;
-        // 调用 core 监听器。
+        // 获取目的地订阅表。
+        ConcurrentMap<String, GroupSubscriptions> destinationSubscriptions =
+                subscriptions.get(physicalDestination);
+        // 目的地已经被清理时直接返回。
+        if (destinationSubscriptions == null) {
+            // 无需继续。
+            return;
+        }
+        // 获取消费组。
+        GroupSubscriptions group = destinationSubscriptions.get(consumerGroup);
+        // 消费组存在时移除状态。
+        if (group != null) {
+            // 删除当前订阅。
+            group.states().remove(state);
+            // 空组从目的地表移除。
+            if (group.states().isEmpty()) {
+                // 条件删除防止并发新增被误删。
+                destinationSubscriptions.remove(consumerGroup, group);
+            }
+        }
+        // 空目的地表从顶层移除。
+        if (destinationSubscriptions.isEmpty()) {
+            // 条件删除防止并发新增被误删。
+            subscriptions.remove(physicalDestination, destinationSubscriptions);
+        }
+    }
+
+    /**
+     * 执行固定退避。
+     */
+    private static void sleep(Duration duration) {
+        // 零退避直接返回。
+        if (duration.isZero()) {
+            // 不休眠。
+            return;
+        }
+        // 捕获中断。
         try {
-            // 获取业务最终消费决策。
-            decision = registration.subscription.listener().onMessage(inboundMessage);
-        } catch (RuntimeException ignored) {
-            // 内存 Provider 不吞并为成功，仍保持 RETRY。
-        }
-        // 只有 RETRY 且未超过最大次数时才继续调度。
-        if (decision == ConsumeDecision.RETRY && attempt <= maxRedeliveries) {
-            // 下一次投递次数递增。
-            int nextAttempt = attempt + 1;
-            // 使用统一重投间隔再次调度。
-            scheduleDelivery(
-                    registration,
-                    request,
-                    nativeMessageId,
-                    nextAttempt,
-                    redeliveryDelay);
+            // 使用毫秒级休眠。
+            Thread.sleep(duration.toMillis());
+        } catch (InterruptedException exception) {
+            // 恢复中断标记。
+            Thread.currentThread().interrupt();
         }
     }
 
     /**
-     * 保存一个内存订阅及其关闭状态。
+     * 表示消费组内的订阅实例集合和轮询游标。
      */
-    private final class Registration implements MessageConsumer {
+    private static final class GroupSubscriptions {
 
-        /** 原始 Provider 订阅定义。 */
-        private final ProviderSubscription subscription;
+        /** 组内订阅实例。 */
+        private final CopyOnWriteArrayList<SubscriptionState> states =
+                new CopyOnWriteArrayList<>();
 
-        /** 标记当前订阅是否已关闭。 */
-        private final AtomicBoolean closed = new AtomicBoolean(false);
+        /** 轮询游标。 */
+        private final AtomicInteger cursor = new AtomicInteger();
 
-        /**
-         * 创建订阅注册对象。
-         *
-         * @param subscription Provider 订阅定义
-         */
-        private Registration(ProviderSubscription subscription) {
-            // 保存订阅定义。
-            this.subscription = subscription;
+        /** @return 组内订阅列表 */
+        private CopyOnWriteArrayList<SubscriptionState> states() {
+            // 返回线程安全列表。
+            return states;
         }
 
         /**
-         * 关闭当前订阅。
+         * 轮询一个有效订阅。
+         *
+         * @return 有效订阅；不存在时为空
          */
-        @Override
-        public void close() {
-            // 仅第一次关闭时执行移除。
-            if (closed.compareAndSet(false, true)) {
-                // 获取当前目的地对应的注册列表。
-                CopyOnWriteArrayList<Registration> destinationRegistrations =
-                        registrations.get(subscription.destination().logicalName());
-                // 目的地列表可能已经在 Provider 关闭时被清理。
-                if (destinationRegistrations != null) {
-                    // 从列表中移除当前订阅。
-                    destinationRegistrations.remove(this);
-                    // 空列表不再保留，避免长期测试产生无效键。
-                    if (destinationRegistrations.isEmpty()) {
-                        // 仅在映射仍指向同一列表时删除。
-                        registrations.remove(
-                                subscription.destination().logicalName(),
-                                destinationRegistrations);
-                    }
+        private SubscriptionState next() {
+            // 获取当前快照大小。
+            int size = states.size();
+            // 空组返回 null。
+            if (size == 0) {
+                // 表示没有可投递实例。
+                return null;
+            }
+            // 最多检查当前大小次数，跳过已关闭实例。
+            for (int index = 0; index < size; index++) {
+                // 使用 floorMod 防止游标溢出后出现负数。
+                int selectedIndex = Math.floorMod(cursor.getAndIncrement(), size);
+                // 获取候选实例。
+                SubscriptionState candidate = states.get(selectedIndex);
+                // 有效实例直接返回。
+                if (candidate.active().get()) {
+                    // 返回候选实例。
+                    return candidate;
                 }
             }
+            // 没有有效实例。
+            return null;
+        }
+    }
+
+    /**
+     * 表示一个内存订阅状态。
+     *
+     * @param id 订阅 ID
+     * @param request Provider 订阅请求
+     * @param active 活跃状态
+     */
+    private record SubscriptionState(
+            String id,
+            ProviderSubscriptionRequest request,
+            AtomicBoolean active) {
+
+        /**
+         * 创建活跃订阅状态。
+         */
+        private SubscriptionState(
+                String id,
+                ProviderSubscriptionRequest request) {
+            // 默认 active 为 true。
+            this(id, request, new AtomicBoolean(true));
         }
     }
 }
