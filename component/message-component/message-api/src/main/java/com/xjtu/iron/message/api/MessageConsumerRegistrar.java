@@ -13,7 +13,5 @@ public interface MessageConsumerRegistrar {
      * @param <T> 业务消息体类型
      * @return 可关闭订阅句柄
      */
-    <T> MessageSubscription subscribe(
-            ConsumerDefinition<T> definition,
-            MessageHandler<T> handler);
+    <T> MessageSubscription subscribe(ConsumerDefinition<T> definition, MessageHandler<T> handler);
 }

@@ -1,0 +1,49 @@
+@startuml
+!include ../../_common/style.puml
+title L3：消费解码与业务异常分支
+
+participant Provider
+participant MessageTemplate
+participant MessageWireCodec
+participant MessageContextAccessor as Context
+participant MessageHandler
+
+Provider -> MessageTemplate: onMessage(inbound)
+MessageTemplate -> MessageWireCodec: decode
+
+alt 必填系统头缺失
+  MessageWireCodec --> MessageTemplate: IllegalArgumentException
+  MessageTemplate --> Provider: RETRY
+else 逻辑目的地不匹配
+  MessageWireCodec --> MessageTemplate: IllegalArgumentException
+  MessageTemplate --> Provider: RETRY
+else content-type 不支持
+  MessageWireCodec --> MessageTemplate: IllegalArgumentException
+  MessageTemplate --> Provider: RETRY
+else payload 反序列化失败
+  MessageWireCodec --> MessageTemplate: exception
+  MessageTemplate --> Provider: RETRY
+else 解码成功
+  MessageWireCodec --> MessageTemplate: DecodedInbound
+  MessageTemplate -> Context: open(CurrentMessage)
+  MessageTemplate -> MessageHandler: handle
+  alt Handler 返回 null
+    MessageHandler --> MessageTemplate: null
+    MessageTemplate -> Context: close
+    MessageTemplate --> Provider: RETRY
+  else Handler 抛异常
+    MessageHandler --> MessageTemplate: exception
+    MessageTemplate -> Context: close
+    MessageTemplate --> Provider: RETRY
+  else Handler 正常返回
+    MessageHandler --> MessageTemplate: SUCCESS / RETRY
+    MessageTemplate -> Context: close
+    MessageTemplate --> Provider: decision
+  end
+end
+
+note over MessageTemplate
+一期所有不可识别消息都保守 RETRY。
+二期必须加入最大次数、毒消息识别和 DLQ，避免永久阻塞。
+end note
+@enduml

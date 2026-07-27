@@ -10,7 +10,6 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>message-integration-rocketmq</artifactId>
-    <name>Iron Message RocketMQ Integration</name>
     <dependencies>
         <dependency>
             <groupId>com.xjtu.iron</groupId>

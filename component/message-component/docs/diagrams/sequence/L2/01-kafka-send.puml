@@ -1,0 +1,32 @@
+@startuml
+!include ../../_common/style.puml
+title L2：Kafka 普通消息发送
+
+participant MessageTemplate
+participant KafkaMessageProvider as KafkaProvider
+participant KafkaProducer
+queue KafkaBroker
+
+MessageTemplate -> KafkaProvider: send(ProviderSendRequest)
+KafkaProvider -> KafkaProvider: ProducerRecord(topic, messageKey, body)
+KafkaProvider -> KafkaProvider: 写入 UTF-8 headers
+KafkaProvider -> KafkaProducer: send(record, callback)
+KafkaProducer -> KafkaBroker: produce request
+
+alt Broker 明确确认
+  KafkaBroker --> KafkaProducer: RecordMetadata
+  KafkaProducer --> KafkaProvider: callback(metadata, null)
+  KafkaProvider -> KafkaProvider: kafka.topic / partition / offset
+  KafkaProvider --> MessageTemplate: CONFIRMED
+else 认证、授权、非法 Topic、消息过大
+  KafkaBroker --> KafkaProducer: explicit error
+  KafkaProducer --> KafkaProvider: callback(null, exception)
+  KafkaProvider --> MessageTemplate: REJECTED
+else Timeout / RetriableException
+  KafkaProducer --> KafkaProvider: callback(null, exception)
+  KafkaProvider --> MessageTemplate: UNKNOWN
+else 明确客户端错误
+  KafkaProducer --> KafkaProvider: callback(null, exception)
+  KafkaProvider --> MessageTemplate: FAILED
+end
+@enduml

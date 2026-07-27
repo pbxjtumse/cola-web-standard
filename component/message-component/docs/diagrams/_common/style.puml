@@ -1,0 +1,25 @@
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName "PingFang SC"
+skinparam defaultFontSize 14
+skinparam sequence {
+  ArrowColor #3F4A5A
+  LifeLineBorderColor #6B7280
+  LifeLineBackgroundColor #F8FAFC
+  ParticipantBorderColor #475569
+  ParticipantBackgroundColor #F1F5F9
+  ParticipantFontColor #0F172A
+  ActorBorderColor #475569
+  ActorBackgroundColor #E2E8F0
+  ActorFontColor #0F172A
+  GroupBorderColor #94A3B8
+  GroupBackgroundColor #F8FAFC
+  GroupHeaderFontColor #0F172A
+  DividerBackgroundColor #E2E8F0
+  DividerBorderColor #94A3B8
+  NoteBackgroundColor #FEF3C7
+  NoteBorderColor #D97706
+  NoteFontColor #78350F
+}
+hide footbox

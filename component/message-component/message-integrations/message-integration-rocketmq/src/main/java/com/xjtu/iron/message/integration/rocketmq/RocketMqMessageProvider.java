@@ -156,10 +156,10 @@ public final class RocketMqMessageProvider implements MessageProvider {
                 .setTopic(request.destination().physicalName())
                 // 设置已序列化消息体。
                 .setBody(request.body());
-        // key 存在时写入 RocketMQ Keys。
-        if (request.key() != null && !request.key().isBlank()) {
-            // 原生 Key 便于定位消息和后续高级能力演进。
-            messageBuilder.setKeys(request.key());
+        // messageKey 存在时写入 RocketMQ Keys；该 Key 便于检索，不等同于 FIFO MessageGroup。
+        if (request.messageKey() != null && !request.messageKey().isBlank()) {
+            // 普通消息仅映射检索 Key，三期 FIFO 将使用独立 orderingKey/messageGroup。
+            messageBuilder.setKeys(request.messageKey());
         }
         // 将完整线级消息头写入 RocketMQ 用户属性。
         request.headers().forEach(messageBuilder::addProperty);
@@ -274,20 +274,19 @@ public final class RocketMqMessageProvider implements MessageProvider {
         // 复制消息体。
         bodyBuffer.get(body);
         // RocketMQ 支持多个 Key，公共模型使用第一个。
-        String key = messageView.getKeys().stream().findFirst().orElse(null);
+        String messageKey = messageView.getKeys().stream().findFirst().orElse(null);
         // 复制用户属性为线级消息头。
         Map<String, String> headers = new LinkedHashMap<>(messageView.getProperties());
         // 构造诊断元数据。
         Map<String, String> metadata = Map.of(
-                "deliveryAttempt",
+                RocketMqMetadataKeys.DELIVERY_ATTEMPT,
                 Integer.toString(messageView.getDeliveryAttempt()));
         // 创建统一入站消息。
         return new ProviderInboundMessage(
                 messageView.getMessageId().toString(),
-                key,
+                messageKey,
                 headers,
                 body,
-                messageView.getDeliveryAttempt(),
                 Instant.now(),
                 metadata);
     }

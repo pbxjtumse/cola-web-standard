@@ -1,24 +1,32 @@
 package com.xjtu.iron.message.api;
-
 import java.util.Objects;
 
 /**
  * 定义一个普通消息消费者。
  *
- * @param destination 逻辑目的地
- * @param consumerGroup 消费组或订阅名称
- * @param payloadType 业务消息体类型
+ * <p>{@code destination}：逻辑目的地</p>
+ * <p>{@code consumerGroup}：消费组或订阅名称</p>
+ * <p>{@code payloadType}：业务消息体类型</p>
  * @param <T> 业务消息体类型
  */
-public record ConsumerDefinition<T>(
-        MessageDestination destination,
-        String consumerGroup,
-        Class<T> payloadType) {
+public final class ConsumerDefinition<T> {
+    /** 逻辑目的地。 */
+    private final MessageDestination destination;
+
+    /** 消费组或订阅名称。 */
+    private final String consumerGroup;
+
+    /** 业务消息体类型。 */
+    private final Class<T> payloadType;
+
 
     /**
      * 校验消费者定义。
      */
-    public ConsumerDefinition {
+    public ConsumerDefinition(
+        MessageDestination destination,
+        String consumerGroup,
+        Class<T> payloadType) {
         // 逻辑目的地不能为空。
         destination = Objects.requireNonNull(destination, "destination must not be null");
         // 消费组不能为空或空白。
@@ -30,6 +38,13 @@ public record ConsumerDefinition<T>(
         consumerGroup = consumerGroup.trim();
         // 反序列化目标类型不能为空。
         payloadType = Objects.requireNonNull(payloadType, "payloadType must not be null");
+    
+        // 保存完成校验和标准化后的 destination。
+        this.destination = destination;
+        // 保存完成校验和标准化后的 consumerGroup。
+        this.consumerGroup = consumerGroup;
+        // 保存完成校验和标准化后的 payloadType。
+        this.payloadType = payloadType;
     }
 
     /**
@@ -48,4 +63,83 @@ public record ConsumerDefinition<T>(
         // 使用静态工厂提升调用处可读性。
         return new ConsumerDefinition<>(destination, consumerGroup, payloadType);
     }
+    /**
+     * 返回逻辑目的地。
+     *
+     * @return 逻辑目的地
+     */
+    public MessageDestination destination() {
+        // 返回不可变字段。
+        return destination;
+    }
+
+    /**
+     * 返回消费组或订阅名称。
+     *
+     * @return 消费组或订阅名称
+     */
+    public String consumerGroup() {
+        // 返回不可变字段。
+        return consumerGroup;
+    }
+
+    /**
+     * 返回业务消息体类型。
+     *
+     * @return 业务消息体类型
+     */
+    public Class<T> payloadType() {
+        // 返回不可变字段。
+        return payloadType;
+    }
+
+    /**
+     * 按全部字段比较两个值对象。
+     *
+     * @param object 待比较对象
+     * @return 字段值全部一致时返回 true
+     */
+    @Override
+    public boolean equals(Object object) {
+        // 同一对象直接相等。
+        if (this == object) {
+            return true;
+        }
+        // 类型不同或对象为空时不相等。
+        if (object == null || getClass() != object.getClass()) {
+            return false;
+        }
+        // 转换为当前类型后逐字段比较。
+        ConsumerDefinition<?> other = (ConsumerDefinition<?>) object;
+        return Objects.equals(destination, other.destination)
+                && Objects.equals(consumerGroup, other.consumerGroup)
+                && Objects.equals(payloadType, other.payloadType);
+    }
+
+    /**
+     * 根据全部字段计算哈希值。
+     *
+     * @return 哈希值
+     */
+    @Override
+    public int hashCode() {
+        // 使用与 equals 相同的字段计算哈希值。
+        return Objects.hash(destination, consumerGroup, payloadType);
+    }
+
+    /**
+     * 返回便于诊断的字段摘要。
+     *
+     * @return 字符串摘要
+     */
+    @Override
+    public String toString() {
+        // 拼接全部字段，保持值对象可诊断。
+        return "ConsumerDefinition{" +
+                "destination=" + destination +
+                ", consumerGroup=" + consumerGroup +
+                ", payloadType=" + payloadType +
+                '}';
+    }
+
 }

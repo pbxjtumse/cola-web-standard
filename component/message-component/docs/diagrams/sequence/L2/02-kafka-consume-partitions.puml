@@ -1,0 +1,40 @@
+@startuml
+!include ../../_common/style.puml
+title L2：Kafka 单 Topic、多分区消费
+
+participant KafkaConsumerWorker as Worker
+participant KafkaConsumer
+queue KafkaBroker
+participant CoreListener
+
+Worker -> KafkaConsumer: subscribe([one physical topic])
+loop while running
+  Worker -> KafkaConsumer: poll(pollTimeout)
+  KafkaConsumer -> KafkaBroker: fetch assigned partitions
+  KafkaBroker --> KafkaConsumer: records(P0, P1, ...)
+  KafkaConsumer --> Worker: ConsumerRecords
+
+  loop each TopicPartition
+    loop records in current partition by offset
+      Worker -> CoreListener: onMessage(inbound)
+      alt SUCCESS
+        CoreListener --> Worker: SUCCESS
+        Worker -> KafkaConsumer: commitSync(partition, offset + 1)
+      else RETRY / exception
+        CoreListener --> Worker: RETRY
+        Worker -> KafkaConsumer: seek(partition, failed offset)
+        Worker -> Worker: consumerRetryBackoff
+        note right of Worker
+          停止当前分区后续记录，
+          继续处理本轮其他分区。
+        end note
+      end
+    end
+  end
+end
+
+note over Worker
+当前一个 ConsumerDefinition 对应一个 Topic、一个 Worker、一个 poll 线程。
+注册多个订阅可并发消费多个 Topic；单个 Worker 内分区暂不并行。
+end note
+@enduml

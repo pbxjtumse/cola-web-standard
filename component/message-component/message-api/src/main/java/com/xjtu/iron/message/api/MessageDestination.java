@@ -4,124 +4,155 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * 表示业务代码使用的逻辑消息目的地。
+ * 表示业务使用的逻辑消息目的地。
  *
- * <p>该对象不直接等价于 Kafka Topic、RocketMQ Topic 或 Pulsar Topic。
- * core 会通过 DestinationResolver 将它解析为具体 Provider 和物理目的地。</p>
+ * <p>Event 或 Command 属于消息命名和业务契约规范，不再作为一期强制分类字段。
+ * Provider 和物理 Topic 由 core 路由解析。</p>
  *
- * @param name 逻辑消息名称，例如 order-paid
- * @param namespace 业务命名空间或领域边界，例如 trade；不建议放 dev、sit、prod 环境名
- * @param category 消息业务类别
- * @param providerHint 可选 Provider 提示；为空时由路由表和默认 Provider 决定
+ * <p>{@code namespace}：业务域或限界上下文，例如 trade</p>
+ * <p>{@code name}：逻辑消息名称，例如 order-paid 或 close-order</p>
+ * <p>{@code providerHint}：可选 Provider 覆盖提示</p>
  */
-public record MessageDestination(
-        String name,
+public final class MessageDestination {
+    /** 业务域或限界上下文，例如 trade。 */
+    private final String namespace;
+
+    /** 逻辑消息名称，例如 order-paid 或 close-order。 */
+    private final String name;
+
+    /** 可选 Provider 覆盖提示。 */
+    private final String providerHint;
+
+
+    /** 校验并标准化逻辑目的地。 */
+    public MessageDestination(
         String namespace,
-        MessageCategory category,
+        String name,
         String providerHint) {
-
-    /**
-     * 创建后统一校验并标准化字段。
-     */
-    public MessageDestination {
-        // name 是逻辑路由键的一部分，必须存在。
-        name = requireText(name, "name");
-        // namespace 用于隔离不同领域中的同名消息，必须存在。
         namespace = requireText(namespace, "namespace");
-        // category 不能缺失，否则无法表达消息业务语义。
-        category = Objects.requireNonNull(category, "category must not be null");
-        // providerHint 是可选字段，空白值统一转换为 null。
+        name = requireText(name, "name");
         providerHint = normalizeProvider(providerHint);
+    
+        // 保存完成校验和标准化后的 namespace。
+        this.namespace = namespace;
+        // 保存完成校验和标准化后的 name。
+        this.name = name;
+        // 保存完成校验和标准化后的 providerHint。
+        this.providerHint = providerHint;
     }
 
-    /**
-     * 创建事件目的地。
-     *
-     * @param namespace 业务命名空间
-     * @param name 逻辑名称
-     * @return 事件目的地
-     */
-    public static MessageDestination event(String namespace, String name) {
-        // Provider 留给路由配置决定。
-        return new MessageDestination(name, namespace, MessageCategory.EVENT, null);
+    /** 创建不指定 Provider 的逻辑目的地。 */
+    public static MessageDestination of(String namespace, String name) {
+        return new MessageDestination(namespace, name, null);
     }
 
-    /**
-     * 创建命令目的地。
-     *
-     * @param namespace 业务命名空间
-     * @param name 逻辑名称
-     * @return 命令目的地
-     */
-    public static MessageDestination command(String namespace, String name) {
-        // Provider 留给路由配置决定。
-        return new MessageDestination(name, namespace, MessageCategory.COMMAND, null);
-    }
-
-    /**
-     * 创建通知目的地。
-     *
-     * @param namespace 业务命名空间
-     * @param name 逻辑名称
-     * @return 通知目的地
-     */
-    public static MessageDestination notification(String namespace, String name) {
-        // Provider 留给路由配置决定。
-        return new MessageDestination(name, namespace, MessageCategory.NOTIFICATION, null);
-    }
-
-    /**
-     * 返回带 Provider 提示的新目的地。
-     *
-     * @param providerName Provider 名称
-     * @return 新目的地
-     */
+    /** 返回带 Provider 提示的新目的地。 */
     public MessageDestination withProviderHint(String providerName) {
-        // record 不可变，因此通过新实例表达覆盖提示。
-        return new MessageDestination(name, namespace, category, providerName);
+        return new MessageDestination(namespace, name, providerName);
     }
 
-    /**
-     * 返回用于日志、路由键和诊断的稳定逻辑名称。
-     *
-     * @return namespace:category:name 格式逻辑名称
-     */
+    /** 返回稳定逻辑名称。 */
     public String qualifiedName() {
-        // category 使用小写，便于配置文件和日志统一。
-        return namespace + ":" + category.name().toLowerCase() + ":" + name;
+        return namespace + ":" + name;
     }
 
-    /** 标准化可选文本。 */
-    private static String normalize(String value) {
-        // null 直接保持 null。
-        if (value == null) {
-            // 返回 null 表示未提供。
-            return null;
-        }
-        // 去除首尾空白。
-        String trimmed = value.trim();
-        // 空白值转换为 null。
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    /** 标准化可选 Provider 名称。 */
-    private static String normalizeProvider(String value) {
-        // 先使用通用可选文本规则。
+    private static String requireText(String value, String fieldName) {
         String normalized = normalize(value);
-        // Provider 未指定时保持 null，否则统一使用小写稳定名称。
+        if (normalized == null) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        return normalized;
+    }
+
+    private static String normalizeProvider(String value) {
+        String normalized = normalize(value);
         return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
     }
 
-    /** 校验必填文本。 */
-    private static String requireText(String value, String fieldName) {
-        // 使用统一标准化规则。
-        String normalized = normalize(value);
-        // 必填字段为空时拒绝创建目的地。
-        if (normalized == null) {
-            // 抛出参数异常并指出字段名。
-            throw new IllegalArgumentException(fieldName + " must not be blank");
+    private static String normalize(String value) {
+        if (value == null) {
+            return null;
         }
-        // 返回合法文本。
-        return normalized;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
+    /**
+     * 返回业务域或限界上下文，例如 trade。
+     *
+     * @return 业务域或限界上下文，例如 trade
+     */
+    public String namespace() {
+        // 返回不可变字段。
+        return namespace;
+    }
+
+    /**
+     * 返回逻辑消息名称，例如 order-paid 或 close-order。
+     *
+     * @return 逻辑消息名称，例如 order-paid 或 close-order
+     */
+    public String name() {
+        // 返回不可变字段。
+        return name;
+    }
+
+    /**
+     * 返回可选 Provider 覆盖提示。
+     *
+     * @return 可选 Provider 覆盖提示
+     */
+    public String providerHint() {
+        // 返回不可变字段。
+        return providerHint;
+    }
+
+    /**
+     * 按全部字段比较两个值对象。
+     *
+     * @param object 待比较对象
+     * @return 字段值全部一致时返回 true
+     */
+    @Override
+    public boolean equals(Object object) {
+        // 同一对象直接相等。
+        if (this == object) {
+            return true;
+        }
+        // 类型不同或对象为空时不相等。
+        if (object == null || getClass() != object.getClass()) {
+            return false;
+        }
+        // 转换为当前类型后逐字段比较。
+        MessageDestination other = (MessageDestination) object;
+        return Objects.equals(namespace, other.namespace)
+                && Objects.equals(name, other.name)
+                && Objects.equals(providerHint, other.providerHint);
+    }
+
+    /**
+     * 根据全部字段计算哈希值。
+     *
+     * @return 哈希值
+     */
+    @Override
+    public int hashCode() {
+        // 使用与 equals 相同的字段计算哈希值。
+        return Objects.hash(namespace, name, providerHint);
+    }
+
+    /**
+     * 返回便于诊断的字段摘要。
+     *
+     * @return 字符串摘要
+     */
+    @Override
+    public String toString() {
+        // 拼接全部字段，保持值对象可诊断。
+        return "MessageDestination{" +
+                "namespace=" + namespace +
+                ", name=" + name +
+                ", providerHint=" + providerHint +
+                '}';
+    }
+
 }

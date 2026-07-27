@@ -11,23 +11,38 @@ import java.util.Objects;
 /**
  * 表示 Provider 层返回给 core 的标准发送结果。
  *
- * @param status Provider 能够确认的发送状态
- * @param failureType 标准失败类型
- * @param providerMessageId Broker 或 Provider 原生消息 ID
- * @param description 诊断描述
- * @param metadata 原生诊断元数据
+ * <p>{@code status}：Provider 能够确认的发送状态</p>
+ * <p>{@code failureType}：标准失败类型</p>
+ * <p>{@code providerMessageId}：Broker 或 Provider 原生消息 ID</p>
+ * <p>{@code description}：诊断描述</p>
+ * <p>{@code metadata}：原生诊断元数据</p>
  */
-public record ProviderSendResult(
+public final class ProviderSendResult {
+    /** Provider 能够确认的发送状态。 */
+    private final SendStatus status;
+
+    /** 标准失败类型。 */
+    private final SendFailureType failureType;
+
+    /** Broker 或 Provider 原生消息 ID。 */
+    private final String providerMessageId;
+
+    /** 诊断描述。 */
+    private final String description;
+
+    /** 原生诊断元数据。 */
+    private final Map<String, String> metadata;
+
+
+    /**
+     * 统一校验结果一致性并复制元数据。
+     */
+    public ProviderSendResult(
         SendStatus status,
         SendFailureType failureType,
         String providerMessageId,
         String description,
         Map<String, String> metadata) {
-
-    /**
-     * 统一校验结果一致性并复制元数据。
-     */
-    public ProviderSendResult {
         // status 不能为空。
         status = Objects.requireNonNull(status, "status must not be null");
         // failureType 不能为空。
@@ -46,6 +61,17 @@ public record ProviderSendResult(
         metadata = metadata == null || metadata.isEmpty()
                 ? Map.of()
                 : Collections.unmodifiableMap(new LinkedHashMap<>(metadata));
+    
+        // 保存完成校验和标准化后的 status。
+        this.status = status;
+        // 保存完成校验和标准化后的 failureType。
+        this.failureType = failureType;
+        // 保存完成校验和标准化后的 providerMessageId。
+        this.providerMessageId = providerMessageId;
+        // 保存完成校验和标准化后的 description。
+        this.description = description;
+        // 保存完成校验和标准化后的 metadata。
+        this.metadata = metadata;
     }
 
     /**
@@ -98,4 +124,107 @@ public record ProviderSendResult(
                 description,
                 Map.of());
     }
+    /**
+     * 返回Provider 能够确认的发送状态。
+     *
+     * @return Provider 能够确认的发送状态
+     */
+    public SendStatus status() {
+        // 返回不可变字段。
+        return status;
+    }
+
+    /**
+     * 返回标准失败类型。
+     *
+     * @return 标准失败类型
+     */
+    public SendFailureType failureType() {
+        // 返回不可变字段。
+        return failureType;
+    }
+
+    /**
+     * 返回Broker 或 Provider 原生消息 ID。
+     *
+     * @return Broker 或 Provider 原生消息 ID
+     */
+    public String providerMessageId() {
+        // 返回不可变字段。
+        return providerMessageId;
+    }
+
+    /**
+     * 返回诊断描述。
+     *
+     * @return 诊断描述
+     */
+    public String description() {
+        // 返回不可变字段。
+        return description;
+    }
+
+    /**
+     * 返回原生诊断元数据。
+     *
+     * @return 原生诊断元数据
+     */
+    public Map<String, String> metadata() {
+        // 返回不可变字段。
+        return metadata;
+    }
+
+    /**
+     * 按全部字段比较两个值对象。
+     *
+     * @param object 待比较对象
+     * @return 字段值全部一致时返回 true
+     */
+    @Override
+    public boolean equals(Object object) {
+        // 同一对象直接相等。
+        if (this == object) {
+            return true;
+        }
+        // 类型不同或对象为空时不相等。
+        if (object == null || getClass() != object.getClass()) {
+            return false;
+        }
+        // 转换为当前类型后逐字段比较。
+        ProviderSendResult other = (ProviderSendResult) object;
+        return Objects.equals(status, other.status)
+                && Objects.equals(failureType, other.failureType)
+                && Objects.equals(providerMessageId, other.providerMessageId)
+                && Objects.equals(description, other.description)
+                && Objects.equals(metadata, other.metadata);
+    }
+
+    /**
+     * 根据全部字段计算哈希值。
+     *
+     * @return 哈希值
+     */
+    @Override
+    public int hashCode() {
+        // 使用与 equals 相同的字段计算哈希值。
+        return Objects.hash(status, failureType, providerMessageId, description, metadata);
+    }
+
+    /**
+     * 返回便于诊断的字段摘要。
+     *
+     * @return 字符串摘要
+     */
+    @Override
+    public String toString() {
+        // 拼接全部字段，保持值对象可诊断。
+        return "ProviderSendResult{" +
+                "status=" + status +
+                ", failureType=" + failureType +
+                ", providerMessageId=" + providerMessageId +
+                ", description=" + description +
+                ", metadata=" + metadata +
+                '}';
+    }
+
 }

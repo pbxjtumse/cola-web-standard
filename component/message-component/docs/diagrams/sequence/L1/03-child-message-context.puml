@@ -1,0 +1,35 @@
+@startuml
+!include ../../_common/style.puml
+title L1：消费中发送子消息的关联上下文传播
+
+participant ProviderConsumer
+participant MessageTemplate
+participant MessageContextAccessor as Accessor
+participant ParentHandler
+participant MessageEnvelopeEnricher as Enricher
+participant MessageProvider as Provider
+
+ProviderConsumer -> MessageTemplate: inbound parent M1
+MessageTemplate -> Accessor: open(CurrentMessage(M1))
+MessageTemplate -> ParentHandler: handle(M1)
+ParentHandler -> MessageTemplate: send(child M2)
+MessageTemplate -> Enricher: enrich(M2)
+Enricher -> Accessor: current()
+Accessor --> Enricher: M1
+Enricher -> Enricher: M2.messageId = new ID
+Enricher -> Enricher: M2.correlationId = M1.correlationId
+Enricher -> Enricher: M2.causationId = M1.messageId
+Enricher -> Enricher: M2.source = current applicationName
+Enricher --> MessageTemplate: enriched M2
+MessageTemplate -> Provider: send(M2)
+Provider --> MessageTemplate: result
+MessageTemplate --> ParentHandler: SendResult
+ParentHandler --> MessageTemplate: SUCCESS
+MessageTemplate -> Accessor: close() / restore parent scope
+MessageTemplate --> ProviderConsumer: SUCCESS
+
+note over Enricher
+messageKey 不自动继承。
+它由业务根据子消息关联的实体显式设置。
+end note
+@enduml

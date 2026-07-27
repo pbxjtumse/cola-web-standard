@@ -1,0 +1,41 @@
+@startuml
+!include ../../_common/style.puml
+title L2：RocketMQ 普通消息发送与消费
+
+participant MessageTemplate
+participant RocketMqMessageProvider as Provider
+participant RocketMQProducer as Producer
+queue RocketMQBroker as Broker
+participant PushConsumer
+participant CoreListener
+
+== 发送 ==
+MessageTemplate -> Provider: send(request)
+Provider -> Provider: setTopic / setBody / properties
+opt messageKey 存在
+  Provider -> Provider: setKeys(messageKey)
+end
+Provider -> Producer: sendAsync(message)
+Producer -> Broker: publish
+Broker --> Producer: SendReceipt / error
+Producer --> Provider: completion
+Provider --> MessageTemplate: CONFIRMED / REJECTED / FAILED / UNKNOWN
+
+== 消费 ==
+Broker -> PushConsumer: MessageView
+PushConsumer -> Provider: listener(messageView)
+Provider -> Provider: body + properties + first key
+Provider -> CoreListener: onMessage(inbound)
+alt SUCCESS
+  CoreListener --> Provider: SUCCESS
+  Provider --> PushConsumer: ConsumeResult.SUCCESS
+else RETRY / exception
+  CoreListener --> Provider: RETRY
+  Provider --> PushConsumer: ConsumeResult.FAILURE
+end
+
+note over Provider
+messageKey 只映射 RocketMQ Keys 用于检索。
+FIFO 顺序的 MessageGroup 属于三期独立能力。
+end note
+@enduml

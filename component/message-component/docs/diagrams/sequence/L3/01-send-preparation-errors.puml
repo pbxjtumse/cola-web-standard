@@ -1,0 +1,40 @@
+@startuml
+!include ../../_common/style.puml
+title L3：发送准备阶段异常分支
+
+actor Caller
+participant MessageTemplate
+participant EnvelopeEnricher
+participant DestinationResolver
+participant ProviderRegistry
+participant MessageWireCodec
+
+Caller -> MessageTemplate: send(...)
+
+alt 参数非法
+  MessageTemplate --> Caller: REJECTED / VALIDATION_ERROR / VALIDATE
+else 丰富失败
+  MessageTemplate -> EnvelopeEnricher: enrich
+  EnvelopeEnricher --> MessageTemplate: exception
+  MessageTemplate --> Caller: REJECTED / VALIDATION_ERROR / ENRICH
+else 路由缺失或歧义
+  MessageTemplate -> DestinationResolver: resolve
+  DestinationResolver --> MessageTemplate: exception
+  MessageTemplate --> Caller: REJECTED / ROUTING_ERROR / RESOLVE
+else Provider 未注册
+  MessageTemplate -> ProviderRegistry: getRequired
+  ProviderRegistry --> MessageTemplate: exception
+  MessageTemplate --> Caller: REJECTED / ROUTING_ERROR / SELECT_PROVIDER
+else 不支持基础发布
+  MessageTemplate --> Caller: REJECTED / UNSUPPORTED_CAPABILITY / CAPABILITY
+else 序列化失败
+  MessageTemplate -> MessageWireCodec: encode
+  MessageWireCodec --> MessageTemplate: exception
+  MessageTemplate --> Caller: FAILED / SERIALIZATION_ERROR / SERIALIZE
+end
+
+note over MessageTemplate
+PreparationException 仅是 MessageTemplate 内部控制流载体，
+不会作为公共异常暴露给业务。
+end note
+@enduml

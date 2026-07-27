@@ -1,0 +1,42 @@
+@startuml
+!include ../../_common/style.puml
+title L1：普通消息发送核心流程
+
+actor Caller
+participant MessageTemplate
+participant MessageEnvelopeEnricher as Enricher
+participant DestinationResolver as Resolver
+participant MessageProviderRegistry as Registry
+participant MessageWireCodec as Codec
+participant MessageProvider as Provider
+
+Caller -> MessageTemplate: sendAsync(destination, message, options)
+MessageTemplate -> MessageTemplate: validate arguments / resolve timeout
+MessageTemplate -> Enricher: enrich(message)
+Enricher -> Enricher: messageId、version、time、context
+Enricher --> MessageTemplate: enrichedMessage
+MessageTemplate -> Resolver: resolve(destination)
+Resolver --> MessageTemplate: ProviderDestination
+MessageTemplate -> Registry: getRequired(providerName)
+Registry --> MessageTemplate: Provider
+MessageTemplate -> Provider: capabilities()
+Provider --> MessageTemplate: BASIC_PUBLISH
+MessageTemplate -> Codec: encode(destination, providerDestination, message)
+Codec -> Codec: serialize payload + encode system headers
+Codec --> MessageTemplate: ProviderSendRequest
+MessageTemplate -> Provider: send(request)
+
+alt CONFIRMED
+  Provider --> MessageTemplate: confirmed(providerMessageId, metadata)
+  MessageTemplate --> Caller: SendResult.CONFIRMED
+else REJECTED
+  Provider --> MessageTemplate: rejected(failureType)
+  MessageTemplate --> Caller: SendResult.REJECTED
+else FAILED
+  Provider --> MessageTemplate: failed(failureType)
+  MessageTemplate --> Caller: SendResult.FAILED
+else UNKNOWN
+  Provider --> MessageTemplate: unknown(timeout/network)
+  MessageTemplate --> Caller: SendResult.UNKNOWN
+end
+@enduml

@@ -8,12 +8,12 @@ package com.xjtu.iron.message.api;
 public enum MessageCategory {
 
     /**
-     * 表示已经发生的业务事实，例如订单已支付。
+     * 表示已经发生的业务事实，例如订单已支付。【表示事实】
      */
     EVENT,
 
     /**
-     * 表示期望某个接收方执行动作，例如创建支付单。
+     * 表示期望某个接收方执行动作，例如创建支付单。【表示要求】
      */
     COMMAND,
 

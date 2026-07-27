@@ -28,6 +28,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Objects;
 
 /**
  * 用于单元测试和 Demo 的内存普通消息 Provider。
@@ -73,9 +74,9 @@ public final class InMemoryMessageProvider implements MessageProvider {
     /**
      * 创建可配置内存 Provider。
      *
-     * @param name Provider 名称
-     * @param maxDeliveryAttempts 最大投递次数
-     * @param retryBackoff 重试退避
+     * <p>{@code name}：Provider 名称</p>
+     * <p>{@code maxDeliveryAttempts}：最大投递次数</p>
+     * <p>{@code retryBackoff}：重试退避</p>
      */
     public InMemoryMessageProvider(
             String name,
@@ -155,7 +156,7 @@ public final class InMemoryMessageProvider implements MessageProvider {
                 providerMessageId,
                 request.destination().physicalName(),
                 request.messageId(),
-                request.key(),
+                request.messageKey(),
                 request.headers(),
                 request.body(),
                 Instant.now());
@@ -166,7 +167,9 @@ public final class InMemoryMessageProvider implements MessageProvider {
         // 内存保存完成后立即返回明确确认。
         return CompletableFuture.completedFuture(ProviderSendResult.confirmed(
                 providerMessageId,
-                Map.of("physicalDestination", request.destination().physicalName())));
+                Map.of(
+                        InMemoryMetadataKeys.PHYSICAL_DESTINATION,
+                        request.destination().physicalName())));
     }
 
     /**
@@ -275,12 +278,13 @@ public final class InMemoryMessageProvider implements MessageProvider {
             // 构造 Provider 入站消息。
             ProviderInboundMessage inbound = new ProviderInboundMessage(
                     record.providerMessageId(),
-                    record.key(),
+                    record.messageKey(),
                     record.headers(),
                     record.body(),
-                    attempt,
                     Instant.now(),
-                    Map.of("provider", name));
+                    Map.of(
+                            InMemoryMetadataKeys.PROVIDER, name,
+                            InMemoryMetadataKeys.DELIVERY_ATTEMPT, Integer.toString(attempt)));
             // 默认 RETRY。
             ConsumeDecision decision = ConsumeDecision.RETRY;
             // 调用 core 监听器。
@@ -414,14 +418,35 @@ public final class InMemoryMessageProvider implements MessageProvider {
     /**
      * 表示一个内存订阅状态。
      *
-     * @param id 订阅 ID
-     * @param request Provider 订阅请求
-     * @param active 活跃状态
+     * <p>{@code id}：订阅 ID</p>
+     * <p>{@code request}：Provider 订阅请求</p>
+     * <p>{@code active}：活跃状态</p>
      */
-    private record SubscriptionState(
+    private static final class SubscriptionState {
+        /** 订阅 ID。 */
+        private final String id;
+
+        /** Provider 订阅请求。 */
+        private final ProviderSubscriptionRequest request;
+
+        /** 活跃状态。 */
+        private final AtomicBoolean active;
+
+        /**
+         * 创建不可变 SubscriptionState。
+         */
+        private SubscriptionState(
             String id,
             ProviderSubscriptionRequest request,
             AtomicBoolean active) {
+            // 保存 id。
+            this.id = id;
+            // 保存 request。
+            this.request = request;
+            // 保存 active。
+            this.active = active;
+        }
+
 
         /**
          * 创建活跃订阅状态。
@@ -432,5 +457,84 @@ public final class InMemoryMessageProvider implements MessageProvider {
             // 默认 active 为 true。
             this(id, request, new AtomicBoolean(true));
         }
+        /**
+         * 返回订阅 ID。
+         *
+         * @return 订阅 ID
+         */
+        public String id() {
+            // 返回不可变字段。
+            return id;
+        }
+
+        /**
+         * 返回Provider 订阅请求。
+         *
+         * @return Provider 订阅请求
+         */
+        public ProviderSubscriptionRequest request() {
+            // 返回不可变字段。
+            return request;
+        }
+
+        /**
+         * 返回活跃状态。
+         *
+         * @return 活跃状态
+         */
+        public AtomicBoolean active() {
+            // 返回不可变字段。
+            return active;
+        }
+
+        /**
+         * 按全部字段比较两个值对象。
+         *
+         * @param object 待比较对象
+         * @return 字段值全部一致时返回 true
+         */
+        @Override
+        public boolean equals(Object object) {
+            // 同一对象直接相等。
+            if (this == object) {
+                return true;
+            }
+            // 类型不同或对象为空时不相等。
+            if (object == null || getClass() != object.getClass()) {
+                return false;
+            }
+            // 转换为当前类型后逐字段比较。
+            SubscriptionState other = (SubscriptionState) object;
+            return Objects.equals(id, other.id)
+                    && Objects.equals(request, other.request)
+                    && Objects.equals(active, other.active);
+        }
+
+        /**
+         * 根据全部字段计算哈希值。
+         *
+         * @return 哈希值
+         */
+        @Override
+        public int hashCode() {
+            // 使用与 equals 相同的字段计算哈希值。
+            return Objects.hash(id, request, active);
+        }
+
+        /**
+         * 返回便于诊断的字段摘要。
+         *
+         * @return 字符串摘要
+         */
+        @Override
+        public String toString() {
+            // 拼接全部字段，保持值对象可诊断。
+            return "SubscriptionState{" +
+                    "id=" + id +
+                    ", request=" + request +
+                    ", active=" + active +
+                    '}';
+        }
+
     }
 }

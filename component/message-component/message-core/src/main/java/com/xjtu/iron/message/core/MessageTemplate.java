@@ -55,7 +55,7 @@ public final class MessageTemplate
     private final MessageEnvelopeEnricher envelopeEnricher;
 
     /** 线级消息映射器。 */
-    private final MessageWireMapper wireMapper;
+    private final MessageWireCodec wireCodec;
 
     /** 当前消息上下文访问器。 */
     private final MessageContextAccessor contextAccessor;
@@ -63,19 +63,19 @@ public final class MessageTemplate
     /**
      * 创建 MessageTemplate。
      *
-     * @param options 组件参数
-     * @param providerRegistry Provider 注册表
-     * @param destinationResolver 目的地解析器
-     * @param envelopeEnricher 消息丰富器
-     * @param wireMapper 线级映射器
-     * @param contextAccessor 当前消息访问器
+     * <p>{@code options}：组件参数</p>
+     * <p>{@code providerRegistry}：Provider 注册表</p>
+     * <p>{@code destinationResolver}：目的地解析器</p>
+     * <p>{@code envelopeEnricher}：消息丰富器</p>
+     * <p>{@code wireCodec}：线级映射器</p>
+     * <p>{@code contextAccessor}：当前消息访问器</p>
      */
     public MessageTemplate(
             MessageComponentOptions options,
             MessageProviderRegistry providerRegistry,
             DestinationResolver destinationResolver,
             MessageEnvelopeEnricher envelopeEnricher,
-            MessageWireMapper wireMapper,
+            MessageWireCodec wireCodec,
             MessageContextAccessor contextAccessor) {
         // 所有核心依赖都必须显式提供，避免隐藏的全局静态状态。
         this.options = Objects.requireNonNull(options, "options must not be null");
@@ -92,7 +92,7 @@ public final class MessageTemplate
                 envelopeEnricher,
                 "envelopeEnricher must not be null");
         // 保存线级映射器。
-        this.wireMapper = Objects.requireNonNull(wireMapper, "wireMapper must not be null");
+        this.wireCodec = Objects.requireNonNull(wireCodec, "wireCodec must not be null");
         // 保存当前消息上下文访问器。
         this.contextAccessor = Objects.requireNonNull(
                 contextAccessor,
@@ -102,10 +102,10 @@ public final class MessageTemplate
     /**
      * 创建常用默认 MessageTemplate。
      *
-     * @param options 组件参数
-     * @param providerRegistry Provider 注册表
-     * @param routeRegistry 路由注册表
-     * @param serializer 消息序列化器
+     * <p>{@code options}：组件参数</p>
+     * <p>{@code providerRegistry}：Provider 注册表</p>
+     * <p>{@code routeRegistry}：路由注册表</p>
+     * <p>{@code serializer}：消息序列化器</p>
      * @return 可用模板
      */
     public static MessageTemplate create(
@@ -129,14 +129,14 @@ public final class MessageTemplate
                         new UuidMessageIdGenerator(),
                         contextAccessor);
         // 创建统一线级映射器。
-        MessageWireMapper wireMapper = new MessageWireMapper(serializer);
+        MessageWireCodec wireCodec = new MessageWireCodec(serializer);
         // 返回完整模板。
         return new MessageTemplate(
                 options,
                 providerRegistry,
                 destinationResolver,
                 envelopeEnricher,
-                wireMapper,
+                wireCodec,
                 contextAccessor);
     }
 
@@ -444,8 +444,8 @@ public final class MessageTemplate
         ProviderSendRequest request;
         // 捕获序列化或线级映射异常。
         try {
-            // MessageWireMapper 内部先序列化，再写入完整系统消息头。
-            request = wireMapper.toProviderRequest(
+            // MessageWireCodec 内部先序列化，再写入完整系统消息头。
+            request = wireCodec.encode(
                     destination,
                     providerDestination,
                     enrichedMessage);
@@ -482,8 +482,8 @@ public final class MessageTemplate
         // 任意异常默认转为 RETRY，防止误确认。
         try {
             // 将线级消息还原为统一信封和消费上下文。
-            MessageWireMapper.DecodedInbound<T> decoded =
-                    wireMapper.fromProviderMessage(
+            MessageWireCodec.DecodedInbound<T> decoded =
+                    wireCodec.decode(
                             definition,
                             providerDestination,
                             inbound);
@@ -661,7 +661,32 @@ public final class MessageTemplate
     /**
      * 表示已经完成全部发送准备的不可变快照。
      */
-    private record PreparedSend(
+    private static final class PreparedSend {
+        /** destination 字段。 */
+        private final MessageDestination destination;
+
+        /** message 字段。 */
+        private final MessageEnvelope<?> message;
+
+        /** providerDestination 字段。 */
+        private final ProviderDestination providerDestination;
+
+        /** provider 字段。 */
+        private final MessageProvider provider;
+
+        /** request 字段。 */
+        private final ProviderSendRequest request;
+
+        /** confirmTimeout 字段。 */
+        private final Duration confirmTimeout;
+
+        /** startedAt 字段。 */
+        private final Instant startedAt;
+
+        /**
+         * 创建不可变 PreparedSend。
+         */
+        private PreparedSend(
             MessageDestination destination,
             MessageEnvelope<?> message,
             ProviderDestination providerDestination,
@@ -669,6 +694,148 @@ public final class MessageTemplate
             ProviderSendRequest request,
             Duration confirmTimeout,
             Instant startedAt) {
+            // 保存 destination。
+            this.destination = destination;
+            // 保存 message。
+            this.message = message;
+            // 保存 providerDestination。
+            this.providerDestination = providerDestination;
+            // 保存 provider。
+            this.provider = provider;
+            // 保存 request。
+            this.request = request;
+            // 保存 confirmTimeout。
+            this.confirmTimeout = confirmTimeout;
+            // 保存 startedAt。
+            this.startedAt = startedAt;
+        }
+        /**
+         * 返回destination。
+         *
+         * @return destination
+         */
+        public MessageDestination destination() {
+            // 返回不可变字段。
+            return destination;
+        }
+
+        /**
+         * 返回message。
+         *
+         * @return message
+         */
+        public MessageEnvelope<?> message() {
+            // 返回不可变字段。
+            return message;
+        }
+
+        /**
+         * 返回providerDestination。
+         *
+         * @return providerDestination
+         */
+        public ProviderDestination providerDestination() {
+            // 返回不可变字段。
+            return providerDestination;
+        }
+
+        /**
+         * 返回provider。
+         *
+         * @return provider
+         */
+        public MessageProvider provider() {
+            // 返回不可变字段。
+            return provider;
+        }
+
+        /**
+         * 返回request。
+         *
+         * @return request
+         */
+        public ProviderSendRequest request() {
+            // 返回不可变字段。
+            return request;
+        }
+
+        /**
+         * 返回confirmTimeout。
+         *
+         * @return confirmTimeout
+         */
+        public Duration confirmTimeout() {
+            // 返回不可变字段。
+            return confirmTimeout;
+        }
+
+        /**
+         * 返回startedAt。
+         *
+         * @return startedAt
+         */
+        public Instant startedAt() {
+            // 返回不可变字段。
+            return startedAt;
+        }
+
+        /**
+         * 按全部字段比较两个值对象。
+         *
+         * @param object 待比较对象
+         * @return 字段值全部一致时返回 true
+         */
+        @Override
+        public boolean equals(Object object) {
+            // 同一对象直接相等。
+            if (this == object) {
+                return true;
+            }
+            // 类型不同或对象为空时不相等。
+            if (object == null || getClass() != object.getClass()) {
+                return false;
+            }
+            // 转换为当前类型后逐字段比较。
+            PreparedSend other = (PreparedSend) object;
+            return Objects.equals(destination, other.destination)
+                    && Objects.equals(message, other.message)
+                    && Objects.equals(providerDestination, other.providerDestination)
+                    && Objects.equals(provider, other.provider)
+                    && Objects.equals(request, other.request)
+                    && Objects.equals(confirmTimeout, other.confirmTimeout)
+                    && Objects.equals(startedAt, other.startedAt);
+        }
+
+        /**
+         * 根据全部字段计算哈希值。
+         *
+         * @return 哈希值
+         */
+        @Override
+        public int hashCode() {
+            // 使用与 equals 相同的字段计算哈希值。
+            return Objects.hash(destination, message, providerDestination, provider, request, confirmTimeout, startedAt);
+        }
+
+        /**
+         * 返回便于诊断的字段摘要。
+         *
+         * @return 字符串摘要
+         */
+        @Override
+        public String toString() {
+            // 拼接全部字段，保持值对象可诊断。
+            return "PreparedSend{" +
+                    "destination=" + destination +
+                    ", message=" + message +
+                    ", providerDestination=" + providerDestination +
+                    ", provider=" + provider +
+                    ", request=" + request +
+                    ", confirmTimeout=" + confirmTimeout +
+                    ", startedAt=" + startedAt +
+                    '}';
+        }
+
     }
 
     /**

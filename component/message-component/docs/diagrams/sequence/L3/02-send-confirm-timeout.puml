@@ -1,0 +1,27 @@
+@startuml
+!include ../../_common/style.puml
+title L3：同步等待超时为何返回 UNKNOWN
+
+actor Caller
+participant MessageTemplate
+participant MessageProvider
+queue Broker
+
+Caller -> MessageTemplate: send(confirmTimeout = 3s)
+MessageTemplate -> MessageProvider: send(request)
+MessageProvider -> Broker: publish
+MessageTemplate -> MessageTemplate: wait future up to 3s
+
+... 3 秒到达但 Future 未完成 ...
+MessageTemplate --> Caller: UNKNOWN / TIMEOUT / CONFIRM
+
+... 之后 Broker 可能才确认 ...
+Broker --> MessageProvider: confirmed at 5s
+MessageProvider -> MessageProvider: complete future CONFIRMED
+
+note over Caller,Broker
+UNKNOWN 不是 FAILED。
+调用方不能因为超时就无条件创建新 messageId 重发，
+否则可能产生重复业务消息。
+end note
+@enduml

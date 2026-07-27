@@ -1,85 +1,76 @@
-# 07. 代码索引
+# 07 代码索引
 
-## Java 类型
+## message-api
 
-### message-api
+- `MessageEnvelope`：消息聚合根，组合 metadata、context、headers、payload。
+- `MessageMetadata`：messageId、messageType、schemaVersion、messageKey、时间。
+- `MessageContext`：source、correlationId、causationId、tenantId。
+- `MessageHeaders`：业务和技术扩展头不可变值对象。
+- `MessageHeaderNames`：线级系统头常量。
+- `MessageDestination`：namespace、name、providerHint。
+- `MessagePublisher`：同步和异步普通发送。
+- `MessageConsumerRegistrar`：消费者注册入口。
+- `ConsumerDefinition`：单逻辑目的地消费者定义。
+- `ConsumeContext`：Provider 投递运行时信息；一期无法统一获得次数时使用基础值 1。
+- `ConsumeDecision`：SUCCESS、RETRY。
+- `SendOptions`：单次调用确认等待选项。
+- `SendResult`、`SendStatus`、`SendStage`、`SendFailureType`：标准发送结果模型。
 
-- `ConsumeContext` — `message-api/src/main/java/com/xjtu/iron/message/api/ConsumeContext.java`
-- `ConsumeDecision` — `message-api/src/main/java/com/xjtu/iron/message/api/ConsumeDecision.java`
-- `ConsumerDefinition` — `message-api/src/main/java/com/xjtu/iron/message/api/ConsumerDefinition.java`
-- `MessageCategory` — `message-api/src/main/java/com/xjtu/iron/message/api/MessageCategory.java`
-- `MessageConsumerRegistrar` — `message-api/src/main/java/com/xjtu/iron/message/api/MessageConsumerRegistrar.java`
-- `MessageContext` — `message-api/src/main/java/com/xjtu/iron/message/api/MessageContext.java`
-- `MessageDestination` — `message-api/src/main/java/com/xjtu/iron/message/api/MessageDestination.java`
-- `MessageEnvelope` — `message-api/src/main/java/com/xjtu/iron/message/api/MessageEnvelope.java`
-- `MessageHandler` — `message-api/src/main/java/com/xjtu/iron/message/api/MessageHandler.java`
-- `MessageHeaders` — `message-api/src/main/java/com/xjtu/iron/message/api/MessageHeaders.java`
-- `MessagePublisher` — `message-api/src/main/java/com/xjtu/iron/message/api/MessagePublisher.java`
-- `MessageSerializer` — `message-api/src/main/java/com/xjtu/iron/message/api/MessageSerializer.java`
-- `MessageSubscription` — `message-api/src/main/java/com/xjtu/iron/message/api/MessageSubscription.java`
-- `SendFailureType` — `message-api/src/main/java/com/xjtu/iron/message/api/SendFailureType.java`
-- `SendOptions` — `message-api/src/main/java/com/xjtu/iron/message/api/SendOptions.java`
-- `SendResult` — `message-api/src/main/java/com/xjtu/iron/message/api/SendResult.java`
-- `SendStage` — `message-api/src/main/java/com/xjtu/iron/message/api/SendStage.java`
-- `SendStatus` — `message-api/src/main/java/com/xjtu/iron/message/api/SendStatus.java`
+## message-spi
 
-### message-spi
+- `MessageProvider`：Provider 最小 SPI。
+- `ProviderDestination`：已解析物理目的地。
+- `ProviderSendRequest`：普通不可变类，显式完成发送请求校验和防御性复制。
+- `ProviderSendResult`：Provider 标准结果。
+- `ProviderInboundMessage`：Provider 原始入站消息。
+- `ProviderSubscriptionRequest`、`ProviderSubscription`、`ProviderMessageListener`：订阅 SPI。
+- `MessageCapability`：一期基础能力声明。
 
-- `MessageCapability` — `message-spi/src/main/java/com/xjtu/iron/message/spi/MessageCapability.java`
-- `MessageProvider` — `message-spi/src/main/java/com/xjtu/iron/message/spi/MessageProvider.java`
-- `ProviderDestination` — `message-spi/src/main/java/com/xjtu/iron/message/spi/ProviderDestination.java`
-- `ProviderInboundMessage` — `message-spi/src/main/java/com/xjtu/iron/message/spi/ProviderInboundMessage.java`
-- `ProviderMessageListener` — `message-spi/src/main/java/com/xjtu/iron/message/spi/ProviderMessageListener.java`
-- `ProviderSendRequest` — `message-spi/src/main/java/com/xjtu/iron/message/spi/ProviderSendRequest.java`
-- `ProviderSendResult` — `message-spi/src/main/java/com/xjtu/iron/message/spi/ProviderSendResult.java`
-- `ProviderSubscription` — `message-spi/src/main/java/com/xjtu/iron/message/spi/ProviderSubscription.java`
-- `ProviderSubscriptionRequest` — `message-spi/src/main/java/com/xjtu/iron/message/spi/ProviderSubscriptionRequest.java`
+## message-core
 
-### message-core
+- `MessageTemplate`：发送和消费生命周期编排。
+- `MessageEnvelopeEnricher`：补齐消息元数据与父子上下文。
+- `MessageWireCodec`：唯一的对象与线级格式编码、解码和契约校验实现。
+- `MessageWireMapper`：兼容入口，已标记 Deprecated，内部委托 MessageWireCodec。
+- `DestinationResolver`、`DefaultDestinationResolver`：逻辑目的地解析。
+- `DestinationRoute`、`DestinationRouteRegistry`：精确路由配置。
+- `MessageProviderRegistry`：Provider 注册与选择。
+- `MessageContextAccessor`、`ThreadLocalMessageContextAccessor`：同步消费作用域。
+- `CurrentMessage`：当前入站消息快照。
+- `MessageComponentOptions`：组件运行参数。
 
-- `CurrentMessage` — `message-core/src/main/java/com/xjtu/iron/message/core/CurrentMessage.java`
-- `DefaultDestinationResolver` — `message-core/src/main/java/com/xjtu/iron/message/core/DefaultDestinationResolver.java`
-- `DestinationResolver` — `message-core/src/main/java/com/xjtu/iron/message/core/DestinationResolver.java`
-- `DestinationRoute` — `message-core/src/main/java/com/xjtu/iron/message/core/DestinationRoute.java`
-- `DestinationRouteRegistry` — `message-core/src/main/java/com/xjtu/iron/message/core/DestinationRouteRegistry.java`
-- `DestinationRoutingMode` — `message-core/src/main/java/com/xjtu/iron/message/core/DestinationRoutingMode.java`
-- `MessageComponentOptions` — `message-core/src/main/java/com/xjtu/iron/message/core/MessageComponentOptions.java`
-- `MessageContextAccessor` — `message-core/src/main/java/com/xjtu/iron/message/core/MessageContextAccessor.java`
-- `MessageEnvelopeEnricher` — `message-core/src/main/java/com/xjtu/iron/message/core/MessageEnvelopeEnricher.java`
-- `MessageIdGenerator` — `message-core/src/main/java/com/xjtu/iron/message/core/MessageIdGenerator.java`
-- `MessageProviderRegistry` — `message-core/src/main/java/com/xjtu/iron/message/core/MessageProviderRegistry.java`
-- `MessageTemplate` — `message-core/src/main/java/com/xjtu/iron/message/core/MessageTemplate.java`
-- `MessageWireMapper` — `message-core/src/main/java/com/xjtu/iron/message/core/MessageWireMapper.java`
-- `ThreadLocalMessageContextAccessor` — `message-core/src/main/java/com/xjtu/iron/message/core/ThreadLocalMessageContextAccessor.java`
-- `UuidMessageIdGenerator` — `message-core/src/main/java/com/xjtu/iron/message/core/UuidMessageIdGenerator.java`
+## integrations
 
-### message-codec-jackson
+### Kafka
 
-- `JacksonMessageSerializer` — `message-codec-jackson/src/main/java/com/xjtu/iron/message/codec/jackson/JacksonMessageSerializer.java`
+- `KafkaMessageProvider`
+- `KafkaMessageProviderConfig`
+- `KafkaMetadataKeys`
 
-### message-integrations/message-integration-kafka
+### RocketMQ
 
-- `KafkaMessageProvider` — `message-integrations/message-integration-kafka/src/main/java/com/xjtu/iron/message/integration/kafka/KafkaMessageProvider.java`
-- `KafkaMessageProviderConfig` — `message-integrations/message-integration-kafka/src/main/java/com/xjtu/iron/message/integration/kafka/KafkaMessageProviderConfig.java`
+- `RocketMqMessageProvider`
+- `RocketMqMessageProviderConfig`
+- `RocketMqMetadataKeys`
 
-### message-integrations/message-integration-rocketmq
+### Pulsar
 
-- `RocketMqMessageProvider` — `message-integrations/message-integration-rocketmq/src/main/java/com/xjtu/iron/message/integration/rocketmq/RocketMqMessageProvider.java`
-- `RocketMqMessageProviderConfig` — `message-integrations/message-integration-rocketmq/src/main/java/com/xjtu/iron/message/integration/rocketmq/RocketMqMessageProviderConfig.java`
+- `PulsarMessageProvider`
+- `PulsarMessageProviderConfig`
+- `PulsarMetadataKeys`
 
-### message-integrations/message-integration-pulsar
+## testkit / demo
 
-- `PulsarMessageProvider` — `message-integrations/message-integration-pulsar/src/main/java/com/xjtu/iron/message/integration/pulsar/PulsarMessageProvider.java`
-- `PulsarMessageProviderConfig` — `message-integrations/message-integration-pulsar/src/main/java/com/xjtu/iron/message/integration/pulsar/PulsarMessageProviderConfig.java`
+- `InMemoryMessageProvider`
+- `InMemoryMessageRecord`
+- `InMemoryMetadataKeys`
+- `Utf8StringMessageSerializer`
+- `InMemoryMessageDemo`
+- `MessageModelContractVerifier`
 
-### message-testkit
+## diagrams
 
-- `InMemoryMessageProvider` — `message-testkit/src/main/java/com/xjtu/iron/message/testkit/InMemoryMessageProvider.java`
-- `InMemoryMessageRecord` — `message-testkit/src/main/java/com/xjtu/iron/message/testkit/InMemoryMessageRecord.java`
-- `Utf8StringMessageSerializer` — `message-testkit/src/main/java/com/xjtu/iron/message/testkit/Utf8StringMessageSerializer.java`
-
-### message-demo
-
-- `InMemoryMessageDemo` — `message-demo/src/main/java/com/xjtu/iron/message/demo/InMemoryMessageDemo.java`
-- `MessageModelContractVerifier` — `message-demo/src/main/java/com/xjtu/iron/message/demo/MessageModelContractVerifier.java`
-
+- `docs/diagrams/sequence/L0`：整体生命周期。
+- `docs/diagrams/sequence/L1`：core 主流程。
+- `docs/diagrams/sequence/L2`：Provider 分支。
+- `docs/diagrams/sequence/L3`：异常和边界分支。

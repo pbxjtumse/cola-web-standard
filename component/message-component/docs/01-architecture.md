@@ -1,135 +1,49 @@
-# 01. 总体架构
+# 01 总体架构
 
-## 1. 组件定位
+## 1. 定位
 
-消息组件统一的是：
-
-- 业务消息信封；
-- 消息发送和消费生命周期；
-- 发送结果；
-- 消费决策；
-- 逻辑目的地；
-- Provider 选择；
-- 上下文传播规则；
-- 可观测和可靠性扩展位置。
-
-消息组件不统一或不负责：
-
-- Kafka partition 管理的全部能力；
-- RocketMQ FIFO、事务、定时消息的全部语义；
-- Pulsar Reader、Key_Shared、事务的全部语义；
-- 业务幂等规则；
-- 数据库本地事务与消息发送的一致性实现；
-- 业务补偿流程；
-- 消息管理控制台。
-
-## 2. 分层
-
-```mermaid
-flowchart TB
-    APP[业务应用] --> API[message-api]
-    API --> CORE[message-core]
-    CORE --> SPI[message-spi]
-    SPI --> KAFKA[Kafka Provider]
-    SPI --> RMQ[RocketMQ Provider]
-    SPI --> PULSAR[Pulsar Provider]
-    CORE --> CODEC[MessageSerializer]
-    CORE --> ROUTE[DestinationResolver]
-    CORE --> CONTEXT[MessageContextAccessor]
-```
-
-### message-api
-
-只放业务需要直接使用、且跨 Provider 稳定的契约：
-
-- `MessageEnvelope`
-- `MessageContext`
-- `MessageDestination`
-- `MessagePublisher`
-- `MessageConsumerRegistrar`
-- `ConsumerDefinition`
-- `ConsumeDecision`
-- `SendResult`
-- `MessageSerializer`
-
-API 层不依赖 Kafka、RocketMQ、Pulsar。
-
-### message-spi
-
-只放 Provider 与 core 之间的线级契约：
-
-- `MessageProvider`
-- `ProviderDestination`
-- `ProviderSendRequest`
-- `ProviderSendResult`
-- `ProviderInboundMessage`
-- `ProviderSubscriptionRequest`
-- `MessageCapability`
-
-SPI 不把任何原生 SDK 类型泄漏给 core。
-
-### message-core
-
-`MessageTemplate` 是一期唯一生命周期编排器，负责：
-
-- 参数校验；
-- 信封丰富；
-- 目的地解析；
-- Provider 选择；
-- 能力校验；
-- 序列化；
-- 线级系统头映射；
-- Provider 结果标准化；
-- 消费消息重建；
-- 当前消息上下文作用域；
-- `SUCCESS / RETRY` 决策传递。
-
-没有额外建立 `DefaultMessageClient`、`MessageSendExecutor`、`MessageConsumeExecutor` 等类，因为一期还没有第二种生命周期实现。内部职责先通过清晰私有方法表达，避免为了分层而分层。
-
-### integrations
-
-每个 Provider 只负责：
-
-- 把 `ProviderSendRequest` 转换为原生消息；
-- 把原生发送回执转换为 `ProviderSendResult`；
-- 把原生入站消息转换为 `ProviderInboundMessage`；
-- 把 `ConsumeDecision` 映射为原生确认或重投动作；
-- 管理原生 Producer、Consumer、Client 资源。
-
-## 3. 依赖方向
+消息组件统一的是消息模型、发送和消费生命周期、结果与决策，不把 Kafka、RocketMQ、Pulsar 的高级能力强行抹平。
 
 ```text
+业务代码
+  ↓
 message-api
-    ↑
-message-spi ──→ message-api
-    ↑
-message-core ──→ message-api + message-spi
-    ↑
-integrations ──→ message-spi
-    ↑
-message-demo ──→ api + core + testkit
+  ↓
+message-core
+  ├── MessageTemplate
+  ├── MessageEnvelopeEnricher
+  ├── DestinationResolver
+  ├── MessageWireCodec
+  └── MessageContextAccessor
+  ↓
+message-spi
+  ↓
+Kafka / RocketMQ / Pulsar Provider
+  ↓
+Broker
 ```
 
-Provider 不依赖 core，避免第三方 Provider 被迫绑定核心实现细节。
+## 2. 模块职责
 
-## 4. 为什么拆出 message-spi
+| 模块 | 职责 |
+|---|---|
+| `message-api` | 业务稳定契约，不依赖具体 MQ |
+| `message-spi` | Provider 开发契约和线级数据载体 |
+| `message-core` | 丰富、路由、编码、Provider 选择、结果映射、消费作用域 |
+| `message-codec-jackson` | JSON payload 序列化 |
+| `message-integrations` | 三种原生客户端适配 |
+| `message-testkit` | 内存 Provider 和测试记录 |
+| `message-demo` | 可运行示例和契约验证 |
 
-V1 把 Provider SPI 放在 API 中尚可运行，但随着同时实现三种 Provider，SPI 已经形成独立变化方向：
+## 3. 一期克制原则
 
-- API 面向业务稳定；
-- SPI 面向 Provider 作者稳定；
-- 两者兼容周期不同；
-- Provider 不应看到业务门面之外的多余类型。
+一期只提取已经存在独立变化方向的类，不创建大量 Validator、Executor、HandlerRegistry 空壳。
 
-因此 V2 将 SPI 独立成模块，但没有进一步拆成十几个微模块。
+- `MessageTemplate` 仍是唯一生命周期编排者。
+- `PreparationException` 保持内部类，因为它只是发送准备阶段的内部控制流。
+- `MessageWireCodec` 独立存在，因为线级契约、序列化和 Provider SPI 都依赖它。
+- Provider 元数据继续使用开放 Map，但每个集成模块用常量定义键名。
 
-## 5. 一期核心设计原则
+## 4. 依赖边界
 
-1. 普通消息能力必须真正闭环，而不是只定义接口。
-2. 三种 MQ 的公共模型不能被某一家原生术语绑架。
-3. 不确定发送结果必须表达为 `UNKNOWN`。
-4. 业务上下文与开放消息头分开建模。
-5. 逻辑目的地与物理 Topic 分离。
-6. 生产环境默认严格路由。
-7. 消费默认至少一次取向。
-8. 高级能力使用 Provider 专属接口，不污染公共 API。
+`message-core` 不直接依赖幂等、事务、可观测性和并行组件。二期通过 integration 模块连接，避免基础组件形成循环依赖。

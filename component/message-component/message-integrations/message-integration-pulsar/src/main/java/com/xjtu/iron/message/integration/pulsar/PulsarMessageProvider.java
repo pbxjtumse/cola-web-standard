@@ -72,8 +72,7 @@ public final class PulsarMessageProvider implements MessageProvider {
         // Token 存在时启用 Token 认证。
         if (config.authenticationToken() != null) {
             // 使用 Pulsar 官方 AuthenticationFactory 创建认证对象。
-            builder.authentication(
-                    AuthenticationFactory.token(config.authenticationToken()));
+            builder.authentication(AuthenticationFactory.token(config.authenticationToken()));
         }
         // 创建 PulsarClient。
         try {
@@ -134,10 +133,10 @@ public final class PulsarMessageProvider implements MessageProvider {
         TypedMessageBuilder<byte[]> builder = producer.newMessage()
                 // 写入已序列化消息体。
                 .value(request.body());
-        // key 存在时设置 Pulsar Key。
-        if (request.key() != null && !request.key().isBlank()) {
+        // messageKey 存在时设置 Pulsar Key；Shared 订阅不据此承诺顺序。
+        if (request.messageKey() != null && !request.messageKey().isBlank()) {
             // Shared 订阅不承诺相同 Key 的局部顺序。
-            builder.key(request.key());
+            builder.key(request.messageKey());
         }
         // 将完整线级消息头写入 Pulsar Properties。
         request.headers().forEach(builder::property);
@@ -291,20 +290,17 @@ public final class PulsarMessageProvider implements MessageProvider {
         // 复制 Pulsar Properties。
         Map<String, String> headers = new LinkedHashMap<>(message.getProperties());
         // 仅在消息包含 Key 时读取。
-        String key = message.hasKey() ? message.getKey() : null;
-        // redeliveryCount 从零开始，因此统一投递次数加一。
-        int deliveryAttempt = message.getRedeliveryCount() + 1;
+        String messageKey = message.hasKey() ? message.getKey() : null;
         // 构造诊断元数据。
         Map<String, String> metadata = Map.of(
-                "publishTime", Long.toString(message.getPublishTime()),
-                "redeliveryCount", Integer.toString(message.getRedeliveryCount()));
+                PulsarMetadataKeys.PUBLISH_TIME, Long.toString(message.getPublishTime()),
+                PulsarMetadataKeys.REDELIVERY_COUNT, Integer.toString(message.getRedeliveryCount()));
         // 创建统一入站消息。
         return new ProviderInboundMessage(
                 message.getMessageId().toString(),
-                key,
+                messageKey,
                 headers,
                 message.getData(),
-                deliveryAttempt,
                 Instant.now(),
                 metadata);
     }

@@ -2,6 +2,7 @@ package com.xjtu.iron.message.api;
 
 /**
  * 表示一期普通消费闭环中的业务处理决策。
+ * 二期 可能考虑增加  DEAD_LETTER 等状态
  */
 public enum ConsumeDecision {
 

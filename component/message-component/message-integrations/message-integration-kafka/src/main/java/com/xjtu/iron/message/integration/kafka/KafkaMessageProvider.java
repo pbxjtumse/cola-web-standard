@@ -65,8 +65,7 @@ public final class KafkaMessageProvider implements MessageProvider {
     private final Producer<String, byte[]> producer;
 
     /** 当前 Provider 创建的全部 Consumer Worker。 */
-    private final ConcurrentMap<String, KafkaConsumerWorker> workers =
-            new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, KafkaConsumerWorker> workers = new ConcurrentHashMap<>();
 
     /** Provider 关闭状态。 */
     private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -74,7 +73,7 @@ public final class KafkaMessageProvider implements MessageProvider {
     /**
      * 创建 Kafka Provider。
      *
-     * @param config Kafka 配置
+     * <p>{@code config}：Kafka 配置</p>
      */
     public KafkaMessageProvider(KafkaMessageProviderConfig config) {
         // 配置不能为空。
@@ -85,14 +84,16 @@ public final class KafkaMessageProvider implements MessageProvider {
         properties.putAll(config.producerProperties());
         // 写入 Bootstrap Server，禁止原生 Map 悄悄覆盖稳定字段。
         properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServers());
-        // 写入 clientId。
-        properties.put(ProducerConfig.CLIENT_ID_CONFIG, config.clientId());
-        // 强制 key 使用 String 序列化器，与公共 key 模型一致。
+        // Producer 使用稳定前缀作为诊断 client.id。
+        properties.put(ProducerConfig.CLIENT_ID_CONFIG, config.clientIdPrefix() + "-producer");
+        // messageKey 映射为 Kafka Record Key，因此强制使用 StringSerializer。
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         // 强制 value 使用 byte[]，业务序列化已经在 core 完成。
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         // 公共 CONFIRMED 语义要求所有同步副本确认。
         properties.put(ProducerConfig.ACKS_CONFIG, "all");
+        // 显式开启 Producer 幂等写入，避免依赖 Kafka 版本默认值。
+        properties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         // 创建 Kafka Producer。
         this.producer = new KafkaProducer<>(properties);
     }
@@ -112,9 +113,7 @@ public final class KafkaMessageProvider implements MessageProvider {
     @Override
     public Set<MessageCapability> capabilities() {
         // Kafka Provider 支持普通发布和普通消费。
-        return Set.of(
-                MessageCapability.BASIC_PUBLISH,
-                MessageCapability.BASIC_CONSUME);
+        return Set.of(MessageCapability.BASIC_PUBLISH, MessageCapability.BASIC_CONSUME);
     }
 
     /**
@@ -133,7 +132,7 @@ public final class KafkaMessageProvider implements MessageProvider {
         // 创建 Kafka ProducerRecord。
         ProducerRecord<String, byte[]> record = new ProducerRecord<>(
                 request.destination().physicalName(),
-                request.key(),
+                request.messageKey(),
                 request.body());
         // 将线级字符串消息头编码为 UTF-8 Kafka Header。
         request.headers().forEach((name, value) ->
@@ -159,9 +158,9 @@ public final class KafkaMessageProvider implements MessageProvider {
                     + metadata.offset();
             // 构造诊断元数据。
             Map<String, String> resultMetadata = Map.of(
-                    "topic", metadata.topic(),
-                    "partition", Integer.toString(metadata.partition()),
-                    "offset", Long.toString(metadata.offset()));
+                    KafkaMetadataKeys.TOPIC, metadata.topic(),
+                    KafkaMetadataKeys.PARTITION, Integer.toString(metadata.partition()),
+                    KafkaMetadataKeys.OFFSET, Long.toString(metadata.offset()));
             // Broker 返回 RecordMetadata 后标记明确确认。
             resultFuture.complete(ProviderSendResult.confirmed(
                     providerMessageId,
@@ -298,9 +297,7 @@ public final class KafkaMessageProvider implements MessageProvider {
         /**
          * 创建 Kafka Consumer Worker。
          */
-        private KafkaConsumerWorker(
-                String workerId,
-                ProviderSubscriptionRequest request) {
+        private KafkaConsumerWorker(String workerId, ProviderSubscriptionRequest request) {
             // 保存 Worker ID。
             this.workerId = workerId;
             // 保存订阅请求。
@@ -316,13 +313,11 @@ public final class KafkaMessageProvider implements MessageProvider {
             // 为每个 Worker 生成独立 clientId。
             properties.put(
                     ConsumerConfig.CLIENT_ID_CONFIG,
-                    config.clientId() + "-consumer-" + workerId);
-            // 强制 key 使用 String 反序列化器。
+                    config.clientIdPrefix() + "-consumer-" + workerId);
+            // Kafka Record Key 还原为统一 messageKey，因此强制使用 StringDeserializer。
             properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
             // 强制 value 保持 byte[] 交给 core 反序列化。
-            properties.put(
-                    ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                    ByteArrayDeserializer.class);
+            properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
             // 禁止自动提交，确保业务成功后再推进 offset。
             properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
             // 未找到历史位点时默认从最早开始，生产环境可通过原生配置覆盖。
@@ -330,9 +325,7 @@ public final class KafkaMessageProvider implements MessageProvider {
             // 创建 KafkaConsumer。
             this.consumer = new KafkaConsumer<>(properties);
             // 创建守护线程。
-            this.thread = new Thread(
-                    this,
-                    "iron-message-kafka-" + request.consumerGroup() + "-" + workerId);
+            this.thread = new Thread(this, "iron-message-kafka-" + request.consumerGroup() + "-" + workerId);
             // 守护线程不阻止 JVM 正常退出。
             this.thread.setDaemon(true);
         }
@@ -358,7 +351,8 @@ public final class KafkaMessageProvider implements MessageProvider {
                 while (running.get()) {
                     // 拉取一批消息。
                     ConsumerRecords<String, byte[]> records = consumer.poll(config.pollTimeout());
-                    // 按分区分别处理，单个分区失败不能让其他分区已拉取记录被静默越过。
+                    // 当前 Worker 只订阅一个物理 Topic；本轮 poll 可能同时返回该 Topic 的多个分区。
+                    // 按分区分别处理，某分区失败不能让其他分区已拉取记录被静默越过。
                     for (TopicPartition partition : records.partitions()) {
                         // 当前分区内保持 offset 顺序。
                         for (ConsumerRecord<String, byte[]> record : records.records(partition)) {
@@ -369,17 +363,16 @@ public final class KafkaMessageProvider implements MessageProvider {
                             }
                             // 构造 Provider 入站元数据。
                             Map<String, String> metadata = Map.of(
-                                    "topic", record.topic(),
-                                    "partition", Integer.toString(record.partition()),
-                                    "offset", Long.toString(record.offset()),
-                                    "timestamp", Long.toString(record.timestamp()));
+                                    KafkaMetadataKeys.TOPIC, record.topic(),
+                                    KafkaMetadataKeys.PARTITION, Integer.toString(record.partition()),
+                                    KafkaMetadataKeys.OFFSET, Long.toString(record.offset()),
+                                    KafkaMetadataKeys.TIMESTAMP, Long.toString(record.timestamp()));
                             // 构造统一 Provider 入站消息。
                             ProviderInboundMessage inbound = new ProviderInboundMessage(
                                     record.topic() + "-" + record.partition() + "@" + record.offset(),
                                     record.key(),
                                     toHeaders(record),
                                     record.value(),
-                                    1,
                                     Instant.now(),
                                     metadata);
                             // 默认 RETRY，防止监听器异常误提交 offset。
@@ -394,8 +387,7 @@ public final class KafkaMessageProvider implements MessageProvider {
                             // SUCCESS 时提交当前分区下一条 offset。
                             if (decision == ConsumeDecision.SUCCESS) {
                                 // Kafka 提交语义是下一条待消费 offset。
-                                OffsetAndMetadata nextOffset =
-                                        new OffsetAndMetadata(record.offset() + 1);
+                                OffsetAndMetadata nextOffset = new OffsetAndMetadata(record.offset() + 1);
                                 // 只提交当前分区，避免覆盖其他分区未完成的进度。
                                 consumer.commitSync(Map.of(partition, nextOffset));
                                 // 继续处理当前分区下一条记录。
@@ -404,7 +396,7 @@ public final class KafkaMessageProvider implements MessageProvider {
                             // RETRY 时仅回退当前分区到失败记录。
                             consumer.seek(partition, record.offset());
                             // 固定退避避免高速空转。
-                            sleep(config.retryBackoff());
+                            sleep(config.consumerRetryBackoff());
                             // 当前分区不能越过失败记录，但其他分区仍可继续处理。
                             break;
                         }

@@ -1,125 +1,203 @@
 package com.xjtu.iron.message.core;
 
-import com.xjtu.iron.message.api.MessageCategory;
 import com.xjtu.iron.message.api.MessageDestination;
 import com.xjtu.iron.message.spi.ProviderDestination;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
 /**
- * 表示一个逻辑目的地到 Provider 物理目的地的精确路由。
+ * 表示逻辑目的地到 Provider 物理目的地的精确路由。
  *
- * @param namespace 逻辑命名空间
- * @param name 逻辑名称
- * @param category 逻辑类别
- * @param providerName Provider 名称
- * @param physicalName 物理 Topic 或同等名称
- * @param attributes Provider 扩展路由属性
+ * <p>{@code namespace}：逻辑命名空间</p>
+ * <p>{@code name}：逻辑名称</p>
+ * <p>{@code providerName}：Provider 名称</p>
+ * <p>{@code physicalName}：物理 Topic 或同等名称</p>
+ * <p>{@code attributes}：Provider 扩展路由属性</p>
  */
-public record DestinationRoute(
+public final class DestinationRoute {
+    /** 逻辑命名空间。 */
+    private final String namespace;
+
+    /** 逻辑名称。 */
+    private final String name;
+
+    /** Provider 名称。 */
+    private final String providerName;
+
+    /** 物理 Topic 或同等名称。 */
+    private final String physicalName;
+
+    /** Provider 扩展路由属性。 */
+    private final Map<String, String> attributes;
+
+
+    /** 校验并防御性复制。 */
+    public DestinationRoute(
         String namespace,
         String name,
-        MessageCategory category,
         String providerName,
         String physicalName,
         Map<String, String> attributes) {
-
-    /**
-     * 校验并复制路由配置。
-     */
-    public DestinationRoute {
-        // 逻辑命名空间必须存在。
         namespace = requireText(namespace, "namespace");
-        // 逻辑名称必须存在。
         name = requireText(name, "name");
-        // 类别必须存在。
-        category = Objects.requireNonNull(category, "category must not be null");
-        // Provider 名称必须存在。
-        providerName = requireText(providerName, "providerName").toLowerCase(java.util.Locale.ROOT);
-        // 物理目的地必须存在。
+        providerName = requireText(providerName, "providerName").toLowerCase(Locale.ROOT);
         physicalName = requireText(physicalName, "physicalName");
-        // 扩展属性执行防御性复制。
         attributes = attributes == null || attributes.isEmpty()
                 ? Map.of()
                 : Collections.unmodifiableMap(new LinkedHashMap<>(attributes));
+    
+        // 保存完成校验和标准化后的 namespace。
+        this.namespace = namespace;
+        // 保存完成校验和标准化后的 name。
+        this.name = name;
+        // 保存完成校验和标准化后的 providerName。
+        this.providerName = providerName;
+        // 保存完成校验和标准化后的 physicalName。
+        this.physicalName = physicalName;
+        // 保存完成校验和标准化后的 attributes。
+        this.attributes = attributes;
     }
 
-    /**
-     * 使用逻辑目的地创建路由。
-     *
-     * @param destination 逻辑目的地
-     * @param providerName Provider 名称
-     * @param physicalName 物理名称
-     * @return 路由
-     */
     public static DestinationRoute of(
             MessageDestination destination,
             String providerName,
             String physicalName) {
-        // 省略 Provider 扩展属性时使用空 Map。
         return of(destination, providerName, physicalName, Map.of());
     }
 
-    /**
-     * 使用逻辑目的地和 Provider 属性创建路由。
-     *
-     * @param destination 逻辑目的地
-     * @param providerName Provider 名称
-     * @param physicalName 物理名称
-     * @param attributes Provider 属性
-     * @return 路由
-     */
     public static DestinationRoute of(
             MessageDestination destination,
             String providerName,
             String physicalName,
             Map<String, String> attributes) {
-        // 逻辑目的地不能为空。
         Objects.requireNonNull(destination, "destination must not be null");
-        // providerHint 不属于路由身份，不复制到路由键中。
         return new DestinationRoute(
                 destination.namespace(),
                 destination.name(),
-                destination.category(),
                 providerName,
                 physicalName,
                 attributes);
     }
 
-    /**
-     * 判断路由是否匹配逻辑目的地。
-     *
-     * @param destination 逻辑目的地
-     * @return 匹配时返回 true
-     */
     public boolean matches(MessageDestination destination) {
-        // 比较 namespace、name 和 category，忽略 providerHint。
-        return namespace.equals(destination.namespace())
-                && name.equals(destination.name())
-                && category == destination.category();
+        return namespace.equals(destination.namespace()) && name.equals(destination.name());
     }
 
-    /**
-     * 转换为 Provider SPI 物理目的地。
-     *
-     * @return Provider 物理目的地
-     */
     public ProviderDestination toProviderDestination() {
-        // 直接复制已经校验过的 Provider 字段。
         return new ProviderDestination(providerName, physicalName, attributes);
     }
 
-    /** 校验必填文本。 */
     private static String requireText(String value, String fieldName) {
-        // null 或空白都属于非法配置。
         if (value == null || value.isBlank()) {
-            // 指出具体非法字段。
             throw new IllegalArgumentException(fieldName + " must not be blank");
         }
-        // 返回去除首尾空白的值。
         return value.trim();
     }
+    /**
+     * 返回逻辑命名空间。
+     *
+     * @return 逻辑命名空间
+     */
+    public String namespace() {
+        // 返回不可变字段。
+        return namespace;
+    }
+
+    /**
+     * 返回逻辑名称。
+     *
+     * @return 逻辑名称
+     */
+    public String name() {
+        // 返回不可变字段。
+        return name;
+    }
+
+    /**
+     * 返回Provider 名称。
+     *
+     * @return Provider 名称
+     */
+    public String providerName() {
+        // 返回不可变字段。
+        return providerName;
+    }
+
+    /**
+     * 返回物理 Topic 或同等名称。
+     *
+     * @return 物理 Topic 或同等名称
+     */
+    public String physicalName() {
+        // 返回不可变字段。
+        return physicalName;
+    }
+
+    /**
+     * 返回Provider 扩展路由属性。
+     *
+     * @return Provider 扩展路由属性
+     */
+    public Map<String, String> attributes() {
+        // 返回不可变字段。
+        return attributes;
+    }
+
+    /**
+     * 按全部字段比较两个值对象。
+     *
+     * @param object 待比较对象
+     * @return 字段值全部一致时返回 true
+     */
+    @Override
+    public boolean equals(Object object) {
+        // 同一对象直接相等。
+        if (this == object) {
+            return true;
+        }
+        // 类型不同或对象为空时不相等。
+        if (object == null || getClass() != object.getClass()) {
+            return false;
+        }
+        // 转换为当前类型后逐字段比较。
+        DestinationRoute other = (DestinationRoute) object;
+        return Objects.equals(namespace, other.namespace)
+                && Objects.equals(name, other.name)
+                && Objects.equals(providerName, other.providerName)
+                && Objects.equals(physicalName, other.physicalName)
+                && Objects.equals(attributes, other.attributes);
+    }
+
+    /**
+     * 根据全部字段计算哈希值。
+     *
+     * @return 哈希值
+     */
+    @Override
+    public int hashCode() {
+        // 使用与 equals 相同的字段计算哈希值。
+        return Objects.hash(namespace, name, providerName, physicalName, attributes);
+    }
+
+    /**
+     * 返回便于诊断的字段摘要。
+     *
+     * @return 字符串摘要
+     */
+    @Override
+    public String toString() {
+        // 拼接全部字段，保持值对象可诊断。
+        return "DestinationRoute{" +
+                "namespace=" + namespace +
+                ", name=" + name +
+                ", providerName=" + providerName +
+                ", physicalName=" + physicalName +
+                ", attributes=" + attributes +
+                '}';
+    }
+
 }

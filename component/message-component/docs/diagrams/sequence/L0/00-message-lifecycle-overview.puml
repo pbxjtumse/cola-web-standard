@@ -1,0 +1,46 @@
+@startuml
+!include ../../_common/style.puml
+title L0：消息组件完整生命周期总览
+
+actor "业务发布方" as ProducerApp
+participant "MessageTemplate" as Template
+participant "EnvelopeEnricher" as Enricher
+participant "DestinationResolver" as Resolver
+participant "MessageWireCodec" as Codec
+participant "MessageProvider\nKafka / RocketMQ / Pulsar" as Provider
+queue "Broker" as Broker
+participant "Provider Consumer" as Consumer
+participant "MessageContextAccessor" as Context
+participant "MessageHandler" as Handler
+
+ProducerApp -> Template: send(destination, envelope)
+Template -> Enricher: 补齐 metadata/context
+Enricher --> Template: enriched envelope
+Template -> Resolver: 逻辑目的地解析
+Resolver --> Template: provider + physical destination
+Template -> Codec: encode(envelope)
+Codec --> Template: ProviderSendRequest
+Template -> Provider: send(request)
+Provider -> Broker: 原生消息发送
+Broker --> Provider: 确认 / 拒绝 / 结果不确定
+Provider --> Template: ProviderSendResult
+Template --> ProducerApp: SendResult
+
+== 异步消费 ==
+Broker -> Consumer: 投递原生消息
+Consumer -> Template: ProviderInboundMessage
+Template -> Codec: decode(inbound)
+Codec --> Template: MessageEnvelope + ConsumeContext
+Template -> Context: open(current message)
+Template -> Handler: handle(envelope, context)
+Handler --> Template: SUCCESS / RETRY
+Template -> Context: close()
+Template --> Consumer: ConsumeDecision
+Consumer --> Broker: commit / ack / retry
+
+note over Template,Handler
+一期只统一普通消息闭环。
+重试次数、DLQ、幂等、Outbox 在二期治理。
+顺序、延时、事务、回放在三期扩展。
+end note
+@enduml

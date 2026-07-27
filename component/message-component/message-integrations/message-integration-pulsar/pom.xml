@@ -10,7 +10,6 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>message-integration-pulsar</artifactId>
-    <name>Iron Message Pulsar Integration</name>
     <dependencies>
         <dependency>
             <groupId>com.xjtu.iron</groupId>

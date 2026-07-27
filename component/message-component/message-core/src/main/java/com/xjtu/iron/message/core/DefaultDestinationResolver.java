@@ -115,12 +115,8 @@ public final class DefaultDestinationResolver implements DestinationResolver {
      * @return 仅包含安全字符的默认名称
      */
     private static String defaultPhysicalName(MessageDestination destination) {
-        // 拼接领域、类别和逻辑名称，避免不同类别同名冲突。
-        String rawName = destination.namespace()
-                + "-"
-                + destination.category().name().toLowerCase(Locale.ROOT)
-                + "-"
-                + destination.name();
+        // 拼接领域和逻辑名称；Event/Command 通过命名规范区分，不再进入一期路由身份。
+        String rawName = destination.namespace() + "-" + destination.name();
         // 将常见 Provider 不一致的特殊字符统一替换为连字符。
         String sanitized = rawName.replaceAll("[^a-zA-Z0-9_-]", "-");
         // 合并连续连字符，避免生成难读名称。

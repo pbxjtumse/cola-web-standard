@@ -1,0 +1,42 @@
+@startuml
+!include ../../_common/style.puml
+title L1：普通消息消费核心流程
+
+actor Application
+participant MessageTemplate
+participant DestinationResolver as Resolver
+participant MessageProviderRegistry as Registry
+participant MessageProvider as Provider
+participant MessageWireCodec as Codec
+participant MessageContextAccessor as Context
+participant MessageHandler as Handler
+
+Application -> MessageTemplate: subscribe(definition, handler)
+MessageTemplate -> Resolver: resolve(definition.destination)
+Resolver --> MessageTemplate: ProviderDestination
+MessageTemplate -> Registry: getRequired(providerName)
+Registry --> MessageTemplate: Provider
+MessageTemplate -> Provider: subscribe(ProviderSubscriptionRequest)
+Provider --> Application: MessageSubscription
+
+== 每次投递 ==
+Provider -> MessageTemplate: onMessage(ProviderInboundMessage)
+MessageTemplate -> Codec: decode(definition, destination, inbound)
+Codec --> MessageTemplate: DecodedInbound
+MessageTemplate -> Context: open(CurrentMessage)
+MessageTemplate -> Handler: handle(envelope, consumeContext)
+
+alt Handler 返回 SUCCESS
+  Handler --> MessageTemplate: SUCCESS
+  MessageTemplate -> Context: close()
+  MessageTemplate --> Provider: SUCCESS
+else Handler 返回 RETRY
+  Handler --> MessageTemplate: RETRY
+  MessageTemplate -> Context: close()
+  MessageTemplate --> Provider: RETRY
+else Handler 抛出运行时异常
+  Handler --> MessageTemplate: exception
+  MessageTemplate -> Context: close()
+  MessageTemplate --> Provider: RETRY（保守策略）
+end
+@enduml

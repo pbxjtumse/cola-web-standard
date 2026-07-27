@@ -1,0 +1,45 @@
+@startuml
+!include ../../_common/style.puml
+title L2：Pulsar 普通消息发送与 Shared 消费
+
+participant MessageTemplate
+participant PulsarMessageProvider as Provider
+participant PulsarProducer as Producer
+queue PulsarBroker as Broker
+participant "Shared Consumer" as Consumer
+participant CoreListener
+
+== 发送 ==
+MessageTemplate -> Provider: send(request)
+Provider -> Provider: newMessage().value(body)
+opt messageKey 存在
+  Provider -> Provider: key(messageKey)
+end
+Provider -> Provider: properties(headers)
+Provider -> Producer: sendAsync()
+Producer -> Broker: publish
+Broker --> Producer: MessageId / error
+Producer --> Provider: completion
+Provider --> MessageTemplate: standardized result
+
+== 消费 ==
+Broker -> Consumer: Message<byte[]>
+Consumer -> Provider: messageListener
+Provider -> CoreListener: onMessage(inbound)
+alt SUCCESS
+  CoreListener --> Provider: SUCCESS
+  Provider -> Consumer: acknowledgeAsync(message)
+  alt ACK 异常
+    Consumer --> Provider: exception
+    Provider -> Consumer: negativeAcknowledge(message)
+  end
+else RETRY / exception
+  CoreListener --> Provider: RETRY
+  Provider -> Consumer: negativeAcknowledge(message)
+end
+
+note over Provider
+Shared Subscription 不承诺同 key 顺序。
+Key_Shared、事务和精确重投治理属于后续阶段。
+end note
+@enduml

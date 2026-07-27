@@ -1,0 +1,13 @@
+' PlantUML 批量入口：一次处理该文件可展开 L0-L3 全部时序图。
+!include L0/00-message-lifecycle-overview.puml
+!include L1/01-send-core-flow.puml
+!include L1/02-consume-core-flow.puml
+!include L1/03-child-message-context.puml
+!include L2/01-kafka-send.puml
+!include L2/02-kafka-consume-partitions.puml
+!include L2/03-rocketmq-basic.puml
+!include L2/04-pulsar-basic.puml
+!include L3/01-send-preparation-errors.puml
+!include L3/02-send-confirm-timeout.puml
+!include L3/03-consume-errors.puml
+!include L3/04-kafka-partition-failure.puml
