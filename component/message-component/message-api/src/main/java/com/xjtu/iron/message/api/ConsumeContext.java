@@ -30,9 +30,6 @@ public final class ConsumeContext {
     /** Provider 原生消息 ID。 */
     private final String providerMessageId;
 
-    /** 当前投递次数；Provider 无法提供时通常为 1。 */
-    private final int deliveryAttempt;
-
     /** 组件收到消息的时间。 */
     private final Instant receivedAt;
 
@@ -66,8 +63,6 @@ public final class ConsumeContext {
         this.consumerGroup = consumerGroup;
         // 保存完成校验和标准化后的 providerMessageId。
         this.providerMessageId = providerMessageId;
-        // 保存完成校验和标准化后的 deliveryAttempt。
-        this.deliveryAttempt = deliveryAttempt;
         // 保存完成校验和标准化后的 receivedAt。
         this.receivedAt = receivedAt;
         // 保存完成校验和标准化后的 metadata。
@@ -113,15 +108,7 @@ public final class ConsumeContext {
         return providerMessageId;
     }
 
-    /**
-     * 返回当前投递次数；Provider 无法提供时通常为 1。
-     *
-     * @return 当前投递次数；Provider 无法提供时通常为 1
-     */
-    public int deliveryAttempt() {
-        // 返回不可变字段。
-        return deliveryAttempt;
-    }
+
 
     /**
      * 返回组件收到消息的时间。
@@ -165,7 +152,6 @@ public final class ConsumeContext {
                 && Objects.equals(physicalDestination, other.physicalDestination)
                 && Objects.equals(consumerGroup, other.consumerGroup)
                 && Objects.equals(providerMessageId, other.providerMessageId)
-                && deliveryAttempt == other.deliveryAttempt
                 && Objects.equals(receivedAt, other.receivedAt)
                 && Objects.equals(metadata, other.metadata);
     }
@@ -178,7 +164,7 @@ public final class ConsumeContext {
     @Override
     public int hashCode() {
         // 使用与 equals 相同的字段计算哈希值。
-        return Objects.hash(providerName, physicalDestination, consumerGroup, providerMessageId, deliveryAttempt, receivedAt, metadata);
+        return Objects.hash(providerName, physicalDestination, consumerGroup, providerMessageId, receivedAt, metadata);
     }
 
     /**
@@ -194,7 +180,6 @@ public final class ConsumeContext {
                 ", physicalDestination=" + physicalDestination +
                 ", consumerGroup=" + consumerGroup +
                 ", providerMessageId=" + providerMessageId +
-                ", deliveryAttempt=" + deliveryAttempt +
                 ", receivedAt=" + receivedAt +
                 ", metadata=" + metadata +
                 '}';

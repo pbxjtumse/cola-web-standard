@@ -19,5 +19,6 @@
         <module>concurrency-component</module>
         <module>distributed-lock-component</module>
         <module>message-component</module>
+        <module>retry-component</module>
     </modules>
 </project>

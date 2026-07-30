@@ -1,0 +1,31 @@
+server:
+  port: 18090
+
+spring:
+  application:
+    name: retry-demo
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+iron:
+  retry:
+    enabled: true
+    default-policy: default
+    policies:
+      demo-exception:
+        max-attempts: 4
+        max-duration: 5s
+        operation-safety: READ_ONLY
+        retry-on:
+          - java.io.IOException
+        stop-on:
+          - java.lang.IllegalArgumentException
+        backoff:
+          type: EXPONENTIAL_JITTER
+          initial-delay: 100ms
+          max-delay: 800ms
+          multiplier: 2.0
