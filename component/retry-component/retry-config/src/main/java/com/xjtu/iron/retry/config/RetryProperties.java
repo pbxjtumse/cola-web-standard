@@ -1,33 +1,26 @@
 package com.xjtu.iron.retry.config;
 
 import com.xjtu.iron.retry.api.OperationSafety;
+import com.xjtu.iron.retry.api.RetryFailureCategory;
+import com.xjtu.iron.retry.api.RetrySafetyMode;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 重试组件 Spring Boot 配置属性。
- */
+/** 绑定 retry-component 的 Spring Boot 外部化配置。 */
 @ConfigurationProperties(prefix = "iron.retry")
 public class RetryProperties {
 
-    /**
-     * 是否启用重试组件自动配置。
-     */
+    /** 是否启用全部自动配置。 */
     private boolean enabled = true;
-
-    /**
-     * 默认策略名称。
-     */
-    private String defaultPolicy = "default";
-
-    /**
-     * 按名称配置的重试策略。
-     */
+    /** 是否将核心事件桥接到 Spring ApplicationEvent。 */
+    private boolean publishSpringEvents = true;
+    /** 是否在存在 Micrometer 时注册指标监听器。 */
+    private boolean metricsEnabled = true;
+    /** 命名策略原始配置。 */
     private Map<String, PolicyProperties> policies = new LinkedHashMap<>();
 
     public boolean isEnabled() {
@@ -38,12 +31,20 @@ public class RetryProperties {
         this.enabled = enabled;
     }
 
-    public String getDefaultPolicy() {
-        return defaultPolicy;
+    public boolean isPublishSpringEvents() {
+        return publishSpringEvents;
     }
 
-    public void setDefaultPolicy(String defaultPolicy) {
-        this.defaultPolicy = defaultPolicy;
+    public void setPublishSpringEvents(boolean publishSpringEvents) {
+        this.publishSpringEvents = publishSpringEvents;
+    }
+
+    public boolean isMetricsEnabled() {
+        return metricsEnabled;
+    }
+
+    public void setMetricsEnabled(boolean metricsEnabled) {
+        this.metricsEnabled = metricsEnabled;
     }
 
     public Map<String, PolicyProperties> getPolicies() {
@@ -51,26 +52,56 @@ public class RetryProperties {
     }
 
     public void setPolicies(Map<String, PolicyProperties> policies) {
-        this.policies = policies == null ? new LinkedHashMap<>() : new LinkedHashMap<>(policies);
+        this.policies = policies == null ? new LinkedHashMap<>() : policies;
     }
 
     /**
-     * 单个命名策略配置。
+     * 描述一个命名策略的原始配置。
+     *
+     * <p>包装类型和可空列表用于区分“没有覆盖父策略”和“显式覆盖或清空父策略”。</p>
      */
     public static class PolicyProperties {
 
-        private int maxAttempts = 3;
-        private Duration maxDuration = Duration.ofSeconds(5);
-        private OperationSafety operationSafety = OperationSafety.UNSPECIFIED;
-        private List<String> retryOn = new ArrayList<>();
-        private List<String> stopOn = new ArrayList<>();
-        private BackoffProperties backoff = new BackoffProperties();
+        /** 可选父策略名称。 */
+        private String basePolicy;
+        /** 可选最大尝试次数覆盖。 */
+        private Integer maxAttempts;
+        /** 可选最大时长覆盖。 */
+        private Duration maxDuration;
+        /** 可选操作安全级别覆盖。 */
+        private OperationSafety operationSafety;
+        /** 可选安全模式覆盖。 */
+        private RetrySafetyMode safetyMode;
+        /** 可选 cause 遍历开关覆盖。 */
+        private Boolean traverseCauses;
+        /** 可选 cause 最大遍历深度覆盖。 */
+        private Integer maxCauseDepth;
+        /** 配置文件中 retry-on 共享的失败分类。 */
+        private RetryFailureCategory retryFailureCategory;
+        /** 配置文件中 retry-on 共享的稳定失败码。 */
+        private String retryFailureCode;
+        /** 可选可重试异常类名列表；空列表表示显式清空。 */
+        private List<String> retryOn;
+        /** 可选正常停止异常类名列表；空列表表示显式清空。 */
+        private List<String> stopOn;
+        /** 可选立即中止异常类名列表；空列表表示显式清空。 */
+        private List<String> abortOn;
+        /** 可选退避配置。 */
+        private BackoffProperties backoff;
 
-        public int getMaxAttempts() {
+        public String getBasePolicy() {
+            return basePolicy;
+        }
+
+        public void setBasePolicy(String basePolicy) {
+            this.basePolicy = basePolicy;
+        }
+
+        public Integer getMaxAttempts() {
             return maxAttempts;
         }
 
-        public void setMaxAttempts(int maxAttempts) {
+        public void setMaxAttempts(Integer maxAttempts) {
             this.maxAttempts = maxAttempts;
         }
 
@@ -90,12 +121,52 @@ public class RetryProperties {
             this.operationSafety = operationSafety;
         }
 
+        public RetrySafetyMode getSafetyMode() {
+            return safetyMode;
+        }
+
+        public void setSafetyMode(RetrySafetyMode safetyMode) {
+            this.safetyMode = safetyMode;
+        }
+
+        public Boolean getTraverseCauses() {
+            return traverseCauses;
+        }
+
+        public void setTraverseCauses(Boolean traverseCauses) {
+            this.traverseCauses = traverseCauses;
+        }
+
+        public Integer getMaxCauseDepth() {
+            return maxCauseDepth;
+        }
+
+        public void setMaxCauseDepth(Integer maxCauseDepth) {
+            this.maxCauseDepth = maxCauseDepth;
+        }
+
+        public RetryFailureCategory getRetryFailureCategory() {
+            return retryFailureCategory;
+        }
+
+        public void setRetryFailureCategory(RetryFailureCategory retryFailureCategory) {
+            this.retryFailureCategory = retryFailureCategory;
+        }
+
+        public String getRetryFailureCode() {
+            return retryFailureCode;
+        }
+
+        public void setRetryFailureCode(String retryFailureCode) {
+            this.retryFailureCode = retryFailureCode;
+        }
+
         public List<String> getRetryOn() {
             return retryOn;
         }
 
         public void setRetryOn(List<String> retryOn) {
-            this.retryOn = retryOn == null ? new ArrayList<>() : new ArrayList<>(retryOn);
+            this.retryOn = retryOn;
         }
 
         public List<String> getStopOn() {
@@ -103,7 +174,15 @@ public class RetryProperties {
         }
 
         public void setStopOn(List<String> stopOn) {
-            this.stopOn = stopOn == null ? new ArrayList<>() : new ArrayList<>(stopOn);
+            this.stopOn = stopOn;
+        }
+
+        public List<String> getAbortOn() {
+            return abortOn;
+        }
+
+        public void setAbortOn(List<String> abortOn) {
+            this.abortOn = abortOn;
         }
 
         public BackoffProperties getBackoff() {
@@ -111,20 +190,23 @@ public class RetryProperties {
         }
 
         public void setBackoff(BackoffProperties backoff) {
-            this.backoff = backoff == null ? new BackoffProperties() : backoff;
+            this.backoff = backoff;
         }
     }
 
-    /**
-     * 退避策略配置。
-     */
+    /** 描述一个策略的退避参数覆盖。 */
     public static class BackoffProperties {
 
-        private BackoffType type = BackoffType.NONE;
-        private Duration delay = Duration.ofMillis(100);
-        private Duration initialDelay = Duration.ofMillis(100);
-        private Duration maxDelay = Duration.ofSeconds(2);
-        private double multiplier = 2.0D;
+        /** 可选退避类型。 */
+        private BackoffType type;
+        /** 可选固定等待时长。 */
+        private Duration delay;
+        /** 可选指数退避初始时长。 */
+        private Duration initialDelay;
+        /** 可选指数退避最大时长。 */
+        private Duration maxDelay;
+        /** 可选指数增长倍数。 */
+        private Double multiplier;
 
         public BackoffType getType() {
             return type;
@@ -158,22 +240,24 @@ public class RetryProperties {
             this.maxDelay = maxDelay;
         }
 
-        public double getMultiplier() {
+        public Double getMultiplier() {
             return multiplier;
         }
 
-        public void setMultiplier(double multiplier) {
+        public void setMultiplier(Double multiplier) {
             this.multiplier = multiplier;
         }
     }
 
-    /**
-     * 支持的退避策略类型。
-     */
+    /** 定义配置文件支持的退避策略类型。 */
     public enum BackoffType {
+        /** 不等待。 */
         NONE,
+        /** 固定等待。 */
         FIXED,
+        /** 指数退避。 */
         EXPONENTIAL,
-        EXPONENTIAL_JITTER
+        /** 指数退避加全抖动。 */
+        EXPONENTIAL_FULL_JITTER
     }
 }

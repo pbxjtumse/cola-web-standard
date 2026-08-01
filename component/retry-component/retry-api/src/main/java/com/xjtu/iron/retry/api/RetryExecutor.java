@@ -1,33 +1,60 @@
 package com.xjtu.iron.retry.api;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 
-/**
- * 进程内同步重试执行入口。
- */
+/** 提供进程内同步重试的统一执行入口。 */
 public interface RetryExecutor {
 
-    /**
-     * 使用直接提供的策略执行一个可重试操作。
-     */
-    <T> RetryResult<T> execute(
-            String operationName,
-            RetryOperation<T> operation,
-            RetryPolicy retryPolicy);
+    /** 执行一个已经完整构建的重试请求。 */
+    <T> RetryResult<T> execute(RetryExecution<T> execution);
 
-    /**
-     * 使用注册表中的命名策略执行一个可重试操作。
-     */
+    /** 使用命名策略执行带属性的业务操作。 */
     <T> RetryResult<T> execute(
             String operationName,
+            Map<String, Object> attributes,
             RetryOperation<T> operation,
             String policyName);
 
-    default <T> RetryResult<T> execute(RetryOperation<T> operation, RetryPolicy retryPolicy) {
-        return execute("anonymous", operation, retryPolicy);
+    /** 使用显式策略执行带属性的业务操作。 */
+    default <T> RetryResult<T> execute(
+            String operationName,
+            Map<String, Object> attributes,
+            RetryOperation<T> operation,
+            RetryPolicy retryPolicy) {
+        RetryExecution<T> execution = RetryExecution
+                .builder(operationName, operation, retryPolicy)
+                .attributes(attributes)
+                .build();
+        return execute(execution);
     }
 
+    /** 使用显式策略执行不带属性的业务操作。 */
+    default <T> RetryResult<T> execute(
+            String operationName,
+            RetryOperation<T> operation,
+            RetryPolicy retryPolicy) {
+        return execute(operationName, Collections.emptyMap(), operation, retryPolicy);
+    }
+
+    /** 使用命名策略执行不带属性的业务操作。 */
+    default <T> RetryResult<T> execute(
+            String operationName,
+            RetryOperation<T> operation,
+            String policyName) {
+        return execute(operationName, Collections.emptyMap(), operation, policyName);
+    }
+
+    /** 使用默认匿名操作名执行业务操作。 */
+    default <T> RetryResult<T> execute(
+            RetryOperation<T> operation,
+            RetryPolicy retryPolicy) {
+        return execute("anonymous", Collections.emptyMap(), operation, retryPolicy);
+    }
+
+    /** 将 Callable 适配为 RetryOperation 后执行。 */
     default <T> RetryResult<T> execute(
             String operationName,
             Callable<T> callable,
@@ -36,6 +63,7 @@ public interface RetryExecutor {
         return execute(operationName, context -> callable.call(), retryPolicy);
     }
 
+    /** 将 Callable 适配为 RetryOperation 并使用命名策略执行。 */
     default <T> RetryResult<T> execute(
             String operationName,
             Callable<T> callable,
@@ -44,6 +72,7 @@ public interface RetryExecutor {
         return execute(operationName, context -> callable.call(), policyName);
     }
 
+    /** 将 Runnable 适配为无返回值操作后执行。 */
     default RetryResult<Void> run(
             String operationName,
             Runnable runnable,
@@ -55,6 +84,7 @@ public interface RetryExecutor {
         }, retryPolicy);
     }
 
+    /** 将 Runnable 适配为无返回值操作并使用命名策略执行。 */
     default RetryResult<Void> run(
             String operationName,
             Runnable runnable,
@@ -66,6 +96,7 @@ public interface RetryExecutor {
         }, policyName);
     }
 
+    /** 执行并在最终失败时抛出统一 RetryExecutionException。 */
     default <T> T executeAndGet(
             String operationName,
             RetryOperation<T> operation,
@@ -73,6 +104,7 @@ public interface RetryExecutor {
         return execute(operationName, operation, retryPolicy).getOrThrow();
     }
 
+    /** 使用命名策略执行并在最终失败时抛出统一异常。 */
     default <T> T executeAndGet(
             String operationName,
             RetryOperation<T> operation,

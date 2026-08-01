@@ -9,23 +9,35 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
 
 iron:
   retry:
     enabled: true
-    default-policy: default
+    publish-spring-events: true
+    metrics-enabled: true
     policies:
-      demo-exception:
-        max-attempts: 4
+      remote-base:
+        max-attempts: 3
         max-duration: 5s
         operation-safety: READ_ONLY
+        safety-mode: WARN
+        traverse-causes: false
+        max-cause-depth: 16
+        retry-failure-category: TRANSIENT
+        retry-failure-code: REMOTE_TRANSIENT_FAILURE
         retry-on:
           - java.io.IOException
         stop-on:
           - java.lang.IllegalArgumentException
+        abort-on:
+          - java.lang.SecurityException
         backoff:
-          type: EXPONENTIAL_JITTER
+          type: EXPONENTIAL_FULL_JITTER
           initial-delay: 100ms
-          max-delay: 800ms
+          max-delay: 1s
           multiplier: 2.0
+
+      remote-call:
+        base-policy: remote-base
+        max-duration: 3s

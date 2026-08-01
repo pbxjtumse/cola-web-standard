@@ -1,22 +1,15 @@
 package com.xjtu.iron.retry.api;
 
-/**
- * 单次可重试业务操作。
- *
- * <p>每次尝试都会重新调用该接口。调用方应确保操作满足天然幂等、业务幂等保护，
- * 或者能够接受重复执行带来的副作用。</p>
- *
- * @param <T> 业务返回值类型
- */
+/** 表示一次可以由重试执行器调用的业务操作。 */
 @FunctionalInterface
 public interface RetryOperation<T> {
 
     /**
-     * 执行一次业务尝试。
+     * 执行当前物理尝试。
      *
-     * @param context 当前尝试的重试上下文
-     * @return 当前尝试返回值
-     * @throws Exception 当前尝试失败时抛出的异常
+     * @param context 当前尝试上下文
+     * @return 当前业务结果
+     * @throws Exception 业务操作允许抛出的受检或运行时异常
      */
     T execute(RetryContext context) throws Exception;
 }

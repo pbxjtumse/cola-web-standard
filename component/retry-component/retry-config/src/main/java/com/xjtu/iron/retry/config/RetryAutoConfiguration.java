@@ -1,107 +1,106 @@
 package com.xjtu.iron.retry.config;
 
-import com.xjtu.iron.retry.api.BackoffStrategy;
 import com.xjtu.iron.retry.api.RetryExecutor;
+import com.xjtu.iron.retry.api.RetryIdGenerator;
 import com.xjtu.iron.retry.api.RetryListener;
 import com.xjtu.iron.retry.api.RetryPolicy;
 import com.xjtu.iron.retry.api.RetryPolicyRegistry;
-import com.xjtu.iron.retry.api.support.BackoffStrategies;
 import com.xjtu.iron.retry.core.DefaultRetryExecutor;
 import com.xjtu.iron.retry.core.DefaultRetryPolicyRegistry;
+import com.xjtu.iron.retry.core.UuidRetryIdGenerator;
+import com.xjtu.iron.retry.core.time.RetryClock;
+import com.xjtu.iron.retry.core.time.RetrySleeper;
+import com.xjtu.iron.retry.core.time.SystemRetryClock;
+import com.xjtu.iron.retry.core.time.ThreadSleepRetrySleeper;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 
 import java.util.List;
 import java.util.Map;
 
-/**
- * 重试组件核心 Spring Boot 自动配置。
- */
+/** 装配 retry-component 的核心 Spring Boot Bean。 */
 @AutoConfiguration
 @EnableConfigurationProperties(RetryProperties.class)
-@ConditionalOnProperty(prefix = "iron.retry", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(
+        prefix = "iron.retry",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
 public class RetryAutoConfiguration {
 
+    /** 在启用 Spring 事件桥接时注册默认监听器。 */
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "iron.retry",
+            name = "publish-spring-events",
+            havingValue = "true",
+            matchIfMissing = true
+    )
+    @ConditionalOnMissingBean(SpringApplicationRetryListener.class)
+    public SpringApplicationRetryListener springApplicationRetryListener(
+            ApplicationEventPublisher publisher) {
+        return new SpringApplicationRetryListener(publisher);
+    }
+
+    /** 注册可被业务覆盖的系统时钟实现。 */
     @Bean
     @ConditionalOnMissingBean
-    public RetryPolicyRegistry retryPolicyRegistry(RetryProperties retryProperties) {
+    public RetryClock retryClock() {
+        return new SystemRetryClock();
+    }
+
+    /** 注册可被业务覆盖的同步等待实现。 */
+    @Bean
+    @ConditionalOnMissingBean
+    public RetrySleeper retrySleeper() {
+        return new ThreadSleepRetrySleeper();
+    }
+
+    /** 注册可被业务覆盖的逻辑执行标识生成器。 */
+    @Bean
+    @ConditionalOnMissingBean
+    public RetryIdGenerator retryIdGenerator() {
+        return new UuidRetryIdGenerator();
+    }
+
+    /** 解析全部命名策略并注册到默认策略注册表。 */
+    @Bean
+    @ConditionalOnMissingBean
+    public RetryPolicyRegistry retryPolicyRegistry(RetryProperties properties) {
         DefaultRetryPolicyRegistry registry = new DefaultRetryPolicyRegistry();
-        Map<String, RetryProperties.PolicyProperties> configuredPolicies = retryProperties.getPolicies();
-
-        for (Map.Entry<String, RetryProperties.PolicyProperties> entry : configuredPolicies.entrySet()) {
-            registry.register(toRetryPolicy(entry.getKey(), entry.getValue()));
+        RetryPolicyPropertiesResolver resolver = new RetryPolicyPropertiesResolver();
+        RetryPolicyFactory factory = new RetryPolicyFactory();
+        Map<String, ResolvedRetryPolicyProperties> resolvedPolicies = resolver.resolve(properties);
+        for (Map.Entry<String, ResolvedRetryPolicyProperties> entry
+                : resolvedPolicies.entrySet()) {
+            RetryPolicy retryPolicy = factory.create(entry.getKey(), entry.getValue());
+            registry.register(retryPolicy);
         }
-
-        if (registry.find(retryProperties.getDefaultPolicy()).isEmpty()) {
-            registry.register(RetryPolicy.builder(retryProperties.getDefaultPolicy()).build());
-        }
-
         return registry;
     }
 
+    /** 汇总有序监听器和可替换基础设施后创建默认执行器。 */
     @Bean
     @ConditionalOnMissingBean
     public RetryExecutor retryExecutor(
             RetryPolicyRegistry retryPolicyRegistry,
-            ObjectProvider<RetryListener> retryListeners) {
+            ObjectProvider<RetryListener> retryListeners,
+            RetrySleeper retrySleeper,
+            RetryClock retryClock,
+            RetryIdGenerator retryIdGenerator) {
         List<RetryListener> listeners = retryListeners.orderedStream().toList();
-        return new DefaultRetryExecutor(retryPolicyRegistry, listeners);
-    }
-
-    private RetryPolicy toRetryPolicy(
-            String policyName,
-            RetryProperties.PolicyProperties properties) {
-        RetryPolicy.Builder builder = RetryPolicy.builder(policyName)
-                .maxAttempts(properties.getMaxAttempts())
-                .maxDuration(properties.getMaxDuration())
-                .operationSafety(properties.getOperationSafety())
-                .backoffStrategy(toBackoffStrategy(properties.getBackoff()));
-
-        for (String exceptionTypeName : properties.getRetryOn()) {
-            builder.retryOn(resolveThrowableType(exceptionTypeName));
-        }
-
-        for (String exceptionTypeName : properties.getStopOn()) {
-            builder.stopOn(resolveThrowableType(exceptionTypeName));
-        }
-
-        return builder.build();
-    }
-
-    private BackoffStrategy toBackoffStrategy(RetryProperties.BackoffProperties properties) {
-        return switch (properties.getType()) {
-            case NONE -> BackoffStrategies.none();
-            case FIXED -> BackoffStrategies.fixed(properties.getDelay());
-            case EXPONENTIAL -> BackoffStrategies.exponential(
-                    properties.getInitialDelay(),
-                    properties.getMaxDelay(),
-                    properties.getMultiplier()
-            );
-            case EXPONENTIAL_JITTER -> BackoffStrategies.exponentialWithFullJitter(
-                    properties.getInitialDelay(),
-                    properties.getMaxDelay(),
-                    properties.getMultiplier()
-            );
-        };
-    }
-
-    @SuppressWarnings("unchecked")
-    private Class<? extends Throwable> resolveThrowableType(String className) {
-        if (className == null || className.isBlank()) {
-            throw new IllegalArgumentException("Configured exception class name must not be blank");
-        }
-        try {
-            Class<?> loadedType = Class.forName(className);
-            if (!Throwable.class.isAssignableFrom(loadedType)) {
-                throw new IllegalArgumentException("Configured type is not a Throwable: " + className);
-            }
-            return (Class<? extends Throwable>) loadedType;
-        } catch (ClassNotFoundException exception) {
-            throw new IllegalArgumentException("Configured exception type does not exist: " + className, exception);
-        }
+        return new DefaultRetryExecutor(
+                retryPolicyRegistry,
+                listeners,
+                retrySleeper,
+                retryClock,
+                retryIdGenerator
+        );
     }
 }
