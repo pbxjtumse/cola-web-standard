@@ -1,13 +1,13 @@
 package com.xjtu.iron.foundation.test.id;
 
-import com.xjtu.iron.foundation.id.StringIdGenerator;
+import com.xjtu.iron.foundation.id.api.IdGenerator;
 
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 按顺序生成可预测标识的测试生成器。
  */
-public final class SequentialStringIdGenerator implements StringIdGenerator {
+public final class SequentialStringIdGenerator implements IdGenerator<String> {
 
     /** 测试序列标识前缀。 */
     private final String prefix;

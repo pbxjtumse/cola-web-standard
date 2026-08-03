@@ -36,7 +36,9 @@ Foundation 只提供异常链解析和序列化异常。它不定义 `TRANSIENT`
 
 ### foundation-id
 
-定义字符串和长整型 ID 协议，提供 UUID、Compact UUID、前缀、组合及时间可排序 ID。当前时间可排序 ID 不是 Snowflake，不需要节点号，也不承诺连续性。
+定义字符串和长整型技术 ID 协议，提供 UUID v4、RFC 9562 UUID v7、Compact UUID v4、单调 ULID、Nano ID、显式 workerId 的 Snowflake、前缀、组合、上下文生成协议和命名注册表。
+
+UUID v7 作为执行 ID、事件 ID 和请求 ID 的优先默认算法；ULID 用于紧凑时间有序字符串；Nano ID 用于短随机公开 ID；Snowflake 只提供本地算法，不负责 workerId 分配。
 
 业务订单号、支付流水号和清算批次号仍由业务领域生成。
 
@@ -80,7 +82,7 @@ Jackson 实现具有以下约束：
 ```text
 foundation-core                 -> Commons Lang / Collections
 foundation-time                 -> foundation-core
-foundation-id                   -> foundation-core + foundation-time
+foundation-id                   -> foundation-time
 foundation-codec                -> foundation-core + Commons Codec
 foundation-context              -> foundation-core
 foundation-reflection           -> foundation-core

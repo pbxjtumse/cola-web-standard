@@ -1,8 +1,6 @@
-package com.xjtu.iron.foundation.id;
+package com.xjtu.iron.foundation.id.api;
 
-/**
- * 定义字符串技术标识生成器。
- */
+/** 生成字符串标识。 */
 @FunctionalInterface
 public interface StringIdGenerator extends IdGenerator<String> {
 }

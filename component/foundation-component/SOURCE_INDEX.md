@@ -71,18 +71,26 @@
 
 ## `foundation-id`
 
-- `com.xjtu.iron.foundation.id.CompactUuidIdGenerator`：生成不包含短横线的紧凑 UUID。
-- `com.xjtu.iron.foundation.id.CompositeIdGenerator`：按顺序组合多个标识片段。
-- `com.xjtu.iron.foundation.id.ContextualIdGenerator`：定义能够根据命名空间和属性生成标识的协议。
-- `com.xjtu.iron.foundation.id.IdGenerationContext`：描述生成技术标识时的命名空间和附加属性。
 - `com.xjtu.iron.foundation.id.IdGenerator`：定义通用技术标识生成协议。
-- `com.xjtu.iron.foundation.id.IdGeneratorRegistry`：按名称管理不同用途的字符串标识生成器。
-- `com.xjtu.iron.foundation.id.IdGenerators`：提供常用技术标识生成器工厂。
-- `com.xjtu.iron.foundation.id.LongIdGenerator`：定义长整型技术标识生成器。
-- `com.xjtu.iron.foundation.id.PrefixedIdGenerator`：为另一个字符串标识生成器增加固定前缀。
-- `com.xjtu.iron.foundation.id.StringIdGenerator`：定义字符串技术标识生成器。
-- `com.xjtu.iron.foundation.id.TimeSortableIdGenerator`：生成前缀按时间排序的字符串标识。
-- `com.xjtu.iron.foundation.id.UuidIdGenerator`：生成标准带短横线 UUID。
+- `com.xjtu.iron.foundation.id.StringIdGenerator`：定义字符串技术标识生成协议。
+- `com.xjtu.iron.foundation.id.LongIdGenerator`：定义长整型技术标识生成协议，并提供原始 long 返回方法。
+- `com.xjtu.iron.foundation.id.IdGenerationException`：表示生成器无法继续安全生成标识。
+- `com.xjtu.iron.foundation.id.IdGenerationContext`：描述上下文相关标识生成时的命名空间和属性。
+- `com.xjtu.iron.foundation.id.ContextualIdGenerator`：定义基于生成上下文的字符串标识协议。
+- `com.xjtu.iron.foundation.id.registry.IdGeneratorRegistry`：按稳定名称管理字符串生成器。
+- `com.xjtu.iron.foundation.id.IdGenerators`：提供 UUID、ULID、Nano ID、Snowflake、前缀和组合工厂。
+- `com.xjtu.iron.foundation.id.decorator.CompositeIdGenerator`：按固定顺序组合多个标识片段。
+- `com.xjtu.iron.foundation.id.decorator.CompactUuidIdGenerator`：生成不包含短横线的 UUID v4。
+- `com.xjtu.iron.foundation.id.uuid.UuidV4StringIdGenerator`：生成标准 UUID v4。
+- `com.xjtu.iron.foundation.id.uuid.UuidV7StringIdGenerator`：生成 RFC 9562 UUID v7，并保持单实例单调。
+- `com.xjtu.iron.foundation.id.ulid.UlidStringIdGenerator`：生成 26 位单调 ULID。
+- `com.xjtu.iron.foundation.id.nanoid.NanoIdOptions`：定义 Nano ID 字符表与长度。
+- `com.xjtu.iron.foundation.id.nanoid.NanoIdStringIdGenerator`：使用安全随机数和拒绝采样生成短 ID。
+- `com.xjtu.iron.foundation.id.snowflake.SnowflakeOptions`：定义 Snowflake workerId、epoch 和时钟策略。
+- `com.xjtu.iron.foundation.id.snowflake.SnowflakeLongIdGenerator`：生成 64 位 Snowflake ID。
+- `com.xjtu.iron.foundation.id.snowflake.ClockRollbackStrategy`：定义时钟回拨处理方式。
+- `com.xjtu.iron.foundation.id.decorator.PrefixedStringIdGenerator`：为委托字符串 ID 添加固定前缀。
+- `UuidIdGenerator`、`TimeSortableIdGenerator`、`PrefixedIdGenerator`：仅用于一期迁移兼容，已标记弃用。
 
 ## `foundation-codec`
 

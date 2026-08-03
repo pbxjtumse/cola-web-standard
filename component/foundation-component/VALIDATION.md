@@ -2,36 +2,28 @@
 
 ## 已完成验证
 
-1. 13 个 Maven POM 均完成 XML 结构解析；
-2. 168 个生产 Java 文件使用 `javac --release 17` 完成语法编译；
-3. 40 个测试 Java 文件完成语法编译；
-4. Jackson、JUnit、ArchUnit 和 Apache Commons 相关源代码使用与真实 API 形状一致的离线桩完成编译检查；
-5. 已运行真实 Java 烟雾测试，覆盖 Unicode 截断、命名转换、集合分片、Duration 解析、Deadline、GZIP、Context 编解码、资源读取、Compact UUID 和树循环检测；
-6. 烟雾测试结果：`FOUNDATION_SMOKE_OK`；
-7. 未发现 `record`、`TODO` 或 `FIXME` 残留。
+1. `foundation-time` 使用 `javac --release 17 -Xlint:all -Werror` 编译通过；
+2. `foundation-id` 使用同样参数编译通过；
+3. `retry-api`、`retry-core` 与修改后的 `foundation-id` 联合编译通过；
+4. UUID v7、ULID、Nano ID 和 Snowflake 各生成 10000 个 ID 的真实烟雾测试通过；
+5. UUID v7 版本位、唯一性和单实例单调性检查通过；
+6. ULID 长度、唯一性和字典序单调性检查通过；
+7. Snowflake 唯一性、递增性和 worker 位检查通过；
+8. 重试组件第三次成功并使用 Foundation UUID v7 生成 retryId 的集成测试通过；
+9. ID 包结构、重复 API、构建目录和 IDE 文件检查通过；
+10. 烟雾测试结果：`FOUNDATION_RETRY_INTEGRATION_OK`。
 
 ## 环境限制
 
-当前执行环境没有安装 Maven，并且不能从 Maven Central 下载真实第三方依赖，所以没有在这里执行完整的：
+当前执行环境没有 Maven，不能从 Maven Central 解析真实 JUnit、ArchUnit、Spring Boot、Jackson 和 Apache Commons 依赖，因此没有声称执行完整的：
 
 ```bash
 mvn clean verify
 ```
 
-因此需要明确区分：
-
-- 纯 Java 17 代码和所有源码的签名级编译已经通过；
-- Jackson、Commons、JUnit 和 ArchUnit 的真实运行时兼容性，仍应在你的联网 Maven 环境执行一次完整构建；
-- Jackson 泛型、Java Time 和 ObjectMapper 配置测试已经提供，但当前环境没有使用真实 Jackson Jar 运行。
-
-## 本地验证命令
+合入完整工程后必须执行：
 
 ```bash
-./scripts/verify.sh
-```
-
-或者：
-
-```bash
-mvn clean verify
+mvn -pl foundation-component -am clean verify
+mvn -pl retry-component -am clean verify
 ```

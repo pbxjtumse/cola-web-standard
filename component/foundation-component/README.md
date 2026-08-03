@@ -4,25 +4,7 @@
 
 Foundation Component 是缓存、消息、重试、分布式锁、幂等、事务、并行、治理和可观测性组件共同依赖的底层技术组件。
 
-它提供：
-
-- 纯技术文本、集合、数值、枚举、校验和异常链工具；
-- 可测试的时间模型；
-- 技术 ID 生成协议和本地实现；
-- 编解码、摘要、校验和及受限压缩；
-- 不绑定 ThreadLocal 的执行上下文模型；
-- 受控反射能力；
-- classpath、文件和内存资源读取；
-- 序列化抽象和 Jackson JSON 实现；
-- 跨组件测试支持和 ArchUnit 架构约束。
-
-它不提供：
-
-- 业务错误码、业务日期、订单号和支付流水号；
-- Redis、MQ、数据库、HTTP 等客户端工具；
-- 万能 Bean Copy、全局 SpringContextHolder 或全局 ObjectMapper；
-- 重试分类、消息 ACK、事务补偿和分布式调度；
-- 密码存储、密钥管理、数字签名和加解密策略。
+它只提供跨多个技术组件复用、没有业务含义、不会反向依赖上层组件的能力。业务订单号、支付流水号、清算批次号、业务错误码和失败重试分类不属于 Foundation。
 
 ## 2. 模块结构
 
@@ -42,64 +24,94 @@ foundation-component
 └── foundation-architecture-tests
 ```
 
-序列化在目录层面属于同一能力域，但 API 与 Jackson 仍是两个 Jar：上层技术组件只依赖 API，应用装配层再选择 Jackson 实现。
+## 3. foundation-id 当前能力
 
-## 3. Java 与依赖
+`foundation-id` 统一提供：
 
-- Java 17；
-- Apache Commons Lang 3.20.0；
-- Apache Commons Collections 4.5.0；
-- Apache Commons Codec 1.22.0；
-- Apache Commons IO 2.22.0；
-- Jackson 2.21.2 LTS；
-- JUnit 6.1.2；
-- ArchUnit 1.4.2。
+- `IdGenerator<T>`、`StringIdGenerator`、`LongIdGenerator`；
+- UUID v4；
+- RFC 9562 UUID v7；
+- 单调 ULID；
+- Nano ID；
+- 显式 workerId 的 64 位 Snowflake；
+- Compact UUID v4；
+- 固定前缀和组合生成器；
+- 命名生成器注册表；
+- 面向旧代码的一期兼容入口。
 
-这些版本应在你现有项目的根 BOM 中统一管理。当前 POM 内的版本用于让本工程能够独立构建。
+推荐选择：
 
-## 4. 构建
+| 场景 | 推荐算法 |
+|---|---|
+| 重试执行 ID、事件 ID、请求 ID | UUID v7 |
+| 日志、对象路径、紧凑时间有序字符串 | ULID |
+| 外部分享链接、邀请码、短资源 ID | Nano ID |
+| 数据库 `BIGINT` 主键 | Snowflake |
+| 兼容已有随机 UUID 协议 | UUID v4 |
 
-```bash
-mvn clean verify
+`foundation-id` 不提供 Snowflake workerId 的自动分配。Kubernetes、Redis、ZooKeeper 或数据库号段协调应由后续独立集成模块承担，不能在纯算法模块里通过 IP、MAC 或随机值猜测节点号。
+
+## 4. 使用示例
+
+```java
+StringIdGenerator retryIdGenerator = IdGenerators.uuidV7();
+String retryId = retryIdGenerator.nextId();
+
+StringIdGenerator objectIdGenerator = IdGenerators.ulid();
+String objectId = objectIdGenerator.nextId();
+
+LongIdGenerator databaseIdGenerator = IdGenerators.snowflake(7L);
+long databaseId = databaseIdGenerator.nextLongId();
 ```
 
-## 5. 推荐依赖方式
+业务需要稳定前缀时：
 
-消息 API 或消息核心只依赖序列化协议：
+```java
+StringIdGenerator generator = IdGenerators.prefixed(
+        "retry",
+        "-",
+        IdGenerators.uuidV7()
+);
+```
+
+## 5. 依赖方式
+
+上层组件只依赖实际使用的 Jar，不依赖 `foundation-component` 聚合 POM：
 
 ```xml
 <dependency>
     <groupId>com.xjtu.iron</groupId>
-    <artifactId>foundation-serialization-api</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <artifactId>foundation-id</artifactId>
 </dependency>
 ```
 
-消息配置或应用装配层选择 Jackson：
-
-```xml
-<dependency>
-    <groupId>com.xjtu.iron</groupId>
-    <artifactId>foundation-serialization-jackson</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
-</dependency>
-```
-
-测试模块按 test scope 引入：
+测试代码需要固定或顺序 ID 时：
 
 ```xml
 <dependency>
     <groupId>com.xjtu.iron</groupId>
     <artifactId>foundation-test-support</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
     <scope>test</scope>
 </dependency>
 ```
 
-## 6. 注释规则
+## 6. Java 与框架边界
 
-- 公开类和核心协议使用类级 Javadoc；
-- 公开业务方法说明语义、边界和返回规则；
-- 关键分支说明为什么需要这样处理；
-- 构造函数、简单 getter 和 setter 不添加重复说明；
-- 不使用 `字段名 + 声明并保存内部状态` 一类无信息量注释。
+- Java 17；
+- `foundation-id` 不依赖 Spring、Micrometer、Jackson、消息客户端或数据库；
+- Foundation 第一版不提供全局 Spring Boot ID Bean；
+- 每个上层组件在自己的装配模块中选择专用生成器 Bean，避免消息 ID、重试 ID、任务 ID 因同类型 Bean 相互冲突。
+
+## 7. 构建
+
+```bash
+python scripts/verify-id-layout.py
+mvn clean verify
+```
+
+## 8. 注释规则
+
+- 公开类、核心协议和关键字段说明真实语义；
+- 核心分支说明为什么需要这样处理；
+- 构造器、简单 getter/setter、import 和普通赋值不写机械注释；
+- 不允许把每一行代码翻译成无信息量中文。

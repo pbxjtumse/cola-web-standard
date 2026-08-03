@@ -1,4 +1,6 @@
-package com.xjtu.iron.foundation.id;
+package com.xjtu.iron.foundation.id.decorator;
+
+import com.xjtu.iron.foundation.id.api.IdGenerator;
 
 import java.util.List;
 import java.util.Objects;
@@ -7,7 +9,7 @@ import java.util.function.Supplier;
 /**
  * 按顺序组合多个标识片段。
  */
-public final class CompositeIdGenerator implements StringIdGenerator {
+public final class CompositeIdGenerator implements IdGenerator<String> {
 
     /** 按照顺序生成标识片段的函数集合。 */
     private final List<Supplier<String>> segments;

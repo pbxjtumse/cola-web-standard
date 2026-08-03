@@ -1,9 +1,9 @@
 # 构建清单
 
-- 生产类型文件：146
-- 生产 Java 文件（含 package-info）：168
-- 测试类型文件：28
-- 测试 Java 文件（含 package-info）：40
+- 生产类型文件：156
+- 生产 Java 文件（含 package-info）：183
+- 测试类型文件：36
+- 测试 Java 文件（含 package-info）：48
 - Maven POM：13
 - Java 基线：17
 
@@ -13,7 +13,7 @@
 |---|---:|---:|
 | `foundation-core` | 45 | 11 |
 | `foundation-time` | 16 | 3 |
-| `foundation-id` | 12 | 2 |
+| `foundation-id` | 22 | 10 |
 | `foundation-codec` | 10 | 3 |
 | `foundation-context` | 15 | 2 |
 | `foundation-reflection` | 11 | 2 |

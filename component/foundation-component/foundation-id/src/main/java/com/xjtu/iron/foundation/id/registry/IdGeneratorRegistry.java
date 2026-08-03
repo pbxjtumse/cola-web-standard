@@ -1,4 +1,6 @@
-package com.xjtu.iron.foundation.id;
+package com.xjtu.iron.foundation.id.registry;
+
+import com.xjtu.iron.foundation.id.api.StringIdGenerator;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;

@@ -1,5 +1,6 @@
 package com.xjtu.iron.foundation.id;
 
+import com.xjtu.iron.foundation.id.registry.IdGeneratorRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;

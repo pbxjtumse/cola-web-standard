@@ -1,19 +1,21 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+
     <parent>
         <groupId>com.xjtu.iron</groupId>
         <artifactId>foundation-component</artifactId>
         <version>1.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
+
     <artifactId>foundation-id</artifactId>
     <name>foundation-id</name>
+    <description>提供跨组件复用的技术 ID 协议与本地生成算法。</description>
+
     <dependencies>
-        <dependency>
-            <groupId>com.xjtu.iron</groupId>
-            <artifactId>foundation-core</artifactId>
-        </dependency>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
             <artifactId>foundation-time</artifactId>
