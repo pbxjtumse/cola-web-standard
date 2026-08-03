@@ -1,0 +1,142 @@
+{
+  "properties": [
+    {
+      "name": "iron.retry.policies.*.base-policy",
+      "type": "java.lang.String",
+      "description": "父策略名称；子策略未显式覆盖的字段从父策略继承。"
+    },
+    {
+      "name": "iron.retry.policies.*.max-attempts",
+      "type": "java.lang.Integer",
+      "description": "最大尝试次数，包含第一次正常执行。",
+      "defaultValue": 3
+    },
+    {
+      "name": "iron.retry.policies.*.max-duration",
+      "type": "java.time.Duration",
+      "description": "一次逻辑重试执行允许消耗的总时长。",
+      "defaultValue": "5s"
+    },
+    {
+      "name": "iron.retry.policies.*.operation-safety",
+      "type": "com.xjtu.iron.retry.api.policy.OperationSafety",
+      "description": "业务操作重复执行时的安全级别。"
+    },
+    {
+      "name": "iron.retry.policies.*.safety-mode",
+      "type": "com.xjtu.iron.retry.api.policy.RetrySafetyMode",
+      "description": "非幂等操作配置多次尝试时的处理方式。",
+      "defaultValue": "WARN"
+    },
+    {
+      "name": "iron.retry.policies.*.traverse-causes",
+      "type": "java.lang.Boolean",
+      "description": "是否沿异常 cause 链继续匹配异常规则。",
+      "defaultValue": false
+    },
+    {
+      "name": "iron.retry.policies.*.max-cause-depth",
+      "type": "java.lang.Integer",
+      "description": "异常 cause 链允许检查的最大深度。",
+      "defaultValue": 16
+    },
+    {
+      "name": "iron.retry.policies.*.retry-failure-category",
+      "type": "com.xjtu.iron.retry.api.policy.RetryFailureCategory",
+      "description": "retry-on 列表命中后使用的统一失败分类。",
+      "defaultValue": "TRANSIENT"
+    },
+    {
+      "name": "iron.retry.policies.*.retry-failure-code",
+      "type": "java.lang.String",
+      "description": "retry-on 列表命中后记录的稳定失败码。",
+      "defaultValue": "RETRYABLE_EXCEPTION"
+    },
+    {
+      "name": "iron.retry.policies.*.retry-on",
+      "type": "java.util.List<java.lang.String>",
+      "description": "允许重试的异常类全限定名列表。"
+    },
+    {
+      "name": "iron.retry.policies.*.stop-on",
+      "type": "java.util.List<java.lang.String>",
+      "description": "命中后正常停止重试的异常类全限定名列表。"
+    },
+    {
+      "name": "iron.retry.policies.*.abort-on",
+      "type": "java.util.List<java.lang.String>",
+      "description": "命中后立即中止重试的异常类全限定名列表。"
+    },
+    {
+      "name": "iron.retry.policies.*.backoff.type",
+      "type": "com.xjtu.iron.retry.config.properties.RetryProperties$BackoffType",
+      "description": "退避策略类型。",
+      "defaultValue": "NONE"
+    },
+    {
+      "name": "iron.retry.policies.*.backoff.delay",
+      "type": "java.time.Duration",
+      "description": "固定退避使用的等待时间。",
+      "defaultValue": "0ms"
+    },
+    {
+      "name": "iron.retry.policies.*.backoff.initial-delay",
+      "type": "java.time.Duration",
+      "description": "指数退避的初始等待时间。",
+      "defaultValue": "100ms"
+    },
+    {
+      "name": "iron.retry.policies.*.backoff.max-delay",
+      "type": "java.time.Duration",
+      "description": "指数退避允许达到的最大等待时间。",
+      "defaultValue": "2s"
+    },
+    {
+      "name": "iron.retry.policies.*.backoff.multiplier",
+      "type": "java.lang.Double",
+      "description": "指数退避的增长倍数。",
+      "defaultValue": 2.0
+    }
+  ],
+  "hints": [
+    {
+      "name": "iron.retry.policies.*.retry-failure-category",
+      "values": [
+        { "value": "UNKNOWN" },
+        { "value": "TRANSIENT" },
+        { "value": "THROTTLING" },
+        { "value": "CONCURRENCY_CONFLICT" },
+        { "value": "DEPENDENCY_UNAVAILABLE" },
+        { "value": "RESULT_NOT_READY" },
+        { "value": "NON_RETRYABLE" }
+      ]
+    },
+    {
+      "name": "iron.retry.policies.*.operation-safety",
+      "values": [
+        { "value": "READ_ONLY" },
+        { "value": "IDEMPOTENT" },
+        { "value": "IDEMPOTENCY_PROTECTED" },
+        { "value": "NON_IDEMPOTENT" },
+        { "value": "UNSPECIFIED" }
+      ]
+    },
+    {
+      "name": "iron.retry.policies.*.safety-mode",
+      "values": [
+        { "value": "ALLOW" },
+        { "value": "WARN" },
+        { "value": "REJECT" }
+      ]
+    },
+    {
+      "name": "iron.retry.policies.*.backoff.type",
+      "values": [
+        { "value": "NONE" },
+        { "value": "FIXED" },
+        { "value": "EXPONENTIAL" },
+        { "value": "EXPONENTIAL_FULL_JITTER" }
+      ]
+    }
+  ]
+}
