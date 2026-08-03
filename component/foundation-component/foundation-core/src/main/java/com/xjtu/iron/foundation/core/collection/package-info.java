@@ -1,4 +1,4 @@
 /**
- * 提供防御性集合复制、分片、索引、差异、转换、集合运算和树构建。
+ * Foundation 集合工具薄封装，优先复用 JDK 与 Apache Commons Collections。
  */
 package com.xjtu.iron.foundation.core.collection;

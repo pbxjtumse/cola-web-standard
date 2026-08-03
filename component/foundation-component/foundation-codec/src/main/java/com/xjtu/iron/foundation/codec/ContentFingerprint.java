@@ -4,48 +4,30 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 /**
- * 表示由内容计算得到的稳定指纹。
+ * 内容指纹值对象，默认基于 SHA-256 十六进制摘要。
  */
 public final class ContentFingerprint {
 
-    /** 计算当前指纹使用的摘要算法。 */
-    private final DigestAlgorithm algorithm;
-    /** 摘要结果的小写十六进制表示。 */
-    private final String hexValue;
+    private final String algorithm;
+    private final String value;
 
-    private ContentFingerprint(DigestAlgorithm algorithm, String hexValue) {
-        this.algorithm = algorithm;
-        this.hexValue = hexValue;
+    public ContentFingerprint(String algorithm, String value) {
+        this.algorithm = Objects.requireNonNull(algorithm, "algorithm must not be null");
+        this.value = Objects.requireNonNull(value, "value must not be null");
     }
 
-    public static ContentFingerprint of(byte[] content, DigestAlgorithm algorithm) {
-        Objects.requireNonNull(content, "content must not be null");
-        Objects.requireNonNull(algorithm, "algorithm must not be null");
-        return new ContentFingerprint(algorithm, HexSupport.encodeLower(DigestSupport.digest(content, algorithm)));
+    public static ContentFingerprint sha256(byte[] bytes) {
+        return new ContentFingerprint("SHA-256", DigestUtils.sha256Hex(bytes));
     }
 
-    public static ContentFingerprint ofText(String content, DigestAlgorithm algorithm) {
-        Objects.requireNonNull(content, "content must not be null");
-        return of(content.getBytes(StandardCharsets.UTF_8), algorithm);
+    public static ContentFingerprint sha256Utf8(String value) {
+        return sha256(value == null ? null : value.getBytes(StandardCharsets.UTF_8));
     }
 
-    public DigestAlgorithm getAlgorithm() { return algorithm; }
-    public String getHexValue() { return hexValue; }
+    public String getAlgorithm() { return algorithm; }
+
+    public String getValue() { return value; }
 
     @Override
-    public String toString() {
-        return algorithm.name() + ':' + hexValue;
-    }
-
-    @Override
-    public boolean equals(Object object) {
-        return object instanceof ContentFingerprint other
-                && algorithm == other.algorithm
-                && hexValue.equals(other.hexValue);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(algorithm, hexValue);
-    }
+    public String toString() { return algorithm + ":" + value; }
 }

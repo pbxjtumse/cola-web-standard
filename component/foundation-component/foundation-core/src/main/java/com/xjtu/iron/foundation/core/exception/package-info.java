@@ -1,4 +1,4 @@
 /**
- * 提供异常链遍历、异步异常解包、中断恢复和堆栈摘要。
+ * Foundation 异常链处理工具，不承载重试或业务失败分类语义。
  */
 package com.xjtu.iron.foundation.core.exception;

@@ -1,26 +1,15 @@
 package com.xjtu.iron.foundation.time;
 
 import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneId;
 
 /**
- * 提供可替换的系统时钟。
+ * Clock 提供者。
  *
- * <p>生产环境通常使用系统时钟，测试环境可以使用可推进时钟，避免依赖真实等待。</p>
+ * <p>Java 标准库已经提供 Clock，因此 Foundation 不再创造 TimeProvider；这里仅在需要注入、
+ * 延迟获取或动态替换 Clock 的场景提供一个极薄抽象。</p>
  */
+@FunctionalInterface
 public interface ClockProvider {
 
-    /** 返回当前使用的 JDK 时钟。 */
     Clock clock();
-
-    /** 返回当前绝对时间点。 */
-    default Instant now() {
-        return clock().instant();
-    }
-
-    /** 返回当前时区。 */
-    default ZoneId zoneId() {
-        return clock().getZone();
-    }
 }

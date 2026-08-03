@@ -1,4 +1,4 @@
 /**
- * 提供 classpath、文件系统、内存资源及受大小限制的读取。
+ * Foundation 资源抽象与受限读取能力。
  */
 package com.xjtu.iron.foundation.resource;

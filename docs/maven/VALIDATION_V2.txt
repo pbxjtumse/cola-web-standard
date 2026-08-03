@@ -1,6 +1,0 @@
-POM count: 96
-BOM managed artifacts: 53
-Errors: 0
-Warnings: 0
-Modules checked: 96
-Missing direct dependencies: 0

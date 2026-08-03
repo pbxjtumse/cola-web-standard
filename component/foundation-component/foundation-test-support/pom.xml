@@ -1,5 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.xjtu.iron</groupId>
@@ -8,12 +10,11 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>foundation-test-support</artifactId>
+    <packaging>jar</packaging>
     <name>foundation-test-support</name>
+    <description>Foundation 测试辅助能力，只能被测试代码以 test scope 使用。</description>
+
     <dependencies>
-        <dependency>
-            <groupId>com.xjtu.iron</groupId>
-            <artifactId>foundation-core</artifactId>
-        </dependency>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
             <artifactId>foundation-time</artifactId>
@@ -31,12 +32,13 @@
             <artifactId>foundation-resource</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.xjtu.iron</groupId>
-            <artifactId>foundation-serialization-api</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

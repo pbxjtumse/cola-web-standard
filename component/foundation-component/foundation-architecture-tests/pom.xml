@@ -1,5 +1,7 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.xjtu.iron</groupId>
@@ -8,54 +10,51 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>foundation-architecture-tests</artifactId>
+    <packaging>jar</packaging>
     <name>foundation-architecture-tests</name>
-    <properties>
-        <maven.deploy.skip>true</maven.deploy.skip>
-    </properties>
+    <description>Foundation 架构约束测试模块，不发布到生产运行时。</description>
+
     <dependencies>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
             <artifactId>foundation-core</artifactId>
-            <scope>test</scope>
         </dependency>
+
         <dependency>
             <groupId>com.xjtu.iron</groupId>
             <artifactId>foundation-time</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
             <artifactId>foundation-id</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
             <artifactId>foundation-codec</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
             <artifactId>foundation-context</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
             <artifactId>foundation-reflection</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
             <artifactId>foundation-resource</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.xjtu.iron</groupId>
-            <artifactId>foundation-serialization-api</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
             <artifactId>foundation-serialization-jackson</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.xjtu.iron</groupId>
+            <artifactId>foundation-serialization-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -63,11 +62,17 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- 架构测试直接使用 ArchUnit JUnit 5 集成。 -->
-        <dependency>
-            <groupId>com.tngtech.archunit</groupId>
-            <artifactId>archunit-junit5</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

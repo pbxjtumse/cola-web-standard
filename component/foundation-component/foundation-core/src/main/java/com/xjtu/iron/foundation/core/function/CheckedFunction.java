@@ -1,7 +1,10 @@
 package com.xjtu.iron.foundation.core.function;
 
-/** 可抛出受检异常的单参数函数。 */
+/**
+ * 可抛出受检异常的函数式接口，供需要保留异常语义的模板类使用。
+ */
 @FunctionalInterface
 public interface CheckedFunction<T, R> {
+
     R apply(T value) throws Exception;
 }

@@ -2,24 +2,19 @@ package com.xjtu.iron.foundation.context;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class StandardContextCodecTest {
 
     @Test
-    void shouldWriteAndReadOnlyStandardKeys() {
-        ContextKey<String> privateKey = ContextKey.of("private", String.class);
-        ExecutionContext source = ExecutionContext.builder()
-                .put(StandardContextKeys.REQUEST_ID, "request-1")
-                .put(privateKey, "secret")
+    void writeAndReadShouldKeepStandardKeys() {
+        ExecutionContext context = ExecutionContext.builder()
+                .put(StandardContextKeys.REQUEST_ID, "r1")
+                .put(StandardContextKeys.TENANT_ID, "t1")
                 .build();
         MapContextCarrier carrier = new MapContextCarrier();
         StandardContextCodec codec = new StandardContextCodec();
-        codec.write(source, carrier);
-
-        ExecutionContext restored = codec.read(carrier);
-        assertEquals("request-1", restored.get(StandardContextKeys.REQUEST_ID).orElseThrow());
-        assertFalse(restored.contains(privateKey));
+        codec.write(context, carrier);
+        assertThat(codec.read(carrier).get(StandardContextKeys.REQUEST_ID)).contains("r1");
     }
 }

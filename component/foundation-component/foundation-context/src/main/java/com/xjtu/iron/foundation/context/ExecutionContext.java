@@ -6,16 +6,13 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 表示一次逻辑执行过程的不可变技术上下文。
+ * 不可变执行上下文。
  *
- * <p>该模型不绑定 ThreadLocal、MDC、Reactor 或消息 Header；传播方式由集成层决定。</p>
+ * <p>该模型只保存上下文数据，不决定数据存放在 ThreadLocal、MDC、Reactor Context 还是消息 Header 中。
+ * 具体传播由并行、消息或可观测集成模块完成。</p>
  */
 public final class ExecutionContext {
 
-    /** 全局可复用的空执行上下文。 */
-    private static final ExecutionContext EMPTY = new ExecutionContext(Map.of());
-
-    /** 按类型安全键保存的不可变上下文值。 */
     private final Map<ContextKey<?>, Object> values;
 
     ExecutionContext(Map<ContextKey<?>, Object> values) {
@@ -23,7 +20,7 @@ public final class ExecutionContext {
     }
 
     public static ExecutionContext empty() {
-        return EMPTY;
+        return new ExecutionContext(Collections.emptyMap());
     }
 
     public static ExecutionContextBuilder builder() {
@@ -32,33 +29,19 @@ public final class ExecutionContext {
 
     public <T> Optional<T> get(ContextKey<T> key) {
         Object value = values.get(key);
-        return Optional.ofNullable(key.cast(value));
-    }
-
-    public <T> T getOrDefault(ContextKey<T> key, T defaultValue) {
-        return get(key).orElse(defaultValue);
-    }
-
-    public boolean contains(ContextKey<?> key) {
-        return values.containsKey(key);
-    }
-
-    public boolean isEmpty() {
-        return values.isEmpty();
-    }
-
-    public int size() {
-        return values.size();
+        if (value == null) {
+            return Optional.empty();
+        }
+        return Optional.of(key.getType().cast(value));
     }
 
     public Map<ContextKey<?>, Object> asMap() {
         return values;
     }
 
-    /**
-     * 创建基于当前内容的构建器。
-     */
-    public ExecutionContextBuilder mutate() {
-        return new ExecutionContextBuilder(values);
+    public ExecutionContextBuilder toBuilder() {
+        ExecutionContextBuilder builder = builder();
+        values.forEach(builder::putRaw);
+        return builder;
     }
 }

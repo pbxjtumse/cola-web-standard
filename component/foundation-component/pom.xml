@@ -1,24 +1,25 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        该 POM 既是 foundation-component 的聚合 POM，也可作为 Foundation 内部模块的父 POM。
+        如果放入现有 component 工程，建议保留这个 parent；如果单独构建，可临时改为独立 groupId/version。
+    -->
     <parent>
         <groupId>com.xjtu.iron</groupId>
         <artifactId>component</artifactId>
         <version>1.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
+
     <artifactId>foundation-component</artifactId>
     <packaging>pom</packaging>
     <name>foundation-component</name>
-    <description>
-        为缓存、消息、重试、分布式锁、幂等、事务和并行组件提供稳定的底层技术能力。
-    </description>
-    <properties>
-        <commons-lang3.version>3.20.0</commons-lang3.version>
-        <commons-collections4.version>4.5.0</commons-collections4.version>
-        <commons-codec.version>1.22.0</commons-codec.version>
-        <commons-io.version>2.22.0</commons-io.version>
-    </properties>
+    <description>为缓存、消息、重试、锁、幂等、事务和并行组件提供稳定、克制、薄封装的底层技术能力。</description>
+
     <modules>
         <module>foundation-core</module>
         <module>foundation-time</module>
@@ -31,18 +32,67 @@
         <module>foundation-test-support</module>
         <module>foundation-architecture-tests</module>
     </modules>
+
     <!--
-        这里只保留 Foundation 内部专用依赖的版本。
-        Java、JUnit、Jackson 和 Maven 插件版本由根 component POM 统一管理。
+        这些版本只用于 Foundation 自身独立审查时保持清晰。
+        如果顶层 component 父 POM 已经统一管理，可以把这些 property 和 dependencyManagement 上移或删除。
     -->
+    <properties>
+        <commons-lang3.version>3.20.0</commons-lang3.version>
+        <commons-collections4.version>4.5.0</commons-collections4.version>
+        <commons-codec.version>1.22.0</commons-codec.version>
+        <commons-io.version>2.22.0</commons-io.version>
+        <archunit.version>1.4.2</archunit.version>
+    </properties>
+
     <dependencyManagement>
         <dependencies>
+
+            <!-- Foundation 内部可消费模块版本。子模块之间依赖不需要重复写 version。 -->
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
-                <artifactId>component-bom</artifactId>
+                <artifactId>foundation-core</artifactId>
                 <version>${project.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>foundation-time</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>foundation-id</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>foundation-codec</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>foundation-context</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>foundation-reflection</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>foundation-resource</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>foundation-serialization-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>foundation-serialization-jackson</artifactId>
+                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>
@@ -63,6 +113,11 @@
                 <groupId>commons-io</groupId>
                 <artifactId>commons-io</artifactId>
                 <version>${commons-io.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit-junit5</artifactId>
+                <version>${archunit.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

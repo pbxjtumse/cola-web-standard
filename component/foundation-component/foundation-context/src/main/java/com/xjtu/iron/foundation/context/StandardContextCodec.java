@@ -1,65 +1,39 @@
 package com.xjtu.iron.foundation.context;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.List;
 
 /**
- * 编解码标准字符串上下文键。
- *
- * <p>未知条目默认忽略，避免把任意不受控 Header 注入内部执行上下文。</p>
+ * 标准字符串上下文编解码器。
  */
 public final class StandardContextCodec implements ContextCodec {
 
-    /** 允许由标准编解码器处理的上下文键。 */
-    private final Map<String, ContextKey<String>> keys;
-    /** 决定标准键是否允许跨边界传播的策略。 */
-    private final ContextPropagationPolicy propagationPolicy;
+    private final List<ContextKey<String>> keys;
 
     public StandardContextCodec() {
-        this(ContextPropagationPolicy.allowAll());
+        this(List.of(
+                StandardContextKeys.REQUEST_ID,
+                StandardContextKeys.CORRELATION_ID,
+                StandardContextKeys.TENANT_ID,
+                StandardContextKeys.OPERATOR_ID));
     }
 
-    public StandardContextCodec(ContextPropagationPolicy propagationPolicy) {
-        this.propagationPolicy = java.util.Objects.requireNonNull(
-                propagationPolicy, "propagationPolicy must not be null"
-        );
-        LinkedHashMap<String, ContextKey<String>> configured = new LinkedHashMap<>();
-        register(configured, StandardContextKeys.REQUEST_ID);
-        register(configured, StandardContextKeys.CORRELATION_ID);
-        register(configured, StandardContextKeys.TENANT_ID);
-        register(configured, StandardContextKeys.OPERATOR_ID);
-        register(configured, StandardContextKeys.TRACE_PARENT);
-        this.keys = Map.copyOf(configured);
-    }
-
-    private static void register(Map<String, ContextKey<String>> target, ContextKey<String> key) {
-        target.put(key.getName(), key);
+    public StandardContextCodec(List<ContextKey<String>> keys) {
+        this.keys = List.copyOf(keys);
     }
 
     @Override
     public ExecutionContext read(ContextCarrier carrier) {
-        if (carrier == null) {
-            return ExecutionContext.empty();
-        }
         ExecutionContextBuilder builder = ExecutionContext.builder();
-        keys.forEach((name, key) -> {
-            String value = carrier.get(name);
-            if (value != null && propagationPolicy.canPropagate(key)) {
-                builder.put(key, value);
-            }
-        });
+        for (ContextKey<String> key : keys) {
+            builder.put(key, carrier.get(key.getName()));
+        }
         return builder.build();
     }
 
     @Override
     public void write(ExecutionContext context, ContextCarrier carrier) {
-        if (context == null || carrier == null) {
-            return;
+        for (ContextKey<String> key : keys) {
+            context.get(key).ifPresent(value -> carrier.put(key.getName(), value));
         }
-        keys.forEach((name, key) -> context.get(key).ifPresent(value -> {
-            if (propagationPolicy.canPropagate(key)) {
-                carrier.put(name, value);
-            }
-        }));
     }
 }

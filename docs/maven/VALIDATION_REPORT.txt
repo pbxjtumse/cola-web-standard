@@ -1,4 +1,0 @@
-POM count: 96
-BOM managed artifacts: 53
-Errors: 0
-Warnings: 0

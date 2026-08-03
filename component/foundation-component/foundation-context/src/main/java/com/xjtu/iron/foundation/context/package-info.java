@@ -1,4 +1,4 @@
 /**
- * 提供不绑定 ThreadLocal 的类型安全执行上下文和跨边界载体协议。
+ * Foundation 执行上下文中立模型，不绑定具体传播机制。
  */
 package com.xjtu.iron.foundation.context;

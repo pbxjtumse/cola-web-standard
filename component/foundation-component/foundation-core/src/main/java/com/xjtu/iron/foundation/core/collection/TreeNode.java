@@ -3,20 +3,19 @@ package com.xjtu.iron.foundation.core.collection;
 import java.util.List;
 
 /**
- * 描述树形节点的最小只读协议。
+ * 可构造成树的节点最小协议。
+ *
+ * <p>该接口用于配置树、菜单树、分类树等纯技术组织结构。业务实体不一定需要直接实现它，
+ * 也可以在调用 TreeUtils 时通过函数式参数完成 id、parentId 和 children 的映射。</p>
+ *
+ * @param <K> 节点 id 类型
+ * @param <N> 节点类型
  */
-public interface TreeNode<ID, T extends TreeNode<ID, T>> {
+public interface TreeNode<K, N> {
 
-    /** 返回当前节点标识。 */
-    ID getId();
+    K getId();
 
-    /** 返回父节点标识；根节点可返回 {@code null}。 */
-    ID getParentId();
+    K getParentId();
 
-    /**
-     * 接收构建完成的直接子节点。
-     *
-     * @param children 不可修改的子节点列表
-     */
-    void setChildren(List<T> children);
+    void setChildren(List<N> children);
 }

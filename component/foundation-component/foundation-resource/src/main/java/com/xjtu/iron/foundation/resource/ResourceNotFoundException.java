@@ -1,15 +1,11 @@
 package com.xjtu.iron.foundation.resource;
 
 /**
- * 表示资源不存在或者无法解析。
+ * 资源不存在异常。
  */
-public class ResourceNotFoundException extends RuntimeException {
+public final class ResourceNotFoundException extends RuntimeException {
 
-    public ResourceNotFoundException(String message) {
-        super(message);
-    }
-
-    public ResourceNotFoundException(String message, Throwable cause) {
-        super(message, cause);
+    public ResourceNotFoundException(String location) {
+        super("resource not found: " + location);
     }
 }

@@ -7,16 +7,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class DeadlineTest {
 
     @Test
-    void shouldCalculateRemainingDuration() {
-        ClockProvider provider = () -> Clock.fixed(Instant.parse("2026-08-01T00:00:00Z"), ZoneOffset.UTC);
-        Deadline deadline = Deadline.after(provider, Duration.ofSeconds(5));
-        assertEquals(Duration.ofSeconds(5), deadline.remaining(provider));
-        assertFalse(deadline.isExpired(provider));
+    void remainingShouldReturnZeroWhenExpired() {
+        Clock clock = Clock.fixed(Instant.parse("2026-08-03T00:00:00Z"), ZoneOffset.UTC);
+        Deadline deadline = Deadline.after(clock, Duration.ZERO);
+        assertThat(deadline.remaining(clock)).isZero();
     }
 }

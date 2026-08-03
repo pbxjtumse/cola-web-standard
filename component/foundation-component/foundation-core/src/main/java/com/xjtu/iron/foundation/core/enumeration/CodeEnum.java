@@ -1,12 +1,11 @@
 package com.xjtu.iron.foundation.core.enumeration;
 
 /**
- * 定义具有稳定外部编码的枚举协议。
+ * 带稳定编码的枚举最小协议。
  *
- * @param <C> 编码类型
+ * @param <C> 编码类型，通常为 String、Integer 或 Long
  */
 public interface CodeEnum<C> {
 
-    /** 返回稳定编码。 */
     C getCode();
 }

@@ -1,4 +1,4 @@
 /**
- * 提供 Base64、Hex、摘要、校验和、字符集、压缩和内容指纹。
+ * Foundation 编解码和内容指纹工具，不负责密钥管理或密码存储。
  */
 package com.xjtu.iron.foundation.codec;

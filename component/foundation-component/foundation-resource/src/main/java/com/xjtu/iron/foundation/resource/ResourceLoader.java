@@ -1,10 +1,10 @@
 package com.xjtu.iron.foundation.resource;
 
 /**
- * 根据资源位置创建资源对象。
+ * 资源加载器。
  */
 @FunctionalInterface
 public interface ResourceLoader {
 
-    Resource load(ResourceLocation location);
+    Resource load(String location);
 }

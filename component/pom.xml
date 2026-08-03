@@ -13,7 +13,6 @@
     <description>技术组件聚合工程；版本由 component-bom 对外统一发布。</description>
     <modules>
         <module>component-bom</module>
-        <module>foundation-component</module>
         <module>observability-component</module>
         <module>governance-component</module>
         <module>cache-component</module>

@@ -1,4 +1,4 @@
 /**
- * 提供数字范围检查、精确转换、十进制运算和百分比值对象。
+ * Foundation 数字工具薄封装，统一安全转换和范围校验。
  */
 package com.xjtu.iron.foundation.core.number;

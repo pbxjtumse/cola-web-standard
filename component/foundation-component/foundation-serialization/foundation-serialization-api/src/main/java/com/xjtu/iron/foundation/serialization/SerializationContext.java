@@ -5,30 +5,34 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 描述一次序列化调用的技术上下文。
+ * 序列化上下文，保存 contentType、schemaVersion 和技术属性。
  */
 public final class SerializationContext {
 
-    /** 无附加信息时复用的空序列化上下文。 */
-    private static final SerializationContext EMPTY = new SerializationContext(null, null, Map.of());
-
-    /** 发起序列化操作的技术操作名称。 */
-    private final String operationName;
-    /** 载荷协议或 Schema 版本。 */
+    private final String contentType;
     private final String schemaVersion;
-    /** 序列化过程使用的低基数附加属性。 */
     private final Map<String, String> attributes;
 
-    public SerializationContext(String operationName, String schemaVersion, Map<String, String> attributes) {
-        this.operationName = operationName;
-        this.schemaVersion = schemaVersion;
-        this.attributes = attributes == null
-                ? Map.of()
-                : Collections.unmodifiableMap(new LinkedHashMap<>(attributes));
+    private SerializationContext(Builder builder) {
+        this.contentType = builder.contentType;
+        this.schemaVersion = builder.schemaVersion;
+        this.attributes = Collections.unmodifiableMap(new LinkedHashMap<>(builder.attributes));
     }
 
-    public static SerializationContext empty() { return EMPTY; }
-    public String getOperationName() { return operationName; }
+    public static Builder builder() { return new Builder(); }
+
+    public String getContentType() { return contentType; }
     public String getSchemaVersion() { return schemaVersion; }
     public Map<String, String> getAttributes() { return attributes; }
+
+    public static final class Builder {
+        private String contentType = SerializationFormat.JSON.getContentType();
+        private String schemaVersion;
+        private final Map<String, String> attributes = new LinkedHashMap<>();
+
+        public Builder contentType(String contentType) { this.contentType = contentType; return this; }
+        public Builder schemaVersion(String schemaVersion) { this.schemaVersion = schemaVersion; return this; }
+        public Builder attribute(String name, String value) { if (name != null && value != null) { attributes.put(name, value); } return this; }
+        public SerializationContext build() { return new SerializationContext(this); }
+    }
 }

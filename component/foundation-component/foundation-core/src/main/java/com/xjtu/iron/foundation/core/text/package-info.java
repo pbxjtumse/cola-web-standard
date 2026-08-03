@@ -1,4 +1,4 @@
 /**
- * 提供无业务语义的文本检查、标准化、命名转换、截断、拆分、拼接和基础脱敏。
+ * Foundation 文本工具薄封装，统一空白、截断、命名转换和脱敏语义。
  */
 package com.xjtu.iron.foundation.core.text;

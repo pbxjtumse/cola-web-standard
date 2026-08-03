@@ -1,7 +1,10 @@
 package com.xjtu.iron.foundation.core.function;
 
-/** 可抛出受检异常的双参数函数。 */
+/**
+ * 可抛出受检异常的函数式接口，供需要保留异常语义的模板类使用。
+ */
 @FunctionalInterface
 public interface CheckedBiFunction<T, U, R> {
+
     R apply(T left, U right) throws Exception;
 }
