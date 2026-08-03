@@ -1,6 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.xjtu.iron</groupId>
@@ -11,8 +10,10 @@
     <artifactId>component</artifactId>
     <packaging>pom</packaging>
     <name>component</name>
-    <url>http://maven.apache.org</url>
+    <description>技术组件聚合工程；版本由 component-bom 对外统一发布。</description>
     <modules>
+        <module>component-bom</module>
+        <module>foundation-component</module>
         <module>observability-component</module>
         <module>governance-component</module>
         <module>cache-component</module>

@@ -1,18 +1,18 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.xjtu.iron</groupId>
     <artifactId>cola-web-standard-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>cola-web-standard</name>
+    <description>COLA 分层应用与可复用技术组件的统一父工程。</description>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <maven.deploy.skip>true</maven.deploy.skip>
         <java.version>17</java.version>
         <maven.compiler.release>${java.version}</maven.compiler.release>
+        <maven.compiler.parameters>true</maven.compiler.parameters>
         <cola.components.version>4.3.2</cola.components.version>
         <spring-boot.version>3.5.14</spring-boot.version>
         <mybatis-starter.version>3.0.4</mybatis-starter.version>
@@ -20,10 +20,15 @@
         <opentelemetry.version>1.39.0</opentelemetry.version>
         <caffeine.version>3.2.4</caffeine.version>
         <testcontainers.version>1.20.6</testcontainers.version>
+        <maven-resources-plugin.version>3.3.0</maven-resources-plugin.version>
+        <maven-source-plugin.version>3.2.1</maven-source-plugin.version>
+        <maven-javadoc-plugin.version>3.4.0</maven-javadoc-plugin.version>
+        <maven-deploy-plugin.version>3.0.0</maven-deploy-plugin.version>
         <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
         <maven-failsafe-plugin.version>3.5.2</maven-failsafe-plugin.version>
         <maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
+        <archunit.version>1.4.2</archunit.version>
     </properties>
     <modules>
         <module>client</module>
@@ -34,28 +39,6 @@
         <module>component</module>
         <module>start</module>
     </modules>
-    <dependencies>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.junit.vintage</groupId>
-                    <artifactId>junit-vintage-engine</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-    </dependencies>
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -105,192 +88,7 @@
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
-                <artifactId>adapter</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>app</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-api</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-component</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-config</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-demo</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-integration-governance</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-integration-observability</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-integrations</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-provider</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-provider-caffeine</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-provider-composite</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-provider-redis</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>cache-starter</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
                 <artifactId>client</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>component</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>concurrency-api</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>concurrency-component</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>concurrency-config</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>concurrency-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>concurrency-demo</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>concurrency-integration-governance</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>concurrency-integration-observability</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>concurrency-integration-ttl</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>concurrency-integrations</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>concurrency-provider</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>concurrency-provider-local</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>concurrency-provider-redis</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>concurrency-starter</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>distributed-lock-api</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>distributed-lock-component</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>distributed-lock-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>distributed-lock-demo</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>distributed-lock-provider</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>distributed-lock-provider-redis</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>distributed-lock-fencing-provider-jdbc</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>distributed-lock-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -300,92 +98,12 @@
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-api</artifactId>
+                <artifactId>app</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-component</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-config-api</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-config-local</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-configs</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-demo</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-engine</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-engine-resilience4j</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-extensions</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-integration</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-integration-spring-aop</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-model</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-observability</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-runtime</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-spi</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-spring-boot-starter</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>governance-starters</artifactId>
+                <artifactId>adapter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -394,39 +112,9 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>observability-api</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>observability-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>observability-demo-app</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>observability-otel</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>observability-component</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>observability-starter</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>start</artifactId>
-                <version>${project.version}</version>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit-junit5</artifactId>
+                <version>${archunit.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -434,29 +122,37 @@
         <pluginManagement>
             <plugins>
                 <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-resources-plugin</artifactId>
-                    <version>3.3.0</version>
+                    <version>${maven-resources-plugin.version}</version>
                 </plugin>
                 <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-source-plugin</artifactId>
-                    <version>3.2.1</version>
+                    <version>${maven-source-plugin.version}</version>
                 </plugin>
                 <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-javadoc-plugin</artifactId>
-                    <version>3.4.0</version>
+                    <version>${maven-javadoc-plugin.version}</version>
                 </plugin>
                 <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-deploy-plugin</artifactId>
-                    <version>3.0.0</version>
+                    <version>${maven-deploy-plugin.version}</version>
                 </plugin>
                 <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.11.0</version>
+                    <version>${maven-compiler-plugin.version}</version>
                     <configuration>
-                        <release>${java.version}</release>
+                        <release>${maven.compiler.release}</release>
+                        <parameters>${maven.compiler.parameters}</parameters>
+                        <encoding>${project.build.sourceEncoding}</encoding>
                     </configuration>
                 </plugin>
                 <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven-surefire-plugin.version}</version>
                     <configuration>
@@ -464,6 +160,7 @@
                     </configuration>
                 </plugin>
                 <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-failsafe-plugin</artifactId>
                     <version>${maven-failsafe-plugin.version}</version>
                     <configuration>
@@ -471,6 +168,7 @@
                     </configuration>
                 </plugin>
                 <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-enforcer-plugin</artifactId>
                     <version>${maven-enforcer-plugin.version}</version>
                 </plugin>
@@ -483,18 +181,31 @@
         </pluginManagement>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
             </plugin>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>ban-legacy-test-frameworks</id>
+                        <id>enforce-build-baseline</id>
                         <goals>
                             <goal>enforce</goal>
                         </goals>
                         <configuration>
                             <rules>
+                                <requireJavaVersion>
+                                    <version>[17,)</version>
+                                </requireJavaVersion>
+                                <requireMavenVersion>
+                                    <version>[3.8,)</version>
+                                </requireMavenVersion>
+                                <banDuplicatePomDependencyVersions/>
                                 <bannedDependencies>
                                     <excludes>
                                         <exclude>junit:junit</exclude>
@@ -502,9 +213,7 @@
                                         <exclude>org.junit.vintage:junit-vintage-engine</exclude>
                                     </excludes>
                                     <searchTransitive>false</searchTransitive>
-                                    <message>测试框架统一使用 JUnit 5。禁止重新引入 junit:junit、TestNG、JUnit Vintage。
-                                        但不拦截第三方测试库内部传递依赖的 JUnit4 API。
-                                    </message>
+                                    <message>测试框架统一使用 JUnit Jupiter，禁止直接引入 JUnit4、TestNG 和 Vintage Engine。</message>
                                 </bannedDependencies>
                             </rules>
                         </configuration>
@@ -513,4 +222,30 @@
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <id>strict-dependencies</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>enforce-dependency-convergence</id>
+                                <goals>
+                                    <goal>enforce</goal>
+                                </goals>
+                                <configuration>
+                                    <rules>
+                                        <dependencyConvergence/>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
