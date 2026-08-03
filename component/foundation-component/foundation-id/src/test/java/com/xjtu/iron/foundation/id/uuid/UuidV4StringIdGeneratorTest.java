@@ -5,18 +5,14 @@ import org.junit.jupiter.api.Test;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class UuidV4StringIdGeneratorTest {
 
     @Test
-    void shouldGenerateDifferentVersionFourIds() {
-        UuidV4StringIdGenerator generator = new UuidV4StringIdGenerator();
+    void shouldGenerateStandardVersionFourUuid() {
+        UUID uuid = UUID.fromString(new UuidV4StringIdGenerator().nextId());
 
-        String first = generator.nextId();
-        String second = generator.nextId();
-
-        assertEquals(4, UUID.fromString(first).version());
-        assertNotEquals(first, second);
+        assertEquals(4, uuid.version());
+        assertEquals(2, uuid.variant());
     }
 }

@@ -5,17 +5,22 @@ import com.xjtu.iron.foundation.id.api.StringIdGenerator;
 import java.security.SecureRandom;
 import java.util.Objects;
 
-/**
- * 使用加密强随机数和无模偏差采样生成 URL 友好短标识。
- *
- * <p>默认使用 64 字符字母表和 21 位长度，对应 Nano ID 的主流安全参数。</p>
- */
+/** 使用安全随机数和无模偏差拒绝采样生成 URL 友好短标识。 */
 public final class NanoIdStringIdGenerator implements StringIdGenerator {
 
+    /** 实际参与随机选择的字符表。 */
     private final char[] alphabet;
+
+    /** 输出标识长度。 */
     private final int size;
+
+    /** 生成随机字节的安全随机源。 */
     private final SecureRandom secureRandom;
+
+    /** 将随机字节限制到最接近字符表大小的二进制掩码。 */
     private final int mask;
+
+    /** 每轮生成的随机字节数量。 */
     private final int step;
 
     public NanoIdStringIdGenerator() {
@@ -26,7 +31,9 @@ public final class NanoIdStringIdGenerator implements StringIdGenerator {
         this(options, new SecureRandom());
     }
 
-    public NanoIdStringIdGenerator(NanoIdOptions options, SecureRandom secureRandom) {
+    public NanoIdStringIdGenerator(
+            NanoIdOptions options,
+            SecureRandom secureRandom) {
         NanoIdOptions actualOptions = Objects.requireNonNull(
                 options,
                 "options must not be null"
@@ -38,7 +45,10 @@ public final class NanoIdStringIdGenerator implements StringIdGenerator {
                 "secureRandom must not be null"
         );
         this.mask = calculateMask(alphabet.length);
-        this.step = (int) Math.ceil(1.6D * mask * size / alphabet.length);
+        this.step = Math.max(
+                1,
+                (int) Math.ceil(1.6D * mask * size / alphabet.length)
+        );
     }
 
     @Override

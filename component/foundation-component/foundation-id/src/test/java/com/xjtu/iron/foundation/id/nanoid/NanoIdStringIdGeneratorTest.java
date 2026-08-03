@@ -2,6 +2,10 @@ package com.xjtu.iron.foundation.id.nanoid;
 
 import org.junit.jupiter.api.Test;
 
+import java.security.SecureRandom;
+import java.util.HashSet;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -9,26 +13,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class NanoIdStringIdGeneratorTest {
 
     @Test
-    void shouldRespectSizeAndAlphabet() {
+    void shouldGenerateIdsUsingConfiguredAlphabetAndSize() {
         NanoIdOptions options = NanoIdOptions.builder()
                 .alphabet("abc123")
                 .size(16)
                 .build();
-        NanoIdStringIdGenerator generator = new NanoIdStringIdGenerator(options);
+        NanoIdStringIdGenerator generator =
+                new NanoIdStringIdGenerator(options, new SecureRandom(new byte[]{7, 8, 9}));
+        Set<String> ids = new HashSet<>();
 
-        String id = generator.nextId();
-
-        assertEquals(16, id.length());
-        assertTrue(id.chars().allMatch(character -> "abc123".indexOf(character) >= 0));
+        for (int index = 0; index < 1_000; index++) {
+            String id = generator.nextId();
+            assertEquals(16, id.length());
+            assertTrue(id.matches("[abc123]{16}"));
+            assertTrue(ids.add(id));
+        }
     }
 
     @Test
-    void shouldSupportSingleCharacterAlphabetWithoutLooping() {
-        NanoIdStringIdGenerator generator = new NanoIdStringIdGenerator(
-                NanoIdOptions.builder().alphabet("x").size(5).build()
-        );
+    void shouldSupportSingleCharacterAlphabet() {
+        NanoIdOptions options = NanoIdOptions.builder()
+                .alphabet("x")
+                .size(5)
+                .build();
 
-        assertEquals("xxxxx", generator.nextId());
+        assertEquals("xxxxx", new NanoIdStringIdGenerator(options).nextId());
     }
 
     @Test

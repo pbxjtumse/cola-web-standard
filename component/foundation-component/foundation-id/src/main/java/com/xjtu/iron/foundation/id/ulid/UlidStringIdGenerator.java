@@ -3,16 +3,16 @@ package com.xjtu.iron.foundation.id.ulid;
 import com.xjtu.iron.foundation.id.api.IdGenerationException;
 import com.xjtu.iron.foundation.id.api.StringIdGenerator;
 
-import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * 生成 26 位、Crockford Base32 编码的单调 ULID。
+ * 生成 26 位 Crockford Base32 编码的单调 ULID。
  *
- * <p>标识由 48 位毫秒时间戳和 80 位随机数组成。同一毫秒内递增随机部分，保持单进程字典序单调。</p>
+ * <p>标识由 48 位毫秒时间戳和 80 位随机数组成。同一生成器实例在同一毫秒内递增随机部分，
+ * 从而保持字符串字典序单调。</p>
  */
 public final class UlidStringIdGenerator implements StringIdGenerator {
 
@@ -20,10 +20,16 @@ public final class UlidStringIdGenerator implements StringIdGenerator {
     private static final char[] ALPHABET =
             "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
 
+    /** 提供 ULID 的毫秒时间部分。 */
     private final Clock clock;
+
+    /** 初始化 80 位随机部分的安全随机源。 */
     private final SecureRandom secureRandom;
+
+    /** 最近一次使用的 80 位随机状态。 */
     private final byte[] randomness = new byte[10];
 
+    /** 最近一次实际或逻辑使用的时间戳。 */
     private long lastTimestamp = -1L;
 
     public UlidStringIdGenerator() {
@@ -40,36 +46,29 @@ public final class UlidStringIdGenerator implements StringIdGenerator {
 
     @Override
     public synchronized String nextId() {
-        long timestamp = clock.millis();
+        long timestamp = validateTimestamp(clock.millis());
+        if (timestamp > lastTimestamp) {
+            secureRandom.nextBytes(randomness);
+        } else {
+            timestamp = lastTimestamp;
+            if (!incrementRandomness()) {
+                timestamp = validateTimestamp(lastTimestamp + 1L);
+                Arrays.fill(randomness, (byte) 0);
+            }
+        }
+
+        lastTimestamp = timestamp;
+        return encode(timestamp, randomness);
+    }
+
+    private long validateTimestamp(long timestamp) {
         if (timestamp < 0L) {
             throw new IdGenerationException("ULID timestamp must not be negative");
         }
         if (timestamp > MAX_TIMESTAMP) {
             throw new IdGenerationException("ULID timestamp exceeds 48-bit range");
         }
-
-        if (timestamp > lastTimestamp) {
-            secureRandom.nextBytes(randomness);
-        } else {
-            timestamp = lastTimestamp;
-            if (!incrementRandomness()) {
-                timestamp = lastTimestamp + 1L;
-                Arrays.fill(randomness, (byte) 0);
-            }
-        }
-
-        if (timestamp > MAX_TIMESTAMP) {
-            throw new IdGenerationException("ULID timestamp space is exhausted");
-        }
-
-        lastTimestamp = timestamp;
-        byte[] bytes = new byte[16];
-        for (int index = 5; index >= 0; index--) {
-            bytes[index] = (byte) timestamp;
-            timestamp >>>= 8;
-        }
-        System.arraycopy(randomness, 0, bytes, 6, randomness.length);
-        return encode(bytes);
+        return timestamp;
     }
 
     private boolean incrementRandomness() {
@@ -83,13 +82,25 @@ public final class UlidStringIdGenerator implements StringIdGenerator {
         return false;
     }
 
-    private String encode(byte[] bytes) {
-        BigInteger value = new BigInteger(1, bytes);
+    private String encode(long timestamp, byte[] randomBytes) {
         char[] encoded = new char[26];
-        BigInteger mask = BigInteger.valueOf(31L);
-        for (int index = encoded.length - 1; index >= 0; index--) {
-            encoded[index] = ALPHABET[value.and(mask).intValue()];
-            value = value.shiftRight(5);
+        long timestampValue = timestamp;
+        for (int index = 9; index >= 0; index--) {
+            encoded[index] = ALPHABET[(int) (timestampValue & 31L)];
+            timestampValue >>>= 5;
+        }
+
+        int outputIndex = 10;
+        int buffer = 0;
+        int bufferedBits = 0;
+        for (byte randomByte : randomBytes) {
+            buffer = (buffer << 8) | (randomByte & 0xFF);
+            bufferedBits += 8;
+            while (bufferedBits >= 5) {
+                bufferedBits -= 5;
+                encoded[outputIndex++] = ALPHABET[(buffer >>> bufferedBits) & 31];
+            }
+            buffer = bufferedBits == 0 ? 0 : buffer & ((1 << bufferedBits) - 1);
         }
         return new String(encoded);
     }

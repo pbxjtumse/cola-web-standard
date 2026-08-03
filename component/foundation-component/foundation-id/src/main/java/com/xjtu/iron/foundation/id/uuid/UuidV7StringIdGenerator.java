@@ -11,8 +11,8 @@ import java.util.UUID;
 /**
  * 生成 RFC 9562 UUID v7。
  *
- * <p>同一进程内使用逻辑时间和 74 位单调随机序列保证生成顺序。进程重启后仍依赖随机空间保证唯一性，
- * 不承诺跨进程的严格全局单调。</p>
+ * <p>同一生成器实例使用逻辑时间和 74 位随机状态保持单调；跨进程唯一性依赖时间与随机空间，
+ * 不承诺多个 JVM 之间严格全局递增。</p>
  */
 public final class UuidV7StringIdGenerator implements StringIdGenerator {
 
@@ -20,11 +20,19 @@ public final class UuidV7StringIdGenerator implements StringIdGenerator {
     private static final int MAX_RANDOM_A = 0x0FFF;
     private static final long MAX_RANDOM_B = 0x3FFFFFFFFFFFFFFFL;
 
+    /** 提供 48 位 Unix 毫秒时间。 */
     private final Clock clock;
+
+    /** 初始化随机状态的安全随机源。 */
     private final SecureRandom secureRandom;
 
+    /** 上一次实际或逻辑使用的时间戳。 */
     private long lastTimestamp = -1L;
+
+    /** UUID v7 的 12 位 rand_a。 */
     private int randomA;
+
+    /** UUID v7 的 62 位 rand_b。 */
     private long randomB;
 
     public UuidV7StringIdGenerator() {
@@ -45,31 +53,21 @@ public final class UuidV7StringIdGenerator implements StringIdGenerator {
     }
 
     /**
-     * 生成 UUID 对象，便于数据库或协议直接使用 128 位值。
+     * 直接生成 UUID 对象，便于数据库 UUID 字段或协议层使用。
      *
      * @return UUID v7
      */
     public synchronized UUID nextUuid() {
-        long timestamp = clock.millis();
-        if (timestamp < 0L) {
-            throw new IdGenerationException("UUID v7 timestamp must not be negative");
-        }
-        if (timestamp > MAX_TIMESTAMP) {
-            throw new IdGenerationException("UUID v7 timestamp exceeds 48-bit range");
-        }
-
+        long timestamp = validateTimestamp(clock.millis());
         if (timestamp > lastTimestamp) {
             seedRandomState();
         } else {
             timestamp = lastTimestamp;
-            incrementRandomState();
-            if (randomA == 0 && randomB == 0) {
-                timestamp = lastTimestamp + 1L;
+            if (!incrementRandomState()) {
+                timestamp = validateTimestamp(lastTimestamp + 1L);
+                randomA = 0;
+                randomB = 0L;
             }
-        }
-
-        if (timestamp > MAX_TIMESTAMP) {
-            throw new IdGenerationException("UUID v7 timestamp space is exhausted");
         }
 
         lastTimestamp = timestamp;
@@ -81,23 +79,31 @@ public final class UuidV7StringIdGenerator implements StringIdGenerator {
         return new UUID(mostSignificantBits, leastSignificantBits);
     }
 
+    private long validateTimestamp(long timestamp) {
+        if (timestamp < 0L) {
+            throw new IdGenerationException("UUID v7 timestamp must not be negative");
+        }
+        if (timestamp > MAX_TIMESTAMP) {
+            throw new IdGenerationException("UUID v7 timestamp exceeds 48-bit range");
+        }
+        return timestamp;
+    }
+
     private void seedRandomState() {
         randomA = secureRandom.nextInt(MAX_RANDOM_A + 1);
         randomB = secureRandom.nextLong() & MAX_RANDOM_B;
     }
 
-    private void incrementRandomState() {
+    private boolean incrementRandomState() {
         if (randomB < MAX_RANDOM_B) {
             randomB++;
-            return;
+            return true;
         }
-
         randomB = 0L;
         if (randomA < MAX_RANDOM_A) {
             randomA++;
-            return;
+            return true;
         }
-
-        randomA = 0;
+        return false;
     }
 }

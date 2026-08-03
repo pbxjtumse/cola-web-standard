@@ -4,14 +4,17 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
-/** Nano ID 字符表与长度配置。 */
+/** Nano ID 字符表与输出长度配置。 */
 public final class NanoIdOptions {
 
     public static final String DEFAULT_ALPHABET =
             "_-0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     public static final int DEFAULT_SIZE = 21;
 
+    /** 允许出现在输出中的唯一字符集合。 */
     private final String alphabet;
+
+    /** 每个 Nano ID 的字符长度。 */
     private final int size;
 
     private NanoIdOptions(Builder builder) {
@@ -52,7 +55,9 @@ public final class NanoIdOptions {
         Set<Character> distinct = new HashSet<>();
         for (int index = 0; index < actualAlphabet.length(); index++) {
             if (!distinct.add(actualAlphabet.charAt(index))) {
-                throw new IllegalArgumentException("alphabet must not contain duplicates");
+                throw new IllegalArgumentException(
+                        "alphabet must not contain duplicate characters"
+                );
             }
         }
         return actualAlphabet;
@@ -62,6 +67,9 @@ public final class NanoIdOptions {
 
         private String alphabet = DEFAULT_ALPHABET;
         private int size = DEFAULT_SIZE;
+
+        private Builder() {
+        }
 
         public Builder alphabet(String alphabet) {
             this.alphabet = alphabet;

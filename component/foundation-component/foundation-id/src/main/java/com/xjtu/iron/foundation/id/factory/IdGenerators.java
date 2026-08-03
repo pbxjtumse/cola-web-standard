@@ -2,6 +2,7 @@ package com.xjtu.iron.foundation.id.factory;
 
 import com.xjtu.iron.foundation.id.api.LongIdGenerator;
 import com.xjtu.iron.foundation.id.api.StringIdGenerator;
+import com.xjtu.iron.foundation.id.decorator.CompositeStringIdGenerator;
 import com.xjtu.iron.foundation.id.decorator.PrefixedStringIdGenerator;
 import com.xjtu.iron.foundation.id.nanoid.NanoIdOptions;
 import com.xjtu.iron.foundation.id.nanoid.NanoIdStringIdGenerator;
@@ -11,10 +12,12 @@ import com.xjtu.iron.foundation.id.ulid.UlidStringIdGenerator;
 import com.xjtu.iron.foundation.id.uuid.UuidV4StringIdGenerator;
 import com.xjtu.iron.foundation.id.uuid.UuidV7StringIdGenerator;
 
-/** 创建内置 ID 生成器的统一工厂。 */
-public final class IdGeneratorsFactory {
+import java.util.List;
 
-    private IdGeneratorsFactory() {
+/** 创建一期内置 ID 生成器和装饰器的统一入口。 */
+public final class IdGenerators {
+
+    private IdGenerators() {
     }
 
     public static StringIdGenerator uuidV4() {
@@ -51,5 +54,18 @@ public final class IdGeneratorsFactory {
             String prefix,
             StringIdGenerator delegate) {
         return new PrefixedStringIdGenerator(prefix, delegate);
+    }
+
+    public static StringIdGenerator prefixed(
+            String prefix,
+            String separator,
+            StringIdGenerator delegate) {
+        return new PrefixedStringIdGenerator(prefix, separator, delegate);
+    }
+
+    public static StringIdGenerator composite(
+            List<? extends StringIdGenerator> delegates,
+            String delimiter) {
+        return new CompositeStringIdGenerator(delegates, delimiter);
     }
 }

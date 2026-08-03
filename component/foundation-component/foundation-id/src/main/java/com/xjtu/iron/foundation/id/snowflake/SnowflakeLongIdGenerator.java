@@ -9,8 +9,8 @@ import java.util.Objects;
 /**
  * 生成 64 位 Snowflake 标识。
  *
- * <p>位布局为 1 位符号位、41 位毫秒时间、10 位 workerId、12 位同毫秒序列。
- * 单节点每毫秒最多生成 4096 个标识。workerId 必须由部署系统保证唯一。</p>
+ * <p>位布局为 1 位符号位、41 位毫秒时间、10 位 workerId 和 12 位同毫秒序列。
+ * workerId 必须由部署系统保证唯一。</p>
  */
 public final class SnowflakeLongIdGenerator implements LongIdGenerator {
 
@@ -19,10 +19,19 @@ public final class SnowflakeLongIdGenerator implements LongIdGenerator {
     private static final int WORKER_ID_SHIFT = 12;
     private static final int TIMESTAMP_SHIFT = 22;
 
+    /** 节点、纪元和时钟策略配置。 */
     private final SnowflakeOptions options;
+
+    /** 提供生成标识时使用的毫秒时间。 */
     private final Clock clock;
 
+    /** 序列耗尽后等待真实时间推进的纳秒预算。 */
+    private final long sequenceWaitTimeoutNanos;
+
+    /** 最近一次实际或逻辑使用的毫秒时间。 */
     private long lastTimestamp = -1L;
+
+    /** 当前毫秒内已经使用的 12 位序列。 */
     private long sequence;
 
     public SnowflakeLongIdGenerator(SnowflakeOptions options) {
@@ -32,6 +41,14 @@ public final class SnowflakeLongIdGenerator implements LongIdGenerator {
     public SnowflakeLongIdGenerator(SnowflakeOptions options, Clock clock) {
         this.options = Objects.requireNonNull(options, "options must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        try {
+            this.sequenceWaitTimeoutNanos = options.getSequenceWaitTimeout().toNanos();
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException(
+                    "sequenceWaitTimeout is too large",
+                    exception
+            );
+        }
     }
 
     @Override
@@ -76,13 +93,18 @@ public final class SnowflakeLongIdGenerator implements LongIdGenerator {
     }
 
     private long nextTimestampAfterSequenceOverflow(long currentLastTimestamp) {
-        long timestamp = clock.millis();
-        if (timestamp <= currentLastTimestamp
-                && options.getClockRollbackStrategy() == ClockRollbackStrategy.USE_LOGICAL_TIME) {
+        if (options.getClockRollbackStrategy() == ClockRollbackStrategy.USE_LOGICAL_TIME) {
             return currentLastTimestamp + 1L;
         }
 
+        long startedAt = System.nanoTime();
+        long timestamp = clock.millis();
         while (timestamp <= currentLastTimestamp) {
+            if (System.nanoTime() - startedAt >= sequenceWaitTimeoutNanos) {
+                throw new IdGenerationException(
+                        "Snowflake sequence exhausted before clock advanced"
+                );
+            }
             Thread.onSpinWait();
             timestamp = clock.millis();
         }

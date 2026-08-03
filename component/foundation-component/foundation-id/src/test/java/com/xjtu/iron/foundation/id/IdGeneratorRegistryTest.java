@@ -1,6 +1,7 @@
 package com.xjtu.iron.foundation.id;
 
-import com.xjtu.iron.foundation.id.registry.IdGeneratorRegistry;
+import com.xjtu.iron.foundation.id.factory.IdGenerators;
+import com.xjtu.iron.foundation.id.registry.StringIdGeneratorRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -12,7 +13,7 @@ class IdGeneratorRegistryTest {
 
     @Test
     void shouldResolveNamedGenerator() {
-        IdGeneratorRegistry registry = new IdGeneratorRegistry(Map.of("message", () -> "message-1"));
+        StringIdGeneratorRegistry registry = new StringIdGeneratorRegistry(Map.of("message", () -> "message-1"));
         assertEquals("message-1", registry.require("message").nextId());
         assertThrows(IllegalArgumentException.class, () -> registry.require("unknown"));
     }

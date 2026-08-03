@@ -13,13 +13,9 @@
 
     <artifactId>foundation-id</artifactId>
     <name>foundation-id</name>
-    <description>提供跨组件复用的技术 ID 协议与本地生成算法。</description>
+    <description>提供跨组件复用的技术 ID 契约、本地生成算法、装饰器与不可变注册表。</description>
 
     <dependencies>
-        <dependency>
-            <groupId>com.xjtu.iron</groupId>
-            <artifactId>foundation-time</artifactId>
-        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

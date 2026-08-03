@@ -1,7 +1,7 @@
 package com.xjtu.iron.foundation.id.api;
 
 /**
- * 生成指定类型的无业务语义标识。
+ * 生成指定类型、无业务语义的技术标识。
  *
  * @param <T> 标识值类型
  */
