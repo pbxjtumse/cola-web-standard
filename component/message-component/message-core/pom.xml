@@ -8,6 +8,8 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>message-core</artifactId>
+    <packaging>jar</packaging>
+
     <dependencies>
         <dependency>
             <groupId>com.xjtu.iron</groupId>

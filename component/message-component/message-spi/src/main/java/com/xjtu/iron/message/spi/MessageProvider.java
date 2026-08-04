@@ -5,13 +5,16 @@ import java.util.concurrent.CompletionStage;
 
 /**
  * 定义 Kafka、RocketMQ、Pulsar 等基础 Provider 的最小 SPI。
+ *
+ * <p>该接口是一期稳定 Provider 边界，Provider 只负责普通消息发送、普通消息订阅和资源释放。
+ * Producer、Consumer、ListenerContainer 等更细粒度对象不进入一期 SPI，避免把 Spring 或特定客户端模型泄露给 core。</p>
  */
 public interface MessageProvider extends AutoCloseable {
 
     /**
      * 返回 Provider 稳定名称。
      *
-     * @return 稳定名称，例如 kafka
+     * @return 稳定名称，例如 kafka、rocketmq、pulsar
      */
     String name();
 

@@ -1,0 +1,49 @@
+server:
+  port: 18081
+
+spring:
+  application:
+    name: message-demo-springboot
+
+xjtu:
+  iron:
+    message:
+      enabled: true
+      provider: pulsar
+      application-name: ${spring.application.name}
+      default-schema-version: "1"
+      default-confirm-timeout: 15s
+      routing-mode: STRICT
+      serializer:
+        type: jackson
+
+      # 逻辑目的地到物理 Topic 的路由。
+      # 业务代码只使用 namespace=demo、name=message-demo-topic，Provider 物理 Topic 由这里决定。
+      routes:
+        - namespace: demo
+          name: message-demo-topic
+          provider: pulsar
+          physical-name: persistent://public/default/message-demo-topic
+
+      demo:
+        auto-subscribe: true
+        destination-name: message-demo-topic
+
+      pulsar:
+        service-url: pulsar://pulsar.xjtu-iron.online:6650
+        tenant: public
+        namespace: default
+        operation-timeout: 15s
+        negative-ack-redelivery-delay: 2s
+        receiver-queue-size: 1000
+
+        producer:
+          topic: persistent://public/default/message-demo-topic
+          name: message-demo-producer
+          send-timeout-seconds: 3
+
+        consumer:
+          topic: persistent://public/default/message-demo-topic
+          subscription-name: message-demo-subscription
+          subscription-type: Shared
+          consumer-name: message-demo-consumer
