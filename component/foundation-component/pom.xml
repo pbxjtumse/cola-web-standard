@@ -86,12 +86,7 @@
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
-                <artifactId>foundation-serialization-api</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>foundation-serialization-jackson</artifactId>
+                <artifactId>foundation-serialization</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

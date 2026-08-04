@@ -17,7 +17,7 @@ public final class ContentFingerprint {
     }
 
     public static ContentFingerprint sha256(byte[] bytes) {
-        return new ContentFingerprint("SHA-256", DigestUtils.sha256Hex(bytes));
+        return new ContentFingerprint("SHA-256", IronDigests.sha256Hex(bytes));
     }
 
     public static ContentFingerprint sha256Utf8(String value) {

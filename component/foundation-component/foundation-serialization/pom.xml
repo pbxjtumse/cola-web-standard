@@ -10,11 +10,36 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>foundation-serialization</artifactId>
-    <packaging>pom</packaging>
+    <packaging>jar</packaging>
     <name>foundation-serialization</name>
-    <description>序列化能力聚合模块；目录上归一，Jar 上保持 API 与 Jackson 实现隔离。</description>
-    <modules>
-        <module>foundation-serialization-api</module>
-        <module>foundation-serialization-jackson</module>
-    </modules>
+    <description>Foundation 序列化统一模块，包含稳定 Serializer 协议和默认 Jackson JSON 实现。</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>
