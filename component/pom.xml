@@ -20,5 +20,6 @@
         <module>distributed-lock-component</module>
         <module>message-component</module>
         <module>retry-component</module>
+        <module>foundation-component</module>
     </modules>
 </project>

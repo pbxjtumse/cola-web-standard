@@ -1,5 +1,7 @@
 package com.xjtu.iron.foundation.test;
 
+import com.xjtu.iron.foundation.id.api.IdGenerator;
+
 import java.util.concurrent.atomic.AtomicLong;
 
 /**

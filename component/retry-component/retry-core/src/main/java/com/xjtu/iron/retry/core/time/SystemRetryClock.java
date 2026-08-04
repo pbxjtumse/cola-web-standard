@@ -22,17 +22,9 @@ public final class SystemRetryClock implements RetryClock {
         this(new SystemClockProvider(), System::nanoTime);
     }
 
-    public SystemRetryClock(
-            ClockProvider clockProvider,
-            LongSupplier nanoTimeSource) {
-        this.clockProvider = Objects.requireNonNull(
-                clockProvider,
-                "clockProvider must not be null"
-        );
-        this.nanoTimeSource = Objects.requireNonNull(
-                nanoTimeSource,
-                "nanoTimeSource must not be null"
-        );
+    public SystemRetryClock(ClockProvider clockProvider, LongSupplier nanoTimeSource) {
+        this.clockProvider = Objects.requireNonNull(clockProvider, "clockProvider must not be null");
+        this.nanoTimeSource = Objects.requireNonNull(nanoTimeSource, "nanoTimeSource must not be null");
     }
 
     @Override

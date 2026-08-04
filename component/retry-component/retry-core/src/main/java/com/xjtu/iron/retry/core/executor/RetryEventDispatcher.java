@@ -42,7 +42,7 @@ final class RetryEventDispatcher {
                 operationName,
                 retryPolicy.getPolicyName(),
                 retryPolicy.getMaxAttempts(),
-                clockProvider.now()
+                clockProvider.clock().instant()
         ).elapsedTime(elapsedTime);
     }
 

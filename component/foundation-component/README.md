@@ -1,14 +1,15 @@
-# foundation-component V2 thin facade
+# foundation-component V3 conflict-safe thin facade
 
-这是 Foundation Component 的第二版重构版本。
+这是 Foundation Component 的第三版重构版本。
 
-本版设计目标不是重新发明一套巨大的 Common Util，而是：
+本版按照以下原则调整：
 
-1. 对成熟开源工具做薄封装；
-2. 保留统一包名、统一命名和统一边界；
-3. 模型类和能力接口保持清晰语义；
-4. 静态工具门面统一使用 `XxxUtils`；
-5. 删除上一版过度细碎的工具类拆分。
+1. 通用工具能力优先复用 JDK 17、Apache Commons、Jackson 等成熟开源能力；
+2. Foundation 只提供一层很薄的统一门面，不再大量自研细碎工具类；
+3. 工具门面不再命名为 `StringUtils`、`CollectionUtils`、`ListUtils` 这类容易与开源库重名的类；
+4. Foundation 工具门面统一采用 `IronXxx` 命名，例如 `IronStrings`、`IronCollections`、`IronLists`；
+5. 模型、值对象和能力接口不加 `Iron` 前缀，也不加 `Utils`，例如 `Deadline`、`ExecutionContext`、`IdGenerator`、`Serializer`；
+6. 序列化能力合并为一个 `foundation-serialization` Jar，内部仍保留 `serialization` 协议包和 `serialization.jackson` 实现包。
 
 ## 模块
 
@@ -22,23 +23,38 @@ foundation-component
 ├── foundation-reflection
 ├── foundation-resource
 ├── foundation-serialization
-│   ├── foundation-serialization-api
-│   └── foundation-serialization-jackson
 ├── foundation-test-support
 └── foundation-architecture-tests
 ```
 
-## 代码规模
+## 命名示例
 
-- POM：13 个
-- 生产 Java：106 个
-- 测试 Java：7 个
+```java
+IronStrings.trimToNull(name);
+IronCollections.groupBy(messages, Message::getTopic);
+IronLists.partition(items, 100);
+IronMaps.getString(headers, "traceId");
+IronDigests.sha256Hex(payload);
+```
 
-## 命名规则
+这种命名避免了下面这种混乱：
 
-- 值对象和模型：不加 Utils，例如 `Deadline`、`DateRange`、`ExecutionContext`、`SerializedPayload`。
-- 能力接口：不加 Utils，例如 `IdGenerator`、`Serializer`、`ResourceLoader`。
-- 静态工具门面：使用 `XxxUtils`，例如 `StringUtils`、`CollectionUtils`、`DigestUtils`。
+```java
+org.apache.commons.collections4.ListUtils.partition(...);
+org.springframework.util.CollectionUtils.isEmpty(...);
+com.xjtu.iron.foundation.core.collection.ListUtils.partition(...);
+```
+
+## 序列化使用
+
+```java
+Serializer serializer = new JacksonJsonSerializer(
+        JacksonObjectMapperFactory.createDefault()
+);
+
+SerializedPayload payload = serializer.serialize(event, SerializationOptions.defaults());
+OrderEvent event = serializer.deserialize(payload, OrderEvent.class);
+```
 
 ## 构建
 
@@ -48,10 +64,4 @@ foundation-component
 mvn -U -pl component/foundation-component -am clean verify
 ```
 
-或在包含根父 POM 的项目根目录执行：
-
-```bash
-mvn -U clean verify
-```
-
-当前生成环境没有 Maven，因此只完成了 POM 解析和 Java 17 语法级编译检查。完整构建仍需在本地 Maven 环境执行。
+当前生成环境没有 Maven，因此无法在沙箱内执行完整 `mvn clean verify`。

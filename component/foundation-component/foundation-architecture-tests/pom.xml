@@ -46,11 +46,7 @@
         </dependency>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
-            <artifactId>foundation-serialization-jackson</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.xjtu.iron</groupId>
-            <artifactId>foundation-serialization-api</artifactId>
+            <artifactId>foundation-serialization</artifactId>
         </dependency>
         <dependency>
             <groupId>com.tngtech.archunit</groupId>

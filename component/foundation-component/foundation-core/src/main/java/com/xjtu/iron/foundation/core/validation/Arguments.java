@@ -56,6 +56,49 @@ public final class Arguments {
         return value;
     }
 
+    /**
+     * 校验 Duration 不能为负数。
+     *
+     * <p>
+     * Duration.ZERO 是合法值，适合重试退避、超时预算、等待时长等场景。
+     * </p>
+     *
+     * @param value 待校验时长
+     * @param name 参数名称
+     * @return 原始 Duration
+     */
+    public static Duration nonNegative(Duration value, String name) {
+        return notNegative(value, name);
+    }
+
+    /**
+     * 校验 int 值不能为负数。
+     *
+     * @param value 待校验值
+     * @param name 参数名称
+     * @return 原始值
+     */
+    public static int notNegative(int value, String name) {
+        if (value < 0) {
+            throw new IllegalArgumentException(name + " must not be negative");
+        }
+        return value;
+    }
+
+    /**
+     * 校验 long 值不能为负数。
+     *
+     * @param value 待校验值
+     * @param name 参数名称
+     * @return 原始值
+     */
+    public static long notNegative(long value, String name) {
+        if (value < 0L) {
+            throw new IllegalArgumentException(name + " must not be negative");
+        }
+        return value;
+    }
+
     public static <T extends Collection<?>> T notEmpty(T value, String name) {
         notNull(value, name);
         if (value.isEmpty()) {

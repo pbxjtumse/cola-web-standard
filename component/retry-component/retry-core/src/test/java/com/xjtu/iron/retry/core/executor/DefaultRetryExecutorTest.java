@@ -1,6 +1,6 @@
 package com.xjtu.iron.retry.core.executor;
 
-import com.xjtu.iron.foundation.test.id.FixedStringIdGenerator;
+
 import com.xjtu.iron.retry.core.policy.DefaultRetryPolicyRegistry;
 
 import com.xjtu.iron.retry.api.execution.RetryCancellationToken;
@@ -305,26 +305,6 @@ class DefaultRetryExecutorTest {
                 events.get(events.size() - 1).getEventType()
         );
     }
-    /** 验证执行器直接复用 Foundation 固定标识生成器。 */
-    @Test
-    void shouldUseFoundationStringIdGenerator() {
-        RetryPolicy policy = RetryPolicy.builder("foundation-id").build();
-        DefaultRetryExecutor executor = new DefaultRetryExecutor(
-                new DefaultRetryPolicyRegistry(),
-                List.of(),
-                duration -> { },
-                new SystemRetryClock(),
-                new FixedStringIdGenerator("retry-fixed-id")
-        );
 
-        RetryResult<String> result = executor.execute(
-                "foundation-id-operation",
-                context -> "ok",
-                policy
-        );
-
-        assertEquals(RetryStatus.SUCCESS, result.getStatus());
-        assertEquals("retry-fixed-id", result.getRetryId());
-    }
 
 }

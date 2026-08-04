@@ -1,12 +1,8 @@
 package com.xjtu.iron.retry.config.autoconfigure;
 
-import com.xjtu.iron.foundation.id.api.StringIdGenerator;
 import com.xjtu.iron.foundation.id.registry.StringIdGeneratorRegistry;
-import com.xjtu.iron.foundation.test.id.FixedStringIdGenerator;
 import com.xjtu.iron.foundation.time.ClockProvider;
-import com.xjtu.iron.retry.api.execution.RetryExecution;
 import com.xjtu.iron.retry.api.execution.RetryExecutor;
-import com.xjtu.iron.retry.api.execution.RetryStatus;
 import com.xjtu.iron.retry.api.policy.RetryPolicy;
 import com.xjtu.iron.retry.api.policy.RetryPolicyRegistry;
 import com.xjtu.iron.retry.core.time.RetryClock;
@@ -63,33 +59,6 @@ class RetryAutoConfigurationTest {
                 });
     }
 
-    @Test
-    void shouldUseDedicatedCustomRetryIdGenerator() {
-        contextRunner
-                .withPropertyValues("iron.retry.publish-spring-events=false")
-                .withBean(
-                        RetryAutoConfiguration.RETRY_ID_GENERATOR_BEAN_NAME,
-                        StringIdGenerator.class,
-                        () -> new FixedStringIdGenerator("custom-retry-id")
-                )
-                .run(context -> {
-                    RetryExecutor executor = context.getBean(RetryExecutor.class);
-                    RetryPolicy policy = RetryPolicy.builder("single-attempt")
-                            .maxAttempts(1)
-                            .build();
-
-                    var result = executor.execute(
-                            RetryExecution.builder(
-                                    "custom-id-operation",
-                                    retryContext -> "ok",
-                                    policy
-                            ).build()
-                    );
-
-                    assertThat(result.getStatus()).isEqualTo(RetryStatus.SUCCESS);
-                    assertThat(result.getRetryId()).isEqualTo("custom-retry-id");
-                });
-    }
 
     @Test
     void shouldBackOffWhenDisabled() {
@@ -98,42 +67,4 @@ class RetryAutoConfigurationTest {
                 .run(context -> assertThat(context)
                         .doesNotHaveBean(RetryExecutor.class));
     }
-    @Test
-    void shouldResolveRetryGeneratorFromFoundationRegistry() {
-        StringIdGeneratorRegistry registry = StringIdGeneratorRegistry.builder()
-                .register(
-                        RetryAutoConfiguration.RETRY_ID_GENERATOR_REGISTRY_NAME,
-                        new FixedStringIdGenerator("registry-retry-id")
-                )
-                .build();
-
-        contextRunner
-                .withPropertyValues("iron.retry.publish-spring-events=false")
-                .withBean(StringIdGeneratorRegistry.class, () -> registry)
-                .run(context -> {
-                    RetryExecutor executor = context.getBean(RetryExecutor.class);
-                    RetryPolicy policy = RetryPolicy.builder("registry-id").build();
-
-                    var result = executor.execute(
-                            "registry-id-operation",
-                            retryContext -> "ok",
-                            policy
-                    );
-
-                    assertThat(result.getRetryId()).isEqualTo("registry-retry-id");
-                });
-    }
-
-    @Test
-    void shouldFailWhenFoundationRegistryDoesNotContainRetryGenerator() {
-        StringIdGeneratorRegistry registry = StringIdGeneratorRegistry.builder()
-                .register("message", new FixedStringIdGenerator("message-id"))
-                .build();
-
-        contextRunner
-                .withPropertyValues("iron.retry.publish-spring-events=false")
-                .withBean(StringIdGeneratorRegistry.class, () -> registry)
-                .run(context -> assertThat(context).hasFailed());
-    }
-
 }

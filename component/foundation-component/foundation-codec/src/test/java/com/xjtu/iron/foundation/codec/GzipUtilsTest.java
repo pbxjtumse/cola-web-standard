@@ -6,11 +6,11 @@ import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class GzipUtilsTest {
+class IronGzipTest {
 
     @Test
     void decompressShouldRestoreOriginalBytes() {
         byte[] source = "hello".getBytes(StandardCharsets.UTF_8);
-        assertThat(GzipUtils.decompress(GzipUtils.compress(source))).isEqualTo(source);
+        assertThat(IronGzip.decompress(IronGzip.compress(source))).isEqualTo(source);
     }
 }
