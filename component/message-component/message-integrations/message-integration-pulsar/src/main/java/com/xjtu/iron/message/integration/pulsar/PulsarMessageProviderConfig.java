@@ -97,6 +97,31 @@ public final class PulsarMessageProviderConfig {
                 1000,
                 null);
     }
+
+    /**
+     * 创建适合通过公网或跨网络访问 Pulsar 的调试配置。
+     *
+     * <p>公网链路通常比集群内链路具有更高的 DNS、连接、Topic Lookup 和 Broker 确认延迟，
+     * 因此这里使用十五秒操作超时，避免首次建立连接时被三秒默认值过早判定失败。</p>
+     *
+     * <p>该方法只调整调试阶段的客户端等待时间，不改变消息确认、Negative ACK 和
+     * Shared Subscription 的基础语义。</p>
+     *
+     * @param serviceUrl Pulsar 二进制服务地址，例如 pulsar://pulsar.example.com:6650
+     * @param authenticationToken 可选 Token；未开启认证时传 null
+     * @return 公网调试配置
+     */
+    public static PulsarMessageProviderConfig externalDebug(
+            String serviceUrl,
+            String authenticationToken) {
+        // 公网调试使用十五秒操作超时、两秒负确认重投延迟和 1000 条接收队列。
+        return new PulsarMessageProviderConfig(
+                serviceUrl,
+                Duration.ofSeconds(15),
+                Duration.ofSeconds(2),
+                1000,
+                authenticationToken);
+    }
     /**
      * 返回Pulsar 服务地址。
      *

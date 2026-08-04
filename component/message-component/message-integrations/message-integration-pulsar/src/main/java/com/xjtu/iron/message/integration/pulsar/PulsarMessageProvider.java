@@ -291,10 +291,27 @@ public final class PulsarMessageProvider implements MessageProvider {
         Map<String, String> headers = new LinkedHashMap<>(message.getProperties());
         // 仅在消息包含 Key 时读取。
         String messageKey = message.hasKey() ? message.getKey() : null;
-        // 构造诊断元数据。
-        Map<String, String> metadata = Map.of(
-                PulsarMetadataKeys.PUBLISH_TIME, Long.toString(message.getPublishTime()),
-                PulsarMetadataKeys.REDELIVERY_COUNT, Integer.toString(message.getRedeliveryCount()));
+        // 构造诊断元数据，保留排查 Topic 路由、原生消息 ID 和重新投递行为所需字段。
+        Map<String, String> metadata = new LinkedHashMap<>();
+        // 保存 Pulsar 返回的完整 Topic 名称。
+        metadata.put(PulsarMetadataKeys.TOPIC, message.getTopicName());
+        // 保存 Pulsar 原生消息 ID，便于与 Broker 侧日志和 Topic Stats 对照。
+        metadata.put(PulsarMetadataKeys.MESSAGE_ID, message.getMessageId().toString());
+        // 保存消息发布时刻。
+        metadata.put(
+                PulsarMetadataKeys.PUBLISH_TIME,
+                Long.toString(message.getPublishTime()));
+        // 保存原生重新投递次数；首次投递通常为 0。
+        metadata.put(
+                PulsarMetadataKeys.REDELIVERY_COUNT,
+                Integer.toString(message.getRedeliveryCount()));
+        // 业务显式设置 EventTime 时才写入，零值表示消息没有提供 EventTime。
+        if (message.getEventTime() > 0L) {
+            // 保存业务事件时间。
+            metadata.put(
+                    PulsarMetadataKeys.EVENT_TIME,
+                    Long.toString(message.getEventTime()));
+        }
         // 创建统一入站消息。
         return new ProviderInboundMessage(
                 message.getMessageId().toString(),

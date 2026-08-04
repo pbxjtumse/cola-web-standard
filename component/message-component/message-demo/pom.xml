@@ -20,5 +20,10 @@
             <groupId>com.xjtu.iron</groupId>
             <artifactId>message-testkit</artifactId>
         </dependency>
+        <!-- Pulsar 真实集群调试 Demo 依赖。 -->
+        <dependency>
+            <groupId>com.xjtu.iron</groupId>
+            <artifactId>message-integration-pulsar</artifactId>
+        </dependency>
     </dependencies>
 </project>

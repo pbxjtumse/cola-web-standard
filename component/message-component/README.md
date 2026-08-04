@@ -146,3 +146,23 @@ mvn clean verify
 - `docs/08-java-class-and-worker-guide.md`：普通不可变类和 poll 线程说明
 - `docs/09-record-to-class-migration.md`：V4 转换规则和类清单
 - `docs/diagrams/sequence/README.md`：L0-L3 时序图索引
+
+## Pulsar 真实集群调试
+
+当前工程提供：
+
+```text
+com.xjtu.iron.message.demo.PulsarMessageDemo
+```
+
+默认连接：
+
+```text
+pulsar://pulsar.xjtu-iron.online:6650
+```
+
+完整步骤见：
+
+```text
+docs/10-pulsar-debug-guide.md
+```
