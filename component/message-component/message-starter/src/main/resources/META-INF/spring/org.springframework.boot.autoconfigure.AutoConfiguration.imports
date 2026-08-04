@@ -1,1 +1,1 @@
-com.xjtu.iron.message.spring.boot.MessageAutoConfiguration
+com.xjtu.iron.message.spring.boot.autoconfigure.MessageAutoConfiguration

@@ -299,9 +299,7 @@ public final class MessageTemplate
      * 注册并启动普通消息消费者。
      */
     @Override
-    public <T> MessageSubscription subscribe(
-            ConsumerDefinition<T> definition,
-            MessageHandler<T> handler) {
+    public <T> MessageSubscription subscribe(ConsumerDefinition<T> definition, MessageHandler<T> handler) {
         // 消费者定义不能为空。
         Objects.requireNonNull(definition, "definition must not be null");
         // Handler 不能为空。

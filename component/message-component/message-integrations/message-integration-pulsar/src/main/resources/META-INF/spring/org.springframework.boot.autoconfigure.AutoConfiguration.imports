@@ -1,1 +1,1 @@
-com.xjtu.iron.message.integration.pulsar.PulsarMessageAutoConfiguration
+com.xjtu.iron.message.integration.pulsar.autoconfigure.PulsarMessageAutoConfiguration

@@ -63,11 +63,18 @@ public class MessageDemoController {
         // 构造逻辑目的地；真实物理 Topic 仍由路由表决定。
         MessageDestination destination = MessageDestination.of("demo", name);
         // 构造统一消息信封。
-        Map<String, Object> payload = request.getPayload() == null ? Map.of() : new LinkedHashMap<>(request.getPayload());
-        MessageEnvelope<Map<String, Object>> envelope = MessageEnvelope.builder(messageType, payload)
-                        .messageKey(request.getBusinessKey())
-                        .headers(request.getHeaders())
-                        .build();
+        Map<String, Object> payload = request.getPayload() == null
+                ? Map.of()
+                : new LinkedHashMap<>(request.getPayload());
+        // 用户消息头允许为空，进入 Builder 前先收口为明确类型，避免泛型推断发散。
+        Map<String, String> headers = request.getHeaders() == null
+                ? Map.of()
+                : new LinkedHashMap<>(request.getHeaders());
+        MessageEnvelope<Map<String, Object>> envelope = MessageEnvelope
+                .<Map<String, Object>>builder(messageType, payload)
+                .messageKey(request.getBusinessKey())
+                .headers(headers)
+                .build();
         // 发送消息。
         SendResult result = messageTemplate.send(destination, envelope);
         // 返回标准结果摘要。

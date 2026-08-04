@@ -22,8 +22,17 @@ import java.util.Objects;
 /**
  * 在统一 Java 消息模型与 Broker 线级格式之间编码和解码。
  *
- * <p>该类统一负责业务消息体序列化、系统消息头编码、入站消息契约校验、
- * 业务消息体反序列化和消息上下文重建，避免不同 Provider 各自维护一套协议。</p>
+ * <p>这里的“线级格式”指真正交给 Kafka、RocketMQ、Pulsar 的结构：</p>
+ * <ul>
+ *     <li>物理目的地</li>
+ *     <li>messageKey</li>
+ *     <li>系统消息头和用户消息头</li>
+ *     <li>已经序列化完成的 payload 字节数组</li>
+ * </ul>
+ *
+ * <p>MessageSerializer 只负责 payload 对象与字节数组之间的转换；
+ * MessageWireCodec 负责消息协议字段，例如 messageId、correlationId、causationId、
+ * logical destination 和 content-type 的编码、校验和重建。</p>
  */
 public final class MessageWireCodec {
 

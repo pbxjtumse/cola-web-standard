@@ -30,6 +30,7 @@ xjtu:
         destination-name: message-demo-topic
 
       pulsar:
+        enabled: true
         service-url: pulsar://pulsar.xjtu-iron.online:6650
         tenant: public
         namespace: default

@@ -11,6 +11,10 @@ import java.util.Objects;
 
 /**
  * 基于 Jackson 的 JSON 消息体序列化器。
+ *
+ * <p>该类只负责 MessageEnvelope.payload 的 JSON 序列化和反序列化，
+ * 不处理 x-iron-message-* 系统消息头，也不处理 Provider 物理目的地。
+ * 这些消息线级协议由 message-core 的 MessageWireCodec 统一处理。</p>
  */
 public final class JacksonMessageSerializer implements MessageSerializer {
 
