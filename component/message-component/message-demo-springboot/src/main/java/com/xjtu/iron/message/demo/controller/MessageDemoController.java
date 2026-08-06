@@ -35,15 +35,20 @@ public class MessageDemoController {
     /** 接收消息观察仓库。 */
     private final InMemoryReceivedMessageStore receivedMessageStore;
 
+    /** 默认逻辑命名空间；不要填写 Provider 物理 namespace。 */
+    private final String defaultNamespace;
+
     /** 默认逻辑消息名称；不要填写 persistent:// 物理 Topic。 */
     private final String defaultTopic;
 
     public MessageDemoController(
             MessageTemplate messageTemplate,
             InMemoryReceivedMessageStore receivedMessageStore,
+            @Value("${xjtu.iron.message.demo.destination-namespace:demo}") String defaultNamespace,
             @Value("${xjtu.iron.message.demo.destination-name:message-demo-topic}") String defaultTopic) {
         this.messageTemplate = messageTemplate;
         this.receivedMessageStore = receivedMessageStore;
+        this.defaultNamespace = defaultNamespace;
         this.defaultTopic = defaultTopic;
     }
 
@@ -61,7 +66,7 @@ public class MessageDemoController {
             messageType = "DemoMessage";
         }
         // 构造逻辑目的地；真实物理 Topic 仍由路由表决定。
-        MessageDestination destination = MessageDestination.of("demo", name);
+        MessageDestination destination = MessageDestination.of(defaultNamespace, name);
         // 构造统一消息信封。
         Map<String, Object> payload = request.getPayload() == null
                 ? Map.of()

@@ -13,9 +13,19 @@ public class MessageDemoProperties {
     private boolean autoSubscribe = false;
 
     /**
+     * Demo 默认逻辑命名空间。
+     */
+    private String destinationNamespace = "demo";
+
+    /**
      * Demo 默认逻辑消息名称。
      */
     private String destinationName = "message-demo-topic";
+
+    /**
+     * Demo 默认消费组。
+     */
+    private String consumerGroup = "message-demo-consumer-group";
 
     public boolean isAutoSubscribe() {
         return autoSubscribe;
@@ -25,11 +35,27 @@ public class MessageDemoProperties {
         this.autoSubscribe = autoSubscribe;
     }
 
+    public String getDestinationNamespace() {
+        return destinationNamespace;
+    }
+
+    public void setDestinationNamespace(String destinationNamespace) {
+        this.destinationNamespace = destinationNamespace;
+    }
+
     public String getDestinationName() {
         return destinationName;
     }
 
     public void setDestinationName(String destinationName) {
         this.destinationName = destinationName;
+    }
+
+    public String getConsumerGroup() {
+        return consumerGroup;
+    }
+
+    public void setConsumerGroup(String consumerGroup) {
+        this.consumerGroup = consumerGroup;
     }
 }

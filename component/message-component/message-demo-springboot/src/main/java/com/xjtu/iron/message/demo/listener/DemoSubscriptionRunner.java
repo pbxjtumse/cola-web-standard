@@ -31,10 +31,13 @@ public class DemoSubscriptionRunner implements ApplicationRunner, AutoCloseable 
     /** 是否自动订阅。 */
     private final boolean autoSubscribe;
 
+    /** Demo 默认逻辑命名空间。 */
+    private final String destinationNamespace;
+
     /** Demo 默认逻辑消息名称。 */
     private final String destinationName;
 
-    /** Demo 消费组，同时会映射为 Pulsar subscriptionName。 */
+    /** Demo 消费组，同时会映射为 Kafka consumer group 或 Pulsar subscriptionName。 */
     private final String consumerGroup;
 
     /** 当前启动出来的订阅句柄。 */
@@ -44,11 +47,13 @@ public class DemoSubscriptionRunner implements ApplicationRunner, AutoCloseable 
             MessageTemplate messageTemplate,
             DemoMessageListener listener,
             @Value("${xjtu.iron.message.demo.auto-subscribe:false}") boolean autoSubscribe,
+            @Value("${xjtu.iron.message.demo.destination-namespace:demo}") String destinationNamespace,
             @Value("${xjtu.iron.message.demo.destination-name:message-demo-topic}") String destinationName,
-            @Value("${xjtu.iron.message.pulsar.consumer.subscription-name:message-demo-subscription}") String consumerGroup) {
+            @Value("${xjtu.iron.message.demo.consumer-group:message-demo-consumer-group}") String consumerGroup) {
         this.messageTemplate = messageTemplate;
         this.listener = listener;
         this.autoSubscribe = autoSubscribe;
+        this.destinationNamespace = destinationNamespace;
         this.destinationName = destinationName;
         this.consumerGroup = consumerGroup;
     }
@@ -65,8 +70,8 @@ public class DemoSubscriptionRunner implements ApplicationRunner, AutoCloseable 
         if (!autoSubscribe) {
             return;
         }
-        // Demo 固定使用 namespace=demo，name 来自配置。
-        MessageDestination destination = MessageDestination.of("demo", destinationName);
+        // Demo 使用配置中的逻辑 namespace + name，物理 Topic 仍由 routes 决定。
+        MessageDestination destination = MessageDestination.of(destinationNamespace, destinationName);
         // Java 运行期无法表达 Map<String, Object>.class，因此这里使用 Map.class。
         ConsumerDefinition<Map> definition = ConsumerDefinition.of(
                 destination,

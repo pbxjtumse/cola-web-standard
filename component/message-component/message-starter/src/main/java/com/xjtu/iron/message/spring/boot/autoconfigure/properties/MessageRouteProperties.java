@@ -67,4 +67,25 @@ public class MessageRouteProperties {
     public void setPhysicalName(String physicalName) {
         this.physicalName = physicalName;
     }
+
+    /**
+     * 兼容 physical-destination 配置项。
+     *
+     * <p>组件内部统一使用 physicalName；该别名仅用于兼容较早的示例配置，
+     * 推荐新配置统一写成 physical-name。</p>
+     *
+     * @return Provider 物理目的地
+     */
+    public String getPhysicalDestination() {
+        return physicalName;
+    }
+
+    /**
+     * 兼容 physical-destination 配置项。
+     *
+     * @param physicalDestination Provider 物理目的地
+     */
+    public void setPhysicalDestination(String physicalDestination) {
+        this.physicalName = physicalDestination;
+    }
 }
