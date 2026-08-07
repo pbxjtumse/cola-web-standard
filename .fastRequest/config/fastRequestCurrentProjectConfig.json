@@ -9,10 +9,10 @@
 			"hostGroup":[
 				{
 					"env":"local",
-					"url":"http://localhost:8080"
+					"url":"http://localhost:18081"
 				}
 			],
-			"name":"cola-web-standard-adapter"
+			"name":"message-demo-springboot"
 		}
 	],
 	"envList":[
@@ -25,7 +25,7 @@
 	"postScript":"",
 	"preScript":"",
 	"projectList":[
-		"cola-web-standard-adapter"
+		"message-demo-springboot"
 	],
 	"searchTruncatedCode":"",
 	"syncModel":{

@@ -1,0 +1,107 @@
+{
+  "groups": [
+    {
+      "name": "xjtu.iron.message.rocketmq",
+      "type": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "xjtu.iron.message.rocketmq.enabled",
+      "type": "java.lang.Boolean",
+      "description": "是否启用 RocketMQ Provider 自动配置。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties",
+      "defaultValue": false
+    },
+    {
+      "name": "xjtu.iron.message.rocketmq.name-server",
+      "type": "java.lang.String",
+      "description": "RocketMQ NameServer 地址，多个地址使用分号分隔。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties",
+      "defaultValue": "localhost:9876"
+    },
+    {
+      "name": "xjtu.iron.message.rocketmq.producer-group",
+      "type": "java.lang.String",
+      "description": "RocketMQ Producer 组名。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties",
+      "defaultValue": "message-producer-group"
+    },
+    {
+      "name": "xjtu.iron.message.rocketmq.consumer-group",
+      "type": "java.lang.String",
+      "description": "RocketMQ 默认 Consumer 组名。Demo 优先使用 xjtu.iron.message.demo.consumer-group。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties",
+      "defaultValue": "message-consumer-group"
+    },
+    {
+      "name": "xjtu.iron.message.rocketmq.topics",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Provider 启动时预声明的 RocketMQ Topic；为空时从 routes 中 provider=rocketmq 的 physical-name 自动推导。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties"
+    },
+    {
+      "name": "xjtu.iron.message.rocketmq.send-timeout",
+      "type": "java.time.Duration",
+      "description": "RocketMQ 同步发送超时。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties",
+      "defaultValue": "3s"
+    },
+    {
+      "name": "xjtu.iron.message.rocketmq.request-timeout",
+      "type": "java.time.Duration",
+      "description": "RocketMQ 请求超时预留项；当前 4.x Provider 主要使用 send-timeout。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties",
+      "defaultValue": "3s"
+    },
+    {
+      "name": "xjtu.iron.message.rocketmq.retry-times-when-send-failed",
+      "type": "java.lang.Integer",
+      "description": "同步发送失败后的客户端重试次数。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties",
+      "defaultValue": 2
+    },
+    {
+      "name": "xjtu.iron.message.rocketmq.retry-times-when-send-async-failed",
+      "type": "java.lang.Integer",
+      "description": "异步发送失败后的客户端重试次数。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties",
+      "defaultValue": 2
+    },
+    {
+      "name": "xjtu.iron.message.rocketmq.vip-channel-enabled",
+      "type": "java.lang.Boolean",
+      "description": "是否启用 RocketMQ VIP Channel；集群外验证建议关闭，避免访问 10909。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties",
+      "defaultValue": false
+    },
+    {
+      "name": "xjtu.iron.message.rocketmq.consume-from-where",
+      "type": "java.lang.String",
+      "description": "Consumer 从哪里开始消费，例如 CONSUME_FROM_LAST_OFFSET 或 CONSUME_FROM_FIRST_OFFSET。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties",
+      "defaultValue": "CONSUME_FROM_LAST_OFFSET"
+    },
+    {
+      "name": "xjtu.iron.message.rocketmq.tag-expression",
+      "type": "java.lang.String",
+      "description": "Tag 过滤表达式；一期默认订阅全部 Tag。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties",
+      "defaultValue": "*"
+    },
+    {
+      "name": "xjtu.iron.message.rocketmq.access-key",
+      "type": "java.lang.String",
+      "description": "RocketMQ ACL AccessKey；当前本地验证默认不配置。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties"
+    },
+    {
+      "name": "xjtu.iron.message.rocketmq.secret-key",
+      "type": "java.lang.String",
+      "description": "RocketMQ ACL SecretKey；当前本地验证默认不配置。",
+      "sourceType": "com.xjtu.iron.message.integration.rocketmq.autoconfigure.RocketMqMessageProperties"
+    }
+  ],
+  "hints": []
+}

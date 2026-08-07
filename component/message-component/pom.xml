@@ -15,7 +15,7 @@
     </description>
     <properties>
         <kafka.version>4.3.1</kafka.version>
-        <rocketmq.client.version>5.2.1</rocketmq.client.version>
+        <rocketmq.client.version>4.9.6</rocketmq.client.version>
         <pulsar.version>4.0.12</pulsar.version>
     </properties>
     <modules>
@@ -42,10 +42,10 @@
                 <artifactId>kafka-clients</artifactId>
                 <version>${kafka.version}</version>
             </dependency>
-            <!-- RocketMQ 5.x Provider 使用的客户端版本。 -->
+            <!-- RocketMQ 4.x Remoting Provider 使用的客户端版本。 -->
             <dependency>
                 <groupId>org.apache.rocketmq</groupId>
-                <artifactId>rocketmq-client-java</artifactId>
+                <artifactId>rocketmq-client</artifactId>
                 <version>${rocketmq.client.version}</version>
             </dependency>
             <!-- Pulsar Provider 使用的客户端版本。 -->

@@ -2,245 +2,237 @@ package com.xjtu.iron.message.integration.rocketmq;
 
 import java.time.Duration;
 import java.util.LinkedHashSet;
-import java.util.Set;
 import java.util.Objects;
+import java.util.Set;
 
 /**
- * 表示 RocketMQ 5.x gRPC Java Client 的一期基础配置。
+ * RocketMQ 4.x Remoting Java Client 的一期基础配置。
  *
- * <p>{@code endpoints}：gRPC Proxy 接入地址</p>
- * <p>{@code topics}：Producer 启动时预声明的物理 Topic</p>
- * <p>{@code requestTimeout}：客户端请求超时</p>
- * <p>{@code maxAttempts}：RocketMQ 客户端内部最大尝试次数</p>
- * <p>{@code accessKey}：可选访问密钥</p>
- * <p>{@code secretKey}：可选访问密钥</p>
+ * <p>{@code nameServer}：RocketMQ NameServer 地址</p>
+ * <p>{@code producerGroup}：Producer 组名</p>
+ * <p>{@code topics}：当前 Provider 允许发送和订阅的物理 Topic</p>
+ * <p>{@code sendTimeout}：同步发送等待 Broker 返回的超时时间</p>
+ * <p>{@code vipChannelEnabled}：是否启用 10909 VIP Channel</p>
  */
 public final class RocketMqMessageProviderConfig {
-    /** gRPC Proxy 接入地址。 */
-    private final String endpoints;
 
-    /** Producer 启动时预声明的物理 Topic。 */
+    /** RocketMQ NameServer 地址。 */
+    private final String nameServer;
+
+    /** Producer 组名。 */
+    private final String producerGroup;
+
+    /** 当前 Provider 允许发送和订阅的物理 Topic。 */
     private final Set<String> topics;
 
-    /** 客户端请求超时。 */
-    private final Duration requestTimeout;
+    /** 同步发送超时。 */
+    private final Duration sendTimeout;
 
-    /** RocketMQ 客户端内部最大尝试次数。 */
-    private final int maxAttempts;
+    /** 同步发送失败后的重试次数。 */
+    private final int retryTimesWhenSendFailed;
 
-    /** 可选访问密钥。 */
+    /** 异步发送失败后的重试次数。 */
+    private final int retryTimesWhenSendAsyncFailed;
+
+    /** 是否启用 VIP Channel。 */
+    private final boolean vipChannelEnabled;
+
+    /** Consumer 从哪里开始消费。 */
+    private final String consumeFromWhere;
+
+    /** Tag 过滤表达式。 */
+    private final String tagExpression;
+
+    /** 可选访问密钥，当前一期本地验证不启用。 */
     private final String accessKey;
 
-    /** 可选访问密钥。 */
+    /** 可选访问密钥，当前一期本地验证不启用。 */
     private final String secretKey;
-
 
     /**
      * 校验并复制 RocketMQ 配置。
      */
     public RocketMqMessageProviderConfig(
-        String endpoints,
-        Set<String> topics,
-        Duration requestTimeout,
-        int maxAttempts,
-        String accessKey,
-        String secretKey) {
-        // endpoints 必须存在。
-        if (endpoints == null || endpoints.isBlank()) {
-            // 没有 Proxy 地址无法建立客户端连接。
-            throw new IllegalArgumentException("endpoints must not be blank");
+            String nameServer,
+            String producerGroup,
+            Set<String> topics,
+            Duration sendTimeout,
+            int retryTimesWhenSendFailed,
+            int retryTimesWhenSendAsyncFailed,
+            boolean vipChannelEnabled,
+            String consumeFromWhere,
+            String tagExpression,
+            String accessKey,
+            String secretKey) {
+        if (nameServer == null || nameServer.isBlank()) {
+            throw new IllegalArgumentException("nameServer must not be blank");
         }
-        // 去除地址首尾空白。
-        endpoints = endpoints.trim();
-        // Topic 集合不能为空。
+        nameServer = nameServer.trim();
+        if (producerGroup == null || producerGroup.isBlank()) {
+            throw new IllegalArgumentException("producerGroup must not be blank");
+        }
+        producerGroup = producerGroup.trim();
         if (topics == null || topics.isEmpty()) {
-            // gRPC Producer Builder 要求预声明发送 Topic。
             throw new IllegalArgumentException("at least one RocketMQ topic is required");
         }
-        // 逐个标准化 Topic。
         LinkedHashSet<String> normalizedTopics = new LinkedHashSet<>();
-        // 遍历配置 Topic。
         for (String topic : topics) {
-            // Topic 不能为空。
             if (topic == null || topic.isBlank()) {
-                // 空 Topic 属于启动配置错误。
                 throw new IllegalArgumentException("RocketMQ topic must not be blank");
             }
-            // 保存标准化 Topic。
             normalizedTopics.add(topic.trim());
         }
-        // 保存不可变 Topic Set。
         topics = Set.copyOf(normalizedTopics);
-        // 请求超时必须为正数。
-        if (requestTimeout == null || requestTimeout.isZero() || requestTimeout.isNegative()) {
-            // 非正超时无意义。
-            throw new IllegalArgumentException("requestTimeout must be positive");
+        if (sendTimeout == null || sendTimeout.isZero() || sendTimeout.isNegative()) {
+            throw new IllegalArgumentException("sendTimeout must be positive");
         }
-        // 最大尝试次数至少为 1。
-        if (maxAttempts < 1) {
-            // 客户端必须至少尝试一次。
-            throw new IllegalArgumentException("maxAttempts must be at least 1");
+        if (retryTimesWhenSendFailed < 0) {
+            throw new IllegalArgumentException("retryTimesWhenSendFailed must not be negative");
         }
-        // accessKey 和 secretKey 必须同时存在或同时为空。
+        if (retryTimesWhenSendAsyncFailed < 0) {
+            throw new IllegalArgumentException("retryTimesWhenSendAsyncFailed must not be negative");
+        }
+        consumeFromWhere = normalizeOrDefault(consumeFromWhere, "CONSUME_FROM_LAST_OFFSET");
+        tagExpression = normalizeOrDefault(tagExpression, "*");
         boolean accessKeyPresent = accessKey != null && !accessKey.isBlank();
-        // 判断 secretKey 是否存在。
         boolean secretKeyPresent = secretKey != null && !secretKey.isBlank();
-        // 仅提供一个凭证字段时拒绝启动。
         if (accessKeyPresent != secretKeyPresent) {
-            // 防止创建无法认证的客户端。
-            throw new IllegalArgumentException(
-                    "accessKey and secretKey must be configured together");
+            throw new IllegalArgumentException("accessKey and secretKey must be configured together");
         }
-        // 空白凭证统一转换为 null。
         accessKey = accessKeyPresent ? accessKey.trim() : null;
-        // 空白凭证统一转换为 null。
         secretKey = secretKeyPresent ? secretKey.trim() : null;
-    
-        // 保存完成校验和标准化后的 endpoints。
-        this.endpoints = endpoints;
-        // 保存完成校验和标准化后的 topics。
+
+        this.nameServer = nameServer;
+        this.producerGroup = producerGroup;
         this.topics = topics;
-        // 保存完成校验和标准化后的 requestTimeout。
-        this.requestTimeout = requestTimeout;
-        // 保存完成校验和标准化后的 maxAttempts。
-        this.maxAttempts = maxAttempts;
-        // 保存完成校验和标准化后的 accessKey。
+        this.sendTimeout = sendTimeout;
+        this.retryTimesWhenSendFailed = retryTimesWhenSendFailed;
+        this.retryTimesWhenSendAsyncFailed = retryTimesWhenSendAsyncFailed;
+        this.vipChannelEnabled = vipChannelEnabled;
+        this.consumeFromWhere = consumeFromWhere;
+        this.tagExpression = tagExpression;
         this.accessKey = accessKey;
-        // 保存完成校验和标准化后的 secretKey。
         this.secretKey = secretKey;
     }
 
-    /**
-     * 创建无鉴权默认配置。
-     *
-     * @param endpoints gRPC Proxy 地址
-     * @param topics 物理 Topic
-     * @return 默认配置
-     */
-    public static RocketMqMessageProviderConfig defaults(
-            String endpoints,
-            Set<String> topics) {
-        // 默认三秒请求超时和三次客户端尝试。
+    /** 创建无鉴权默认配置。 */
+    public static RocketMqMessageProviderConfig defaults(String nameServer, Set<String> topics) {
         return new RocketMqMessageProviderConfig(
-                endpoints,
+                nameServer,
+                "message-producer-group",
                 topics,
                 Duration.ofSeconds(3),
-                3,
+                2,
+                2,
+                false,
+                "CONSUME_FROM_LAST_OFFSET",
+                "*",
                 null,
                 null);
     }
-    /**
-     * 返回gRPC Proxy 接入地址。
-     *
-     * @return gRPC Proxy 接入地址
-     */
-    public String endpoints() {
-        // 返回不可变字段。
-        return endpoints;
+
+    private static String normalizeOrDefault(String value, String defaultValue) {
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        return value.trim();
     }
 
-    /**
-     * 返回Producer 启动时预声明的物理 Topic。
-     *
-     * @return Producer 启动时预声明的物理 Topic
-     */
+    public String nameServer() {
+        return nameServer;
+    }
+
+    public String producerGroup() {
+        return producerGroup;
+    }
+
     public Set<String> topics() {
-        // 返回不可变字段。
         return topics;
     }
 
-    /**
-     * 返回客户端请求超时。
-     *
-     * @return 客户端请求超时
-     */
-    public Duration requestTimeout() {
-        // 返回不可变字段。
-        return requestTimeout;
+    public Duration sendTimeout() {
+        return sendTimeout;
     }
 
-    /**
-     * 返回RocketMQ 客户端内部最大尝试次数。
-     *
-     * @return RocketMQ 客户端内部最大尝试次数
-     */
-    public int maxAttempts() {
-        // 返回不可变字段。
-        return maxAttempts;
+    public int retryTimesWhenSendFailed() {
+        return retryTimesWhenSendFailed;
     }
 
-    /**
-     * 返回可选访问密钥。
-     *
-     * @return 可选访问密钥
-     */
+    public int retryTimesWhenSendAsyncFailed() {
+        return retryTimesWhenSendAsyncFailed;
+    }
+
+    public boolean vipChannelEnabled() {
+        return vipChannelEnabled;
+    }
+
+    public String consumeFromWhere() {
+        return consumeFromWhere;
+    }
+
+    public String tagExpression() {
+        return tagExpression;
+    }
+
     public String accessKey() {
-        // 返回不可变字段。
         return accessKey;
     }
 
-    /**
-     * 返回可选访问密钥。
-     *
-     * @return 可选访问密钥
-     */
     public String secretKey() {
-        // 返回不可变字段。
         return secretKey;
     }
 
-    /**
-     * 按全部字段比较两个值对象。
-     *
-     * @param object 待比较对象
-     * @return 字段值全部一致时返回 true
-     */
     @Override
     public boolean equals(Object object) {
-        // 同一对象直接相等。
         if (this == object) {
             return true;
         }
-        // 类型不同或对象为空时不相等。
         if (object == null || getClass() != object.getClass()) {
             return false;
         }
-        // 转换为当前类型后逐字段比较。
         RocketMqMessageProviderConfig other = (RocketMqMessageProviderConfig) object;
-        return Objects.equals(endpoints, other.endpoints)
+        return retryTimesWhenSendFailed == other.retryTimesWhenSendFailed
+                && retryTimesWhenSendAsyncFailed == other.retryTimesWhenSendAsyncFailed
+                && vipChannelEnabled == other.vipChannelEnabled
+                && Objects.equals(nameServer, other.nameServer)
+                && Objects.equals(producerGroup, other.producerGroup)
                 && Objects.equals(topics, other.topics)
-                && Objects.equals(requestTimeout, other.requestTimeout)
-                && maxAttempts == other.maxAttempts
+                && Objects.equals(sendTimeout, other.sendTimeout)
+                && Objects.equals(consumeFromWhere, other.consumeFromWhere)
+                && Objects.equals(tagExpression, other.tagExpression)
                 && Objects.equals(accessKey, other.accessKey)
                 && Objects.equals(secretKey, other.secretKey);
     }
 
-    /**
-     * 根据全部字段计算哈希值。
-     *
-     * @return 哈希值
-     */
     @Override
     public int hashCode() {
-        // 使用与 equals 相同的字段计算哈希值。
-        return Objects.hash(endpoints, topics, requestTimeout, maxAttempts, accessKey, secretKey);
+        return Objects.hash(
+                nameServer,
+                producerGroup,
+                topics,
+                sendTimeout,
+                retryTimesWhenSendFailed,
+                retryTimesWhenSendAsyncFailed,
+                vipChannelEnabled,
+                consumeFromWhere,
+                tagExpression,
+                accessKey,
+                secretKey);
     }
 
-    /**
-     * 返回便于诊断的字段摘要。
-     *
-     * @return 字符串摘要
-     */
     @Override
     public String toString() {
-        // 认证信息只输出是否配置，禁止把访问密钥写入日志。
         return "RocketMqMessageProviderConfig{" +
-                "endpoints=" + endpoints +
+                "nameServer=" + nameServer +
+                ", producerGroup=" + producerGroup +
                 ", topics=" + topics +
-                ", requestTimeout=" + requestTimeout +
-                ", maxAttempts=" + maxAttempts +
+                ", sendTimeout=" + sendTimeout +
+                ", retryTimesWhenSendFailed=" + retryTimesWhenSendFailed +
+                ", retryTimesWhenSendAsyncFailed=" + retryTimesWhenSendAsyncFailed +
+                ", vipChannelEnabled=" + vipChannelEnabled +
+                ", consumeFromWhere=" + consumeFromWhere +
+                ", tagExpression=" + tagExpression +
                 ", authenticationConfigured=" + (accessKey != null) +
                 '}';
     }
-
 }

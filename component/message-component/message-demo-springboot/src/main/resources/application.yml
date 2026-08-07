@@ -50,25 +50,60 @@ spring:
 #          consumer-name: message-demo-consumer
 
 
+#xjtu:
+#  iron:
+#    message:
+#      enabled: true
+#      provider: kafka
+#
+#      application-name: ${spring.application.name}
+#      default-schema-version: "1"
+#      default-confirm-timeout: 5s
+#      routing-mode: STRICT
+#      serializer:
+#        type: jackson
+#
+#      # 逻辑目的地到 Provider 物理目的地的路由。
+#      # 业务代码只使用 namespace=demo、name=message；Kafka 物理 Topic 由 physical-name 决定。
+#      routes:
+#        - namespace: demo
+#          name: message
+#          provider: kafka
+#          physical-name: message-demo-topic
+#
+#      demo:
+#        auto-subscribe: true
+#        destination-namespace: demo
+#        destination-name: message
+#        consumer-group: message-demo-consumer-group
+#
+#      kafka:
+#        enabled: true
+#        bootstrap-servers: www.xjtu-iron.online:31959,www.xjtu-iron.online:31934,www.xjtu-iron.online:31100
+#        client-id: message-demo-springboot
+#        poll-timeout: 1s
+#        consumer-retry-backoff: 1s
+#
+#      # 当前验证 Kafka 时关闭 Pulsar Provider，避免 Pulsar 依赖在 classpath 中时自动连接 Pulsar。
+#      pulsar:
+#        enabled: false
+
+
 xjtu:
   iron:
     message:
       enabled: true
-      provider: kafka
+      provider: rocketmq
 
-      application-name: ${spring.application.name}
+      application-name: message-demo-springboot
       default-schema-version: "1"
       default-confirm-timeout: 5s
-      routing-mode: STRICT
-      serializer:
-        type: jackson
+      routing-mode: strict
 
-      # 逻辑目的地到 Provider 物理目的地的路由。
-      # 业务代码只使用 namespace=demo、name=message；Kafka 物理 Topic 由 physical-name 决定。
       routes:
         - namespace: demo
           name: message
-          provider: kafka
+          provider: rocketmq
           physical-name: message-demo-topic
 
       demo:
@@ -78,12 +113,22 @@ xjtu:
         consumer-group: message-demo-consumer-group
 
       kafka:
-        enabled: true
-        bootstrap-servers: www.xjtu-iron.online:31959,www.xjtu-iron.online:31934,www.xjtu-iron.online:31100
-        client-id: message-demo-springboot
-        poll-timeout: 1s
-        consumer-retry-backoff: 1s
+        enabled: false
 
-      # 当前验证 Kafka 时关闭 Pulsar Provider，避免 Pulsar 依赖在 classpath 中时自动连接 Pulsar。
       pulsar:
         enabled: false
+
+      rocketmq:
+        enabled: true
+        name-server: www.xjtu-iron.online:9876
+        producer-group: message-demo-producer-group
+        consumer-group: message-demo-consumer-group
+        topics:
+          - message-demo-topic
+        send-timeout: 3s
+        request-timeout: 3s
+        retry-times-when-send-failed: 2
+        retry-times-when-send-async-failed: 2
+        vip-channel-enabled: false
+        consume-from-where: CONSUME_FROM_LAST_OFFSET
+        tag-expression: "*"
