@@ -1,5 +1,8 @@
 package com.xjtu.iron.message.spring.boot.autoconfigure.properties;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Demo 辅助配置。
  *
@@ -26,6 +29,13 @@ public class MessageDemoProperties {
      * Demo 默认消费组。
      */
     private String consumerGroup = "message-demo-consumer-group";
+
+    /**
+     * Demo 并行验证时启用的 Provider 列表。
+     *
+     * <p>这里的名称必须和 MessageProvider.name() 保持一致，例如 kafka、pulsar、rocketmq。</p>
+     */
+    private List<String> providers = new ArrayList<>(List.of("kafka", "pulsar", "rocketmq"));
 
     public boolean isAutoSubscribe() {
         return autoSubscribe;
@@ -57,5 +67,13 @@ public class MessageDemoProperties {
 
     public void setConsumerGroup(String consumerGroup) {
         this.consumerGroup = consumerGroup;
+    }
+
+    public List<String> getProviders() {
+        return providers;
+    }
+
+    public void setProviders(List<String> providers) {
+        this.providers = providers == null ? new ArrayList<>() : providers;
     }
 }

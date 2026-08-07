@@ -6,18 +6,23 @@ import com.xjtu.iron.message.api.MessageDestination;
 import com.xjtu.iron.message.api.MessageEnvelope;
 import com.xjtu.iron.message.api.MessageSubscription;
 import com.xjtu.iron.message.core.MessageTemplate;
-import org.springframework.beans.factory.annotation.Value;
+import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageProperties;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Demo 启动后的普通消息订阅器。
  *
  * <p>当前 message-starter 还没有做注解式 @MessageListener 扫描，
- * 因此 Demo 先通过 MessageTemplate 显式订阅，便于验证 Pulsar 的基础消费闭环。</p>
+ * 因此 Demo 先通过 MessageTemplate 显式订阅，便于验证多 Provider 的基础消费闭环。</p>
  */
 @Component
 public class DemoSubscriptionRunner implements ApplicationRunner, AutoCloseable {
@@ -28,34 +33,19 @@ public class DemoSubscriptionRunner implements ApplicationRunner, AutoCloseable 
     /** Demo 业务处理器。 */
     private final DemoMessageListener listener;
 
-    /** 是否自动订阅。 */
-    private final boolean autoSubscribe;
+    /** 通用消息配置。 */
+    private final MessageProperties properties;
 
-    /** Demo 默认逻辑命名空间。 */
-    private final String destinationNamespace;
-
-    /** Demo 默认逻辑消息名称。 */
-    private final String destinationName;
-
-    /** Demo 消费组，同时会映射为 Kafka consumer group 或 Pulsar subscriptionName。 */
-    private final String consumerGroup;
-
-    /** 当前启动出来的订阅句柄。 */
-    private MessageSubscription subscription;
+    /** 当前启动出来的订阅句柄集合。 */
+    private final List<MessageSubscription> subscriptions = new ArrayList<>();
 
     public DemoSubscriptionRunner(
             MessageTemplate messageTemplate,
             DemoMessageListener listener,
-            @Value("${xjtu.iron.message.demo.auto-subscribe:false}") boolean autoSubscribe,
-            @Value("${xjtu.iron.message.demo.destination-namespace:demo}") String destinationNamespace,
-            @Value("${xjtu.iron.message.demo.destination-name:message-demo-topic}") String destinationName,
-            @Value("${xjtu.iron.message.demo.consumer-group:message-demo-consumer-group}") String consumerGroup) {
+            MessageProperties properties) {
         this.messageTemplate = messageTemplate;
         this.listener = listener;
-        this.autoSubscribe = autoSubscribe;
-        this.destinationNamespace = destinationNamespace;
-        this.destinationName = destinationName;
-        this.consumerGroup = consumerGroup;
+        this.properties = properties;
     }
 
     /**
@@ -67,27 +57,35 @@ public class DemoSubscriptionRunner implements ApplicationRunner, AutoCloseable 
     @SuppressWarnings({"rawtypes", "unchecked"})
     public void run(ApplicationArguments args) {
         // 未启用自动订阅时直接跳过，避免启动阶段连接外部 Broker。
-        if (!autoSubscribe) {
+        if (!properties.getDemo().isAutoSubscribe()) {
             return;
         }
         // Demo 使用配置中的逻辑 namespace + name，物理 Topic 仍由 routes 决定。
-        MessageDestination destination = MessageDestination.of(destinationNamespace, destinationName);
-        // Java 运行期无法表达 Map<String, Object>.class，因此这里使用 Map.class。
-        ConsumerDefinition<Map> definition = ConsumerDefinition.of(
-                destination,
-                consumerGroup,
-                Map.class);
-        // 启动订阅；业务成功保存后返回 SUCCESS，让 Provider ACK 或提交位点。
-        this.subscription = messageTemplate.subscribe(definition, (message, context) -> {
-            // 当前消费到的消息信封。
-            MessageEnvelope<?> typedMessage = message;
+        String namespace = properties.getDemo().getDestinationNamespace();
+        String name = properties.getDemo().getDestinationName();
+        String consumerGroup = properties.getDemo().getConsumerGroup();
 
-            // 调用 Demo 自己的监听器。
-            listener.onMessage(typedMessage);
+        // 并行验证模式下，为每个 Provider 单独创建一个订阅。
+        for (String providerName : enabledProviders()) {
+            MessageDestination destination = MessageDestination
+                    .of(namespace, name)
+                    .withProviderHint(providerName);
+            ConsumerDefinition<Map> definition = ConsumerDefinition.of(
+                    destination,
+                    consumerGroup,
+                    Map.class);
+            MessageSubscription subscription = messageTemplate.subscribe(definition, (message, context) -> {
+                // 当前消费到的消息信封。
+                MessageEnvelope<?> typedMessage = message;
 
-            // 业务处理成功后返回 SUCCESS，Provider 才会 ACK 或提交位点。
-            return ConsumeDecision.SUCCESS;
-        });
+                // 调用 Demo 自己的监听器，并保存 Provider 上下文。
+                listener.onMessage(typedMessage, context);
+
+                // 业务处理成功后返回 SUCCESS，Provider 才会 ACK 或提交位点。
+                return ConsumeDecision.SUCCESS;
+            });
+            subscriptions.add(subscription);
+        }
     }
 
     /**
@@ -95,11 +93,36 @@ public class DemoSubscriptionRunner implements ApplicationRunner, AutoCloseable 
      */
     @Override
     public void close() {
-        // 订阅不存在说明未启用自动订阅或启动失败。
-        if (subscription == null) {
-            return;
+        // 逐个关闭底层 Provider 订阅。
+        for (MessageSubscription subscription : subscriptions) {
+            if (subscription != null) {
+                subscription.close();
+            }
         }
-        // 关闭底层 Provider 订阅。
-        subscription.close();
+        subscriptions.clear();
+    }
+
+    private Set<String> enabledProviders() {
+        Set<String> providers = new LinkedHashSet<>();
+        List<String> configured = properties.getDemo().getProviders();
+        if (configured != null) {
+            for (String provider : configured) {
+                String normalized = normalizeProvider(provider);
+                if (normalized != null) {
+                    providers.add(normalized);
+                }
+            }
+        }
+        if (providers.isEmpty()) {
+            providers.add(normalizeProvider(properties.getProvider()));
+        }
+        return providers;
+    }
+
+    private static String normalizeProvider(String providerName) {
+        if (providerName == null || providerName.isBlank()) {
+            return null;
+        }
+        return providerName.trim().toLowerCase(Locale.ROOT);
     }
 }

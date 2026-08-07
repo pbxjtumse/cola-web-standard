@@ -1,5 +1,6 @@
 package com.xjtu.iron.message.demo.listener;
 
+import com.xjtu.iron.message.api.ConsumeContext;
 import com.xjtu.iron.message.api.MessageEnvelope;
 import com.xjtu.iron.message.demo.store.InMemoryReceivedMessageStore;
 import org.springframework.stereotype.Component;
@@ -28,5 +29,16 @@ public class DemoMessageListener {
     public void onMessage(MessageEnvelope<?> message) {
         // 保存消息视图。
         store.add(message);
+    }
+
+    /**
+     * 保存收到的消息和消费上下文。
+     *
+     * @param message 消息信封
+     * @param context 消费上下文
+     */
+    public void onMessage(MessageEnvelope<?> message, ConsumeContext context) {
+        // 保存消息视图。
+        store.add(message, context);
     }
 }

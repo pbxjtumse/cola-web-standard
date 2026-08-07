@@ -5,102 +5,31 @@ spring:
   application:
     name: message-demo-springboot
 
-#xjtu:
-#  iron:
-#    message:
-#      enabled: true
-#      provider: pulsar
-#      application-name: ${spring.application.name}
-#      default-schema-version: "1"
-#      default-confirm-timeout: 15s
-#      routing-mode: STRICT
-#      serializer:
-#        type: jackson
-#
-#      # 逻辑目的地到物理 Topic 的路由。
-#      # 业务代码只使用 namespace=demo、name=message-demo-topic，Provider 物理 Topic 由这里决定。
-#      routes:
-#        - namespace: demo
-#          name: message-demo-topic
-#          provider: pulsar
-#          physical-name: persistent://public/default/message-demo-topic
-#
-#      demo:
-#        auto-subscribe: true
-#        destination-name: message-demo-topic
-#
-#      pulsar:
-#        enabled: true
-#        service-url: pulsar://pulsar.xjtu-iron.online:6650
-#        tenant: public
-#        namespace: default
-#        operation-timeout: 15s
-#        negative-ack-redelivery-delay: 2s
-#        receiver-queue-size: 1000
-#
-#        producer:
-#          topic: persistent://public/default/message-demo-topic
-#          name: message-demo-producer
-#          send-timeout-seconds: 3
-#
-#        consumer:
-#          topic: persistent://public/default/message-demo-topic
-#          subscription-name: message-demo-subscription
-#          subscription-type: Shared
-#          consumer-name: message-demo-consumer
-
-
-#xjtu:
-#  iron:
-#    message:
-#      enabled: true
-#      provider: kafka
-#
-#      application-name: ${spring.application.name}
-#      default-schema-version: "1"
-#      default-confirm-timeout: 5s
-#      routing-mode: STRICT
-#      serializer:
-#        type: jackson
-#
-#      # 逻辑目的地到 Provider 物理目的地的路由。
-#      # 业务代码只使用 namespace=demo、name=message；Kafka 物理 Topic 由 physical-name 决定。
-#      routes:
-#        - namespace: demo
-#          name: message
-#          provider: kafka
-#          physical-name: message-demo-topic
-#
-#      demo:
-#        auto-subscribe: true
-#        destination-namespace: demo
-#        destination-name: message
-#        consumer-group: message-demo-consumer-group
-#
-#      kafka:
-#        enabled: true
-#        bootstrap-servers: www.xjtu-iron.online:31959,www.xjtu-iron.online:31934,www.xjtu-iron.online:31100
-#        client-id: message-demo-springboot
-#        poll-timeout: 1s
-#        consumer-retry-backoff: 1s
-#
-#      # 当前验证 Kafka 时关闭 Pulsar Provider，避免 Pulsar 依赖在 classpath 中时自动连接 Pulsar。
-#      pulsar:
-#        enabled: false
-
-
 xjtu:
   iron:
     message:
       enabled: true
+      # 默认 Provider 只影响 /demo/messages/send；/send/all 会显式指定 providerHint。
       provider: rocketmq
 
-      application-name: message-demo-springboot
+      application-name: ${spring.application.name}
       default-schema-version: "1"
       default-confirm-timeout: 5s
       routing-mode: strict
+      serializer:
+        type: jackson
 
+      # 同一个逻辑目的地 demo/message，同时配置三条 Provider 路由。
+      # 并行发送时通过 MessageDestination.withProviderHint(provider) 精确选择路由。
       routes:
+        - namespace: demo
+          name: message
+          provider: kafka
+          physical-name: message-demo-topic
+        - namespace: demo
+          name: message
+          provider: pulsar
+          physical-name: persistent://public/default/message-demo-topic
         - namespace: demo
           name: message
           provider: rocketmq
@@ -111,12 +40,27 @@ xjtu:
         destination-namespace: demo
         destination-name: message
         consumer-group: message-demo-consumer-group
+        # 三 Provider 并行订阅和 /send/all 的目标 Provider 列表。
+        providers:
+          - kafka
+          - pulsar
+          - rocketmq
 
       kafka:
-        enabled: false
+        enabled: true
+        bootstrap-servers: www.xjtu-iron.online:31959,www.xjtu-iron.online:31934,www.xjtu-iron.online:31100
+        client-id: message-demo-springboot
+        poll-timeout: 1s
+        consumer-retry-backoff: 1s
 
       pulsar:
-        enabled: false
+        enabled: true
+        service-url: pulsar://pulsar.xjtu-iron.online:6650
+        tenant: public
+        namespace: default
+        operation-timeout: 15s
+        negative-ack-redelivery-delay: 2s
+        receiver-queue-size: 1000
 
       rocketmq:
         enabled: true

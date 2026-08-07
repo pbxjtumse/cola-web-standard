@@ -4,21 +4,30 @@ import com.xjtu.iron.message.api.MessageDestination;
 import com.xjtu.iron.message.api.MessageEnvelope;
 import com.xjtu.iron.message.api.SendResult;
 import com.xjtu.iron.message.core.MessageTemplate;
+import com.xjtu.iron.message.demo.dto.MultiSendMessageResponse;
 import com.xjtu.iron.message.demo.dto.ReceivedMessageView;
 import com.xjtu.iron.message.demo.dto.SendMessageRequest;
 import com.xjtu.iron.message.demo.dto.SendMessageResponse;
 import com.xjtu.iron.message.demo.store.InMemoryReceivedMessageStore;
-import org.springframework.beans.factory.annotation.Value;
+import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageProperties;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Spring Boot Demo HTTP 接口。
@@ -35,76 +44,180 @@ public class MessageDemoController {
     /** 接收消息观察仓库。 */
     private final InMemoryReceivedMessageStore receivedMessageStore;
 
-    /** 默认逻辑命名空间；不要填写 Provider 物理 namespace。 */
-    private final String defaultNamespace;
-
-    /** 默认逻辑消息名称；不要填写 persistent:// 物理 Topic。 */
-    private final String defaultTopic;
+    /** 消息组件配置。 */
+    private final MessageProperties properties;
 
     public MessageDemoController(
             MessageTemplate messageTemplate,
             InMemoryReceivedMessageStore receivedMessageStore,
-            @Value("${xjtu.iron.message.demo.destination-namespace:demo}") String defaultNamespace,
-            @Value("${xjtu.iron.message.demo.destination-name:message-demo-topic}") String defaultTopic) {
+            MessageProperties properties) {
         this.messageTemplate = messageTemplate;
         this.receivedMessageStore = receivedMessageStore;
-        this.defaultNamespace = defaultNamespace;
-        this.defaultTopic = defaultTopic;
+        this.properties = properties;
     }
 
+    /**
+     * 使用默认 Provider 发送一条消息。
+     */
     @PostMapping("/send")
     public SendMessageResponse send(@RequestBody SendMessageRequest request) {
-        // Demo 中把 topic 字段当作逻辑 name 使用。
-        String name = request.getTopic();
-        // 未传入时使用默认逻辑名称。
-        if (name == null || name.isBlank()) {
-            name = defaultTopic;
+        String providerName = normalizeProvider(properties.getProvider());
+        return sendToProvider(providerName, request, null);
+    }
+
+    /**
+     * 使用指定 Provider 发送一条消息。
+     *
+     * <p>例如：/demo/messages/send/kafka、/demo/messages/send/pulsar、/demo/messages/send/rocketmq。</p>
+     */
+    @PostMapping("/send/{providerName}")
+    public SendMessageResponse sendToProvider(
+            @PathVariable String providerName,
+            @RequestBody SendMessageRequest request) {
+        return sendToProvider(normalizeProvider(providerName), request, null);
+    }
+
+    /**
+     * 并行向配置中的全部 Provider 发送一条逻辑相同的消息。
+     *
+     * <p>每个 Provider 都会生成独立的 messageId，公共 batchId 通过 header 关联。</p>
+     */
+    @PostMapping("/send/all")
+    public MultiSendMessageResponse sendAll(@RequestBody SendMessageRequest request) {
+        Instant startedAt = Instant.now();
+        String batchId = UUID.randomUUID().toString().replace("-", "");
+        List<CompletableFuture<SendMessageResponse>> futures = new ArrayList<>();
+        for (String providerName : enabledProviders()) {
+            futures.add(CompletableFuture.supplyAsync(
+                    () -> sendToProvider(providerName, request, batchId)));
         }
-        // 消息类型未传入时给出 Demo 默认类型。
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        List<SendMessageResponse> results = new ArrayList<>();
+        for (CompletableFuture<SendMessageResponse> future : futures) {
+            results.add(future.join());
+        }
+        return new MultiSendMessageResponse(batchId, startedAt, Instant.now(), results);
+    }
+
+    /**
+     * 返回全部接收记录。
+     */
+    @GetMapping("/received")
+    public List<ReceivedMessageView> received() {
+        return receivedMessageStore.list();
+    }
+
+    /**
+     * 按 Provider 返回接收记录。
+     */
+    @GetMapping("/received/{providerName}")
+    public List<ReceivedMessageView> receivedByProvider(@PathVariable String providerName) {
+        return receivedMessageStore.listByProvider(providerName);
+    }
+
+    /**
+     * 返回各 Provider 的接收数量。
+     */
+    @GetMapping("/received-summary")
+    public Map<String, Long> receivedSummary() {
+        return receivedMessageStore.countByProvider();
+    }
+
+    /**
+     * 清空接收记录。
+     */
+    @DeleteMapping("/received")
+    public void clear() {
+        receivedMessageStore.clear();
+    }
+
+    /**
+     * Demo 健康检查。
+     */
+    @GetMapping("/health")
+    public String health() {
+        return "OK";
+    }
+
+    private SendMessageResponse sendToProvider(
+            String providerName,
+            SendMessageRequest request,
+            String batchId) {
+        try {
+            String name = logicalName(request);
+            MessageDestination destination = MessageDestination
+                    .of(properties.getDemo().getDestinationNamespace(), name)
+                    .withProviderHint(providerName);
+            MessageEnvelope<Map<String, Object>> envelope = buildEnvelope(request, providerName, batchId);
+            SendResult result = messageTemplate.send(destination, envelope);
+            return SendMessageResponse.from(result);
+        } catch (RuntimeException exception) {
+            return SendMessageResponse.failed(
+                    providerName,
+                    logicalTopic(request),
+                    exception.getMessage());
+        }
+    }
+
+    private MessageEnvelope<Map<String, Object>> buildEnvelope(
+            SendMessageRequest request,
+            String providerName,
+            String batchId) {
         String messageType = request.getEventType();
         if (messageType == null || messageType.isBlank()) {
             messageType = "DemoMessage";
         }
-        // 构造逻辑目的地；真实物理 Topic 仍由路由表决定。
-        MessageDestination destination = MessageDestination.of(defaultNamespace, name);
-        // 构造统一消息信封。
         Map<String, Object> payload = request.getPayload() == null
                 ? Map.of()
                 : new LinkedHashMap<>(request.getPayload());
-        // 用户消息头允许为空，进入 Builder 前先收口为明确类型，避免泛型推断发散。
         Map<String, String> headers = request.getHeaders() == null
-                ? Map.of()
+                ? new LinkedHashMap<>()
                 : new LinkedHashMap<>(request.getHeaders());
-        MessageEnvelope<Map<String, Object>> envelope = MessageEnvelope
+        headers.put("demo-provider-target", providerName);
+        if (batchId != null && !batchId.isBlank()) {
+            headers.put("demo-broadcast-batch-id", batchId);
+        }
+        return MessageEnvelope
                 .<Map<String, Object>>builder(messageType, payload)
                 .messageKey(request.getBusinessKey())
                 .headers(headers)
                 .build();
-        // 发送消息。
-        SendResult result = messageTemplate.send(destination, envelope);
-        // 返回标准结果摘要。
-        return new SendMessageResponse(
-                result.messageId(),
-                result.providerMessageId(),
-                destination.qualifiedName(),
-                result.status().name());
     }
 
-    @GetMapping("/received")
-    public List<ReceivedMessageView> received() {
-        // 返回接收记录。
-        return receivedMessageStore.list();
+    private String logicalName(SendMessageRequest request) {
+        String name = request.getTopic();
+        if (name == null || name.isBlank()) {
+            name = properties.getDemo().getDestinationName();
+        }
+        return name;
     }
 
-    @DeleteMapping("/received")
-    public void clear() {
-        // 清空接收记录。
-        receivedMessageStore.clear();
+    private String logicalTopic(SendMessageRequest request) {
+        return properties.getDemo().getDestinationNamespace() + ":" + logicalName(request);
     }
 
-    @GetMapping("/health")
-    public String health() {
-        // Demo 健康检查。
-        return "OK";
+    private Set<String> enabledProviders() {
+        Set<String> providers = new LinkedHashSet<>();
+        List<String> configured = properties.getDemo().getProviders();
+        if (configured != null) {
+            for (String provider : configured) {
+                String normalized = normalizeProvider(provider);
+                if (normalized != null) {
+                    providers.add(normalized);
+                }
+            }
+        }
+        if (providers.isEmpty()) {
+            providers.add(normalizeProvider(properties.getProvider()));
+        }
+        return providers;
+    }
+
+    private static String normalizeProvider(String providerName) {
+        if (providerName == null || providerName.isBlank()) {
+            return null;
+        }
+        return providerName.trim().toLowerCase(Locale.ROOT);
     }
 }
