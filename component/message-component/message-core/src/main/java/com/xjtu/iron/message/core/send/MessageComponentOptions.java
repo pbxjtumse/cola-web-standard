@@ -1,4 +1,6 @@
-package com.xjtu.iron.message.core;
+package com.xjtu.iron.message.core.send;
+
+import com.xjtu.iron.message.core.routing.DestinationRoutingMode;
 
 import java.time.Clock;
 import java.time.Duration;

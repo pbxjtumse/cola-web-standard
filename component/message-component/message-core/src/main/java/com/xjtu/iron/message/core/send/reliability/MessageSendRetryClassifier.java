@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.core;
+package com.xjtu.iron.message.core.send.reliability;
 
 import com.xjtu.iron.message.api.SendFailureType;
 import com.xjtu.iron.message.api.SendStatus;

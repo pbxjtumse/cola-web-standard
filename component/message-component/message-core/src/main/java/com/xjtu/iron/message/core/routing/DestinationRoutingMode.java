@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.core;
+package com.xjtu.iron.message.core.routing;
 
 /**
  * 定义未配置精确路由时的处理策略。

@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.core;
+package com.xjtu.iron.message.core.context;
 
 import com.xjtu.iron.message.api.ConsumeContext;
 import com.xjtu.iron.message.api.MessageEnvelope;

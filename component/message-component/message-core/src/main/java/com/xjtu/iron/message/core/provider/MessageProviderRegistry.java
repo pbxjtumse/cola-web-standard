@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.core;
+package com.xjtu.iron.message.core.provider;
 
 import com.xjtu.iron.message.spi.MessageProvider;
 

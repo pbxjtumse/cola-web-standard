@@ -1,6 +1,6 @@
 package com.xjtu.iron.message.spring.boot.autoconfigure.properties;
 
-import com.xjtu.iron.message.core.DestinationRoutingMode;
+import com.xjtu.iron.message.core.routing.DestinationRoutingMode;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;

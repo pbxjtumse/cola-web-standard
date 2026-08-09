@@ -1,8 +1,12 @@
-package com.xjtu.iron.message.core;
+package com.xjtu.iron.message.core.enrich;
 
 import com.xjtu.iron.message.api.MessageContext;
 import com.xjtu.iron.message.api.MessageEnvelope;
 import com.xjtu.iron.message.api.MessageMetadata;
+import com.xjtu.iron.message.core.send.MessageComponentOptions;
+import com.xjtu.iron.message.core.MessageIdGenerator;
+import com.xjtu.iron.message.core.context.CurrentMessage;
+import com.xjtu.iron.message.core.context.MessageContextAccessor;
 
 import java.time.Instant;
 import java.util.Objects;
