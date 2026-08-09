@@ -2,14 +2,21 @@ package com.xjtu.iron.message.spring.boot.autoconfigure;
 
 import com.xjtu.iron.message.api.MessageSerializer;
 import com.xjtu.iron.message.codec.jackson.JacksonMessageSerializer;
+import com.xjtu.iron.message.core.DefaultReliableMessageSender;
 import com.xjtu.iron.message.core.DestinationRoute;
 import com.xjtu.iron.message.core.DestinationRouteRegistry;
+import com.xjtu.iron.message.core.DirectMessageSender;
 import com.xjtu.iron.message.core.MessageComponentOptions;
 import com.xjtu.iron.message.core.MessageProviderRegistry;
+import com.xjtu.iron.message.core.MessageSendExecutor;
+import com.xjtu.iron.message.core.MessageSendReliabilityOptions;
 import com.xjtu.iron.message.core.MessageTemplate;
 import com.xjtu.iron.message.spi.MessageProvider;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageProperties;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageRouteProperties;
+import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageSendReliabilityProperties;
+import com.xjtu.iron.retry.api.execution.RetryExecutor;
+import com.xjtu.iron.retry.api.policy.RetryPolicyRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -22,20 +29,10 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ForkJoinPool;
 
 /**
  * 消息组件 Spring Boot 自动配置入口。
- *
- * <p>Starter 只编排 message-core 的通用对象：</p>
- * <ul>
- *     <li>消息体序列化器</li>
- *     <li>组件运行参数</li>
- *     <li>逻辑目的地路由表</li>
- *     <li>Provider 注册表</li>
- *     <li>核心 MessageTemplate</li>
- * </ul>
- *
- * <p>具体 Provider 由各 integration 模块自动配置，例如 Pulsar 模块创建 PulsarMessageProvider。</p>
  */
 @AutoConfiguration
 @EnableConfigurationProperties(MessageProperties.class)
@@ -44,11 +41,6 @@ public class MessageAutoConfiguration {
 
     /**
      * 创建默认消息体序列化器。
-     *
-     * <p>业务没有显式提供 MessageSerializer Bean 时，默认使用 Jackson JSON。</p>
-     *
-     * <p>如果后续需要统一复用 foundation-component，只需要在业务应用或独立 codec 模块中
-     * 提供一个 MessageSerializer Bean，当前 Bean 会因为 ConditionalOnMissingBean 自动让位。</p>
      *
      * @return 默认消息体序列化器
      */
@@ -60,8 +52,6 @@ public class MessageAutoConfiguration {
 
     /**
      * 创建 message-core 运行参数。
-     *
-     * <p>这些参数不包含 Provider 原生连接参数，只控制消息组件自己的公共行为。</p>
      *
      * @param properties 通用配置
      * @return 组件运行参数
@@ -79,9 +69,24 @@ public class MessageAutoConfiguration {
     }
 
     /**
-     * 创建逻辑目的地路由注册表。
+     * 创建发送可靠性选项。
      *
-     * <p>STRICT 模式下，没有配置在 routes 中的逻辑目的地会被拒绝，防止误投 Topic。</p>
+     * @param properties 消息组件配置
+     * @return 发送可靠性选项
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public MessageSendReliabilityOptions messageSendReliabilityOptions(MessageProperties properties) {
+        MessageSendReliabilityProperties send = properties.getReliability().getSend();
+        return new MessageSendReliabilityOptions(
+                send.isEnabled(),
+                send.getRetryPolicy(),
+                send.isRetryWhenUnknown(),
+                send.isIncludeReliabilityInfo());
+    }
+
+    /**
+     * 创建逻辑目的地路由注册表。
      *
      * @param properties 通用配置
      * @return 路由注册表
@@ -104,8 +109,6 @@ public class MessageAutoConfiguration {
     /**
      * 创建 Provider 注册表。
      *
-     * <p>这里收集所有已经由 integration 模块创建出来的 MessageProvider Bean。</p>
-     *
      * @param providers Provider Bean 集合
      * @return Provider 注册表
      */
@@ -117,14 +120,53 @@ public class MessageAutoConfiguration {
     }
 
     /**
-     * 创建统一消息模板。
+     * 创建发送执行器。
      *
-     * <p>业务发送和消费注册都应使用这个稳定入口，而不是直接依赖某个 Provider。</p>
+     * <p>
+     * reliability.send.enabled=false 时使用一期直发执行器。
+     * reliability.send.enabled=true 时必须存在 retry-component 相关 Bean。
+     * </p>
+     *
+     * @param options 组件运行参数
+     * @param reliabilityOptions 发送可靠性选项
+     * @param retryExecutorProvider retry 执行器提供者
+     * @param retryPolicyRegistryProvider retry 策略注册表提供者
+     * @return 发送执行器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public MessageSendExecutor messageSendExecutor(
+            MessageComponentOptions options,
+            MessageSendReliabilityOptions reliabilityOptions,
+            ObjectProvider<RetryExecutor> retryExecutorProvider,
+            ObjectProvider<RetryPolicyRegistry> retryPolicyRegistryProvider) {
+        if (!reliabilityOptions.enabled()) {
+            return new DirectMessageSender(options.clock());
+        }
+        RetryExecutor retryExecutor = retryExecutorProvider.getIfAvailable();
+        RetryPolicyRegistry retryPolicyRegistry = retryPolicyRegistryProvider.getIfAvailable();
+        if (retryExecutor == null || retryPolicyRegistry == null) {
+            throw new IllegalStateException(
+                    "xjtu.iron.message.reliability.send.enabled=true, "
+                            + "but RetryExecutor or RetryPolicyRegistry is missing. "
+                            + "Please add retry-config/retry-core dependency or disable send reliability.");
+        }
+        return new DefaultReliableMessageSender(
+                retryExecutor,
+                retryPolicyRegistry,
+                reliabilityOptions,
+                options.clock(),
+                ForkJoinPool.commonPool());
+    }
+
+    /**
+     * 创建统一消息模板。
      *
      * @param options 组件运行参数
      * @param providerRegistry Provider 注册表
      * @param routeRegistry 路由注册表
      * @param serializer 消息体序列化器
+     * @param sendExecutor 发送执行器
      * @return 统一消息模板
      */
     @Bean
@@ -134,7 +176,13 @@ public class MessageAutoConfiguration {
             MessageComponentOptions options,
             MessageProviderRegistry providerRegistry,
             DestinationRouteRegistry routeRegistry,
-            MessageSerializer serializer) {
-        return MessageTemplate.create(options, providerRegistry, routeRegistry, serializer);
+            MessageSerializer serializer,
+            MessageSendExecutor sendExecutor) {
+        return MessageTemplate.create(
+                options,
+                providerRegistry,
+                routeRegistry,
+                serializer,
+                sendExecutor);
     }
 }

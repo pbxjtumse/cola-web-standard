@@ -58,6 +58,11 @@ public class MessageProperties {
     private MessageSerializerProperties serializer = new MessageSerializerProperties();
 
     /**
+     * 可靠性增强配置。
+     */
+    private Reliability reliability = new Reliability();
+
+    /**
      * 逻辑目的地到 Provider 物理目的地的精确路由表。
      */
     private List<MessageRouteProperties> routes = new ArrayList<>();
@@ -123,6 +128,14 @@ public class MessageProperties {
         this.serializer = serializer == null ? new MessageSerializerProperties() : serializer;
     }
 
+    public Reliability getReliability() {
+        return reliability;
+    }
+
+    public void setReliability(Reliability reliability) {
+        this.reliability = reliability == null ? new Reliability() : reliability;
+    }
+
     public List<MessageRouteProperties> getRoutes() {
         return routes;
     }
@@ -137,5 +150,24 @@ public class MessageProperties {
 
     public void setDemo(MessageDemoProperties demo) {
         this.demo = demo == null ? new MessageDemoProperties() : demo;
+    }
+
+    /**
+     * 消息组件可靠性增强配置分组。
+     */
+    public static class Reliability {
+
+        /**
+         * 发送可靠性配置。
+         */
+        private MessageSendReliabilityProperties send = new MessageSendReliabilityProperties();
+
+        public MessageSendReliabilityProperties getSend() {
+            return send;
+        }
+
+        public void setSend(MessageSendReliabilityProperties send) {
+            this.send = send == null ? new MessageSendReliabilityProperties() : send;
+        }
     }
 }

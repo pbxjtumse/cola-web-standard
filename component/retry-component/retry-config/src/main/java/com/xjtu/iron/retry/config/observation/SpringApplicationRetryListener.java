@@ -13,10 +13,7 @@ public final class SpringApplicationRetryListener implements RetryListener {
     private final ApplicationEventPublisher applicationEventPublisher;
 
     public SpringApplicationRetryListener(ApplicationEventPublisher applicationEventPublisher) {
-        this.applicationEventPublisher = Objects.requireNonNull(
-                applicationEventPublisher,
-                "applicationEventPublisher must not be null"
-        );
+        this.applicationEventPublisher = Objects.requireNonNull(applicationEventPublisher, "applicationEventPublisher must not be null");
     }
 
     /** 将核心事件发布到 Spring 应用上下文。 */

@@ -1,0 +1,53 @@
+@startuml
+' message-component phase2 reliable send state machine
+hide empty description
+title message-component 二期可靠发送状态图
+
+[*] --> VALIDATE
+
+VALIDATE --> REJECTED : destination/message/options 非法
+VALIDATE --> ENRICH : 校验通过
+
+ENRICH --> FAILED : enrich 失败
+ENRICH --> RESOLVE : 补齐 messageId/context 成功
+
+RESOLVE --> REJECTED : 路由不存在 / provider 不存在 / 不支持发布
+RESOLVE --> SERIALIZE : 解析 provider + physicalDestination 成功
+
+SERIALIZE --> FAILED : 序列化失败
+SERIALIZE --> SEND_READY : ProviderSendRequest 构建成功
+
+SEND_READY --> DIRECT_SEND : reliability.send.enabled=false
+SEND_READY --> RETRY : reliability.send.enabled=true
+
+DIRECT_SEND --> CONFIRMED : ProviderSendResult.CONFIRMED
+DIRECT_SEND --> FAILED : ProviderSendResult.FAILED
+DIRECT_SEND --> REJECTED : ProviderSendResult.REJECTED
+DIRECT_SEND --> UNKNOWN : ProviderSendResult.UNKNOWN / confirm timeout
+
+RETRY --> ATTEMPTING : 创建 RetryExecution
+ATTEMPTING --> PROVIDER_SEND : attempt 开始
+PROVIDER_SEND --> WAIT_CONFIRM : provider.send 返回 CompletionStage
+PROVIDER_SEND --> RETRY_DECISION : provider 同步返回标准失败
+
+WAIT_CONFIRM --> RETRY_DECISION : ProviderSendResult
+WAIT_CONFIRM --> RETRY_DECISION : Timeout -> UNKNOWN
+WAIT_CONFIRM --> RETRY_DECISION : Interrupted -> UNKNOWN
+
+RETRY_DECISION --> CONFIRMED : CONFIRMED -> SUCCESS
+RETRY_DECISION --> BACKOFF : FAILED + retryable -> RETRY
+RETRY_DECISION --> REJECTED : REJECTED -> STOP
+RETRY_DECISION --> UNKNOWN : UNKNOWN + retryWhenUnknown=false
+RETRY_DECISION --> FAILED : FAILED + non-retryable -> STOP
+
+BACKOFF --> ATTEMPTING : 未超过 maxAttempts/maxDuration
+BACKOFF --> RETRY_EXHAUSTED : 超过 maxAttempts 或预算耗尽
+
+RETRY_EXHAUSTED --> FAILED : last result = FAILED
+RETRY_EXHAUSTED --> UNKNOWN : last result = UNKNOWN
+
+CONFIRMED --> [*]
+FAILED --> [*]
+REJECTED --> [*]
+UNKNOWN --> [*]
+@enduml

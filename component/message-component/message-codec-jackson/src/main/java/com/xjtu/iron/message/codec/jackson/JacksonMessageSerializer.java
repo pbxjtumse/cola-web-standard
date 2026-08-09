@@ -45,7 +45,9 @@ public final class JacksonMessageSerializer implements MessageSerializer {
      */
     public JacksonMessageSerializer(ObjectMapper objectMapper) {
         // ObjectMapper 不能为空。
-        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.objectMapper = Objects.requireNonNull(
+                objectMapper,
+                "objectMapper must not be null");
     }
 
     /**

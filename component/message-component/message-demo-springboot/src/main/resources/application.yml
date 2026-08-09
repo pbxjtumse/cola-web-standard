@@ -19,6 +19,13 @@ xjtu:
       serializer:
         type: jackson
 
+      reliability:
+        send:
+          enabled: true
+          retry-policy: message-send
+          retry-when-unknown: false
+          include-reliability-info: true
+
       # 同一个逻辑目的地 demo/message，同时配置三条 Provider 路由。
       # 并行发送时通过 MessageDestination.withProviderHint(provider) 精确选择路由。
       routes:
@@ -76,3 +83,30 @@ xjtu:
         vip-channel-enabled: false
         consume-from-where: CONSUME_FROM_LAST_OFFSET
         tag-expression: "*"
+
+    retry:
+      enabled: true
+      publish-spring-events: true
+      metrics-enabled: true
+      policies:
+        message-send:
+          max-attempts: 3
+          max-duration: 8s
+          operation-safety: IDEMPOTENCY_PROTECTED
+          safety-mode: WARN
+          traverse-causes: true
+          max-cause-depth: 8
+          retry-failure-category: TRANSIENT
+          retry-failure-code: MESSAGE_SEND_RETRYABLE_FAILURE
+          retry-on:
+            - java.io.IOException
+            - java.util.concurrent.TimeoutException
+          stop-on:
+            - java.lang.IllegalArgumentException
+          abort-on:
+            - java.lang.SecurityException
+          backoff:
+            type: EXPONENTIAL_FULL_JITTER
+            initial-delay: 100ms
+            max-delay: 1s
+            multiplier: 2.0

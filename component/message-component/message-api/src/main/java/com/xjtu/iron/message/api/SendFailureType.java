@@ -44,6 +44,15 @@ public enum SendFailureType {
     /** Provider 客户端本地错误。 */
     CLIENT_ERROR,
 
+    /** 多次发送尝试后仍然没有获得明确成功。 */
+    RETRY_EXHAUSTED,
+
+    /** retry-component 自身执行失败。 */
+    RETRY_EXECUTION_ERROR,
+
+    /** Provider 返回或抛出的结果无法确认 Broker 是否已经接收。 */
+    UNKNOWN_OUTCOME,
+
     /** 无法进一步分类的错误。 */
     UNKNOWN_ERROR
 }

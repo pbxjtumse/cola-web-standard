@@ -23,6 +23,9 @@ public enum SendStage {
     /** 等待或处理 Broker 发送确认。 */
     CONFIRM,
 
+    /** 由可靠发送层执行 retry-component 编排。 */
+    RETRY,
+
     /** 发送生命周期已经完成。 */
     COMPLETE
 }

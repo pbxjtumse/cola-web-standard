@@ -1,5 +1,6 @@
 package com.xjtu.iron.message.demo.dto;
 
+import com.xjtu.iron.message.api.SendReliabilityInfo;
 import com.xjtu.iron.message.api.SendResult;
 
 /**
@@ -25,18 +26,43 @@ public final class SendMessageResponse {
     /** 发送状态。 */
     private final String status;
 
+    /** 失败类型。 */
+    private final String failureType;
+
+    /** 结果阶段。 */
+    private final String stage;
+
     /** 诊断描述。 */
     private final String description;
 
-    /**
-     * 兼容旧 Demo 的构造器。
-     */
+    /** 是否启用可靠发送。 */
+    private final boolean reliabilityEnabled;
+
+    /** retryId。 */
+    private final String retryId;
+
+    /** retry 策略名称。 */
+    private final String retryPolicy;
+
+    /** retry 终态。 */
+    private final String retryStatus;
+
+    /** 尝试次数。 */
+    private final int attempts;
+
+    /** 最后失败码。 */
+    private final String lastFailureCode;
+
+    /** 最后失败分类。 */
+    private final String lastFailureCategory;
+
     public SendMessageResponse(
             String messageId,
             String providerMessageId,
             String topic,
             String status) {
-        this(null, messageId, providerMessageId, topic, null, status, null);
+        this(null, messageId, providerMessageId, topic, null, status, null, null, null,
+                false, null, null, null, 1, null, null);
     }
 
     public SendMessageResponse(
@@ -46,14 +72,32 @@ public final class SendMessageResponse {
             String topic,
             String physicalDestination,
             String status,
-            String description) {
+            String failureType,
+            String stage,
+            String description,
+            boolean reliabilityEnabled,
+            String retryId,
+            String retryPolicy,
+            String retryStatus,
+            int attempts,
+            String lastFailureCode,
+            String lastFailureCategory) {
         this.providerName = providerName;
         this.messageId = messageId;
         this.providerMessageId = providerMessageId;
         this.topic = topic;
         this.physicalDestination = physicalDestination;
         this.status = status;
+        this.failureType = failureType;
+        this.stage = stage;
         this.description = description;
+        this.reliabilityEnabled = reliabilityEnabled;
+        this.retryId = retryId;
+        this.retryPolicy = retryPolicy;
+        this.retryStatus = retryStatus;
+        this.attempts = attempts;
+        this.lastFailureCode = lastFailureCode;
+        this.lastFailureCategory = lastFailureCategory;
     }
 
     /**
@@ -63,6 +107,7 @@ public final class SendMessageResponse {
      * @return Demo 响应
      */
     public static SendMessageResponse from(SendResult result) {
+        SendReliabilityInfo reliabilityInfo = result.reliabilityInfo();
         return new SendMessageResponse(
                 result.providerName(),
                 result.messageId(),
@@ -70,7 +115,16 @@ public final class SendMessageResponse {
                 result.destination() == null ? null : result.destination().qualifiedName(),
                 result.physicalDestination(),
                 result.status() == null ? null : result.status().name(),
-                result.description());
+                result.failureType() == null ? null : result.failureType().name(),
+                result.stage() == null ? null : result.stage().name(),
+                result.description(),
+                reliabilityInfo != null && reliabilityInfo.enabled(),
+                reliabilityInfo == null ? null : reliabilityInfo.retryId(),
+                reliabilityInfo == null ? null : reliabilityInfo.retryPolicy(),
+                reliabilityInfo == null ? null : reliabilityInfo.retryStatus(),
+                reliabilityInfo == null ? 1 : reliabilityInfo.attempts(),
+                reliabilityInfo == null ? null : reliabilityInfo.lastFailureCode(),
+                reliabilityInfo == null ? null : reliabilityInfo.lastFailureCategory());
     }
 
     /**
@@ -87,7 +141,16 @@ public final class SendMessageResponse {
                 topic,
                 null,
                 "FAILED",
-                description);
+                "UNKNOWN_ERROR",
+                null,
+                description,
+                false,
+                null,
+                null,
+                null,
+                1,
+                null,
+                null);
     }
 
     public String getProviderName() {
@@ -114,7 +177,43 @@ public final class SendMessageResponse {
         return status;
     }
 
+    public String getFailureType() {
+        return failureType;
+    }
+
+    public String getStage() {
+        return stage;
+    }
+
     public String getDescription() {
         return description;
+    }
+
+    public boolean isReliabilityEnabled() {
+        return reliabilityEnabled;
+    }
+
+    public String getRetryId() {
+        return retryId;
+    }
+
+    public String getRetryPolicy() {
+        return retryPolicy;
+    }
+
+    public String getRetryStatus() {
+        return retryStatus;
+    }
+
+    public int getAttempts() {
+        return attempts;
+    }
+
+    public String getLastFailureCode() {
+        return lastFailureCode;
+    }
+
+    public String getLastFailureCategory() {
+        return lastFailureCategory;
     }
 }
