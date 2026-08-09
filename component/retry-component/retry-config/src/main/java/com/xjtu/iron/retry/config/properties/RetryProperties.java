@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 /** 绑定 retry-component 的 Spring Boot 外部化配置。 */
-@ConfigurationProperties(prefix = "iron.retry")
+@ConfigurationProperties(prefix = "xjtu.iron.retry")
 public class RetryProperties {
 
     /** 是否启用全部自动配置。 */

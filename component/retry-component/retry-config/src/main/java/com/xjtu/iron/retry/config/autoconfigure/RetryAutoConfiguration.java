@@ -33,7 +33,7 @@ import java.util.List;
 @AutoConfiguration
 @EnableConfigurationProperties(RetryProperties.class)
 @ConditionalOnProperty(
-        prefix = "iron.retry",
+        prefix = "xjtu.iron.retry",
         name = "enabled",
         havingValue = "true",
         matchIfMissing = true
@@ -65,7 +65,7 @@ public class RetryAutoConfiguration {
     /** 在启用 Spring 事件桥接时注册默认监听器。 */
     @Bean
     @ConditionalOnProperty(
-            prefix = "iron.retry",
+            prefix = "xjtu.iron.retry",
             name = "publish-spring-events",
             havingValue = "true",
             matchIfMissing = true

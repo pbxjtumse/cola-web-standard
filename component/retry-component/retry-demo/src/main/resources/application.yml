@@ -11,33 +11,59 @@ management:
       exposure:
         include: health,info,metrics,prometheus
 
-iron:
-  retry:
-    enabled: true
-    publish-spring-events: true
-    metrics-enabled: true
-    policies:
-      remote-base:
-        max-attempts: 3
-        max-duration: 5s
-        operation-safety: READ_ONLY
-        safety-mode: WARN
-        traverse-causes: false
-        max-cause-depth: 16
-        retry-failure-category: TRANSIENT
-        retry-failure-code: REMOTE_TRANSIENT_FAILURE
-        retry-on:
-          - java.io.IOException
-        stop-on:
-          - java.lang.IllegalArgumentException
-        abort-on:
-          - java.lang.SecurityException
-        backoff:
-          type: EXPONENTIAL_FULL_JITTER
-          initial-delay: 100ms
-          max-delay: 1s
-          multiplier: 2.0
+xjtu:
+  iron:
+    retry:
+      enabled: true
+      publish-spring-events: true
+      metrics-enabled: true
+      policies:
+        remote-base:
+          max-attempts: 3
+          max-duration: 5s
+          operation-safety: READ_ONLY
+          safety-mode: WARN
+          traverse-causes: false
+          max-cause-depth: 16
+          retry-failure-category: TRANSIENT
+          retry-failure-code: REMOTE_TRANSIENT_FAILURE
+          retry-on:
+            - java.io.IOException
+          stop-on:
+            - java.lang.IllegalArgumentException
+          abort-on:
+            - java.lang.SecurityException
+          backoff:
+            type: EXPONENTIAL_FULL_JITTER
+            initial-delay: 100ms
+            max-delay: 1s
+            multiplier: 2.0
 
-      remote-call:
-        base-policy: remote-base
-        max-duration: 3s
+        remote-call:
+          base-policy: remote-base
+          max-duration: 3s
+
+        # 给 message-component 二期发送可靠性预留的标准策略。
+        # 这个策略只描述“短时间、进程内、有限次数”的发送重试。
+        # UNKNOWN 是否继续重试由 message-component 自己判断，retry-component 不理解 MQ 语义。
+        message-send:
+          max-attempts: 3
+          max-duration: 5s
+          operation-safety: IDEMPOTENCY_PROTECTED
+          safety-mode: WARN
+          traverse-causes: true
+          max-cause-depth: 8
+          retry-failure-category: TRANSIENT
+          retry-failure-code: MESSAGE_SEND_RETRYABLE_FAILURE
+          retry-on:
+            - java.io.IOException
+            - java.util.concurrent.TimeoutException
+          stop-on:
+            - java.lang.IllegalArgumentException
+          abort-on:
+            - java.lang.SecurityException
+          backoff:
+            type: EXPONENTIAL_FULL_JITTER
+            initial-delay: 100ms
+            max-delay: 1s
+            multiplier: 2.0

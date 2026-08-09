@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Bean;
 @AutoConfiguration(before = RetryAutoConfiguration.class)
 @ConditionalOnClass(MeterRegistry.class)
 @ConditionalOnProperty(
-        prefix = "iron.retry",
+        prefix = "xjtu.iron.retry",
         name = {"enabled", "metrics-enabled"},
         havingValue = "true",
         matchIfMissing = true

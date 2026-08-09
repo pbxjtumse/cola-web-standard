@@ -62,7 +62,7 @@
 
 | 类型 | 职责 | 关键边界 |
 |---|---|---|
-| `RetryProperties` | 绑定 `iron.retry` 配置 | 使用包装类型表达继承三态 |
+| `RetryProperties` | 绑定 `xjtu.iron.retry` 配置 | 使用包装类型表达继承三态 |
 | `RetryPolicyConfigurationLoader` | 外部配置转核心策略的公开门面 | 隐藏解析器和工厂细节 |
 | `ResolvedRetryPolicyProperties` | 完成继承后的配置快照 | 只在 properties 包内部使用 |
 | `RetryPolicyPropertiesResolver` | 解析父子策略和循环依赖 | 显式空列表清空父规则 |

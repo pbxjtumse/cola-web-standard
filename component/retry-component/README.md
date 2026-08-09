@@ -5,7 +5,7 @@
 当前交付里程碑为：
 
 ```text
-Phase 1 RC4
+Phase 1 V1 minimal for message-send
 ```
 
 Maven 版本继续继承完整组件工程的统一版本：
@@ -220,9 +220,9 @@ META-INF/additional-spring-configuration-metadata.json
 显式描述：
 
 ```yaml
-iron.retry.policies.*.retry-failure-category
-iron.retry.policies.*.max-attempts
-iron.retry.policies.*.backoff.type
+xjtu.iron.retry.policies.*.retry-failure-category
+xjtu.iron.retry.policies.*.max-attempts
+xjtu.iron.retry.policies.*.backoff.type
 ```
 
 避免 IDEA 将 `TRANSIENT` 错误识别为整数。YAML 正确写法仍然是：
@@ -297,36 +297,77 @@ RetryResult<Order> result = retryExecutor.execute(execution);
 
 ## 六、Spring Boot 配置
 
+配置前缀统一为：
+
+```text
+xjtu.iron.retry
+```
+
+这和 `message-component`、`lock-component`、`cache-component` 等技术组件的命名空间保持一致。
+
 ```yaml
-iron:
-  retry:
-    enabled: true
-    publish-spring-events: true
-    metrics-enabled: true
-    policies:
-      remote-call:
-        max-attempts: 3
-        max-duration: 5s
-        operation-safety: READ_ONLY
-        safety-mode: WARN
-        traverse-causes: true
-        max-cause-depth: 16
-        retry-failure-category: TRANSIENT
-        retry-failure-code: REMOTE_TRANSIENT_FAILURE
-        retry-on:
-          - java.io.IOException
-        stop-on:
-          - java.lang.IllegalArgumentException
-        abort-on:
-          - java.lang.SecurityException
-        backoff:
-          type: EXPONENTIAL_FULL_JITTER
-          initial-delay: 100ms
-          max-delay: 1s
-          multiplier: 2.0
+xjtu:
+  iron:
+    retry:
+      enabled: true
+      publish-spring-events: true
+      metrics-enabled: true
+      policies:
+        remote-call:
+          max-attempts: 3
+          max-duration: 5s
+          operation-safety: READ_ONLY
+          safety-mode: WARN
+          traverse-causes: true
+          max-cause-depth: 16
+          retry-failure-category: TRANSIENT
+          retry-failure-code: REMOTE_TRANSIENT_FAILURE
+          retry-on:
+            - java.io.IOException
+          stop-on:
+            - java.lang.IllegalArgumentException
+          abort-on:
+            - java.lang.SecurityException
+          backoff:
+            type: EXPONENTIAL_FULL_JITTER
+            initial-delay: 100ms
+            max-delay: 1s
+            multiplier: 2.0
 ```
 
 `retry-failure-category` 只描述已经命中 `retry-on` 的失败类别，本身不会决定异常是否可重试。
+
+### message-component 二期发送可靠性推荐策略
+
+这个策略是给 `message-component` 二期可靠发送使用的最小策略。它只负责“是否短时间再试一次”，不负责判断 MQ Broker 是否已经收到消息。`UNKNOWN`、`RETRY_EXHAUSTED` 等消息发送语义由 `message-component` 自己解释。
+
+```yaml
+xjtu:
+  iron:
+    retry:
+      policies:
+        message-send:
+          max-attempts: 3
+          max-duration: 5s
+          operation-safety: IDEMPOTENCY_PROTECTED
+          safety-mode: WARN
+          traverse-causes: true
+          max-cause-depth: 8
+          retry-failure-category: TRANSIENT
+          retry-failure-code: MESSAGE_SEND_RETRYABLE_FAILURE
+          retry-on:
+            - java.io.IOException
+            - java.util.concurrent.TimeoutException
+          stop-on:
+            - java.lang.IllegalArgumentException
+          abort-on:
+            - java.lang.SecurityException
+          backoff:
+            type: EXPONENTIAL_FULL_JITTER
+            initial-delay: 100ms
+            max-delay: 1s
+            multiplier: 2.0
+```
 
 ## 七、构建
 
@@ -351,6 +392,9 @@ mvn -pl retry-component/retry-demo -am spring-boot:run
 ```
 
 ## 八、与消息组件的后续关系
+
+补充文档：`docs/message-send-minimal-support.md` 记录了 `message-component` 二期发送可靠性接入 retry V1 的最小边界。
+
 
 一期消息组件验证阶段，建议先完成：
 
@@ -411,7 +455,7 @@ retryIdGenerator
 调用方已有 requestId、messageId 或任务执行 ID 时，仍可在 `RetryExecution` 中显式指定
 `retryId`。自动生成的 retryId 只是技术关联标识，不是幂等键。
 
-## Phase 1 RC4
+## Phase 1 V1 minimal for message-send
 
 - 对接已经冻结的 Foundation ID 一期终版。
 - 公共 ID 契约统一为 `foundation.id.api.StringIdGenerator`。

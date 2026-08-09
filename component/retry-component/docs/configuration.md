@@ -3,11 +3,12 @@
 ## 一、顶层开关
 
 ```yaml
-iron:
-  retry:
-    enabled: true
-    publish-spring-events: true
-    metrics-enabled: true
+xjtu:
+  iron:
+    retry:
+      enabled: true
+      publish-spring-events: true
+      metrics-enabled: true
 ```
 
 - `enabled=false`：不装配重试自动配置。
@@ -17,36 +18,61 @@ iron:
 ## 二、完整策略示例
 
 ```yaml
-iron:
-  retry:
-    policies:
-      remote-base:
-        max-attempts: 3
-        max-duration: 5s
-        operation-safety: READ_ONLY
-        safety-mode: WARN
-        traverse-causes: true
-        max-cause-depth: 16
-        retry-failure-category: TRANSIENT
-        retry-failure-code: REMOTE_TRANSIENT_FAILURE
-        retry-on:
-          - java.io.IOException
-          - java.util.concurrent.TimeoutException
-        stop-on:
-          - java.lang.IllegalArgumentException
-        abort-on:
-          - java.lang.SecurityException
-        backoff:
-          type: EXPONENTIAL_FULL_JITTER
-          initial-delay: 100ms
-          max-delay: 1s
-          multiplier: 2.0
+xjtu:
+  iron:
+    retry:
+      policies:
+        remote-base:
+          max-attempts: 3
+          max-duration: 5s
+          operation-safety: READ_ONLY
+          safety-mode: WARN
+          traverse-causes: true
+          max-cause-depth: 16
+          retry-failure-category: TRANSIENT
+          retry-failure-code: REMOTE_TRANSIENT_FAILURE
+          retry-on:
+            - java.io.IOException
+            - java.util.concurrent.TimeoutException
+          stop-on:
+            - java.lang.IllegalArgumentException
+          abort-on:
+            - java.lang.SecurityException
+          backoff:
+            type: EXPONENTIAL_FULL_JITTER
+            initial-delay: 100ms
+            max-delay: 1s
+            multiplier: 2.0
 
-      payment-query:
-        base-policy: remote-base
-        max-attempts: 5
-        max-duration: 20s
+        payment-query:
+          base-policy: remote-base
+          max-attempts: 5
+          max-duration: 20s
+
+        message-send:
+          max-attempts: 3
+          max-duration: 5s
+          operation-safety: IDEMPOTENCY_PROTECTED
+          safety-mode: WARN
+          traverse-causes: true
+          max-cause-depth: 8
+          retry-failure-category: TRANSIENT
+          retry-failure-code: MESSAGE_SEND_RETRYABLE_FAILURE
+          retry-on:
+            - java.io.IOException
+            - java.util.concurrent.TimeoutException
+          stop-on:
+            - java.lang.IllegalArgumentException
+          abort-on:
+            - java.lang.SecurityException
+          backoff:
+            type: EXPONENTIAL_FULL_JITTER
+            initial-delay: 100ms
+            max-delay: 1s
+            multiplier: 2.0
 ```
+
+`message-send` 是给消息组件二期可靠发送预留的短时同步重试策略。消息是否已经进入 Broker、发送结果是否为 `UNKNOWN`，由消息组件根据 Provider 结果自行判断，retry-component 不处理 MQ 语义。
 
 ## 三、字段语义
 
@@ -78,24 +104,25 @@ iron:
 示例：
 
 ```yaml
-iron:
-  retry:
-    policies:
-      base:
-        retry-on:
-          - java.io.IOException
+xjtu:
+  iron:
+    retry:
+      policies:
+        base:
+          retry-on:
+            - java.io.IOException
 
-      inherit:
-        base-policy: base
+        inherit:
+          base-policy: base
 
-      clear:
-        base-policy: base
-        retry-on: []
+        clear:
+          base-policy: base
+          retry-on: []
 
-      replace:
-        base-policy: base
-        retry-on:
-          - java.util.concurrent.TimeoutException
+        replace:
+          base-policy: base
+          retry-on:
+            - java.util.concurrent.TimeoutException
 ```
 
 解析结果：

@@ -27,17 +27,17 @@ class RetryAutoConfigurationTest {
     void shouldCreateExecutorAndResolveInheritedPolicy() {
         contextRunner
                 .withPropertyValues(
-                        "iron.retry.publish-spring-events=false",
-                        "iron.retry.policies.base.max-attempts=4",
-                        "iron.retry.policies.base.max-duration=3s",
-                        "iron.retry.policies.base.retry-on[0]="
+                        "xjtu.iron.retry.publish-spring-events=false",
+                        "xjtu.iron.retry.policies.base.max-attempts=4",
+                        "xjtu.iron.retry.policies.base.max-duration=3s",
+                        "xjtu.iron.retry.policies.base.retry-on[0]="
                                 + IOException.class.getName(),
-                        "iron.retry.policies.base.retry-failure-category=TRANSIENT",
-                        "iron.retry.policies.base.max-cause-depth=8",
-                        "iron.retry.policies.base.backoff.type=FIXED",
-                        "iron.retry.policies.base.backoff.delay=10ms",
-                        "iron.retry.policies.remote.base-policy=base",
-                        "iron.retry.policies.remote.max-duration=2s"
+                        "xjtu.iron.retry.policies.base.retry-failure-category=TRANSIENT",
+                        "xjtu.iron.retry.policies.base.max-cause-depth=8",
+                        "xjtu.iron.retry.policies.base.backoff.type=FIXED",
+                        "xjtu.iron.retry.policies.base.backoff.delay=10ms",
+                        "xjtu.iron.retry.policies.remote.base-policy=base",
+                        "xjtu.iron.retry.policies.remote.max-duration=2s"
                 )
                 .run(context -> {
                     assertThat(context).hasSingleBean(RetryExecutor.class);
@@ -63,7 +63,7 @@ class RetryAutoConfigurationTest {
     @Test
     void shouldBackOffWhenDisabled() {
         contextRunner
-                .withPropertyValues("iron.retry.enabled=false")
+                .withPropertyValues("xjtu.iron.retry.enabled=false")
                 .run(context -> assertThat(context)
                         .doesNotHaveBean(RetryExecutor.class));
     }
