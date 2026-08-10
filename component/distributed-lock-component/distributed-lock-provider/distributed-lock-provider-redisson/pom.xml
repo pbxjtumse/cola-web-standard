@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.xjtu.iron</groupId>
+        <artifactId>distributed-lock-provider</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>distributed-lock-provider-redisson</artifactId>
+    <packaging>jar</packaging>
+    <name>distributed-lock-provider-redisson</name>
+
+    <dependencies>
+        <!-- 自研模块版本全部由 component-bom 管理。 -->
+        <dependency>
+            <groupId>com.xjtu.iron</groupId>
+            <artifactId>distributed-lock-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.xjtu.iron</groupId>
+            <artifactId>distributed-lock-core</artifactId>
+        </dependency>
+
+        <!--
+            Redisson 是第三方基础库，版本不要写在子模块。
+            由 cola-web-standard 根 POM dependencyManagement 统一管理。
+            当前实现针对 Redisson 4.7.0 API。
+        -->
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

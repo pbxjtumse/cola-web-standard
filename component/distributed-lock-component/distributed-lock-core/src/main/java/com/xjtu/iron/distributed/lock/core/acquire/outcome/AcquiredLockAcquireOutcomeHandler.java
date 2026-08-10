@@ -73,7 +73,7 @@ public final class AcquiredLockAcquireOutcomeHandler implements LockAcquireOutco
         }
 
         DefaultLockHandle handle = lockHandleFactory.create(
-                context.provider(), completion.requireLease());
+                context.provider(), completion.requireLease(), context.options());
         return LockResult.acquired(handle, context.waitDuration());
     }
 }

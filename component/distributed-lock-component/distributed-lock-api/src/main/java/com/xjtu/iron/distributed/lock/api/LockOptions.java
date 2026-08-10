@@ -111,8 +111,8 @@ public final class LockOptions {
      * 锁租约时间。
      *
      * <p>
-     * Redis Provider 下，每次加锁或续期都会把 TTL 设置为 leaseTime。
-     * 注意：续期是重置 TTL，不是在原 TTL 上累加。
+     * CORE_MANAGED Redis Provider 下，每次加锁或续期都会把 TTL 设置为 leaseTime；
+     * PROVIDER_MANAGED Redisson 下，autoRenew=true 时 leaseTime 表示与 client watchdogTimeout 对齐的 TTL 时间窗。
      * </p>
      */
     private final Duration leaseTime;
@@ -121,9 +121,10 @@ public final class LockOptions {
      * 等待策略。
      *
      * <p>
-     * 一期只建议支持：
+     * 当前支持三种职责边界：
      * NO_WAIT：不等待；
-     * BACKOFF：指数退避 + jitter 重试。
+     * BACKOFF：由 Core 退避 + jitter 重试；
+     * PROVIDER_NATIVE：由 Provider 自己完成等待/唤醒，例如 Redisson Pub/Sub、未来 ZK/Etcd watch。
      * </p>
      */
     private final LockWaitStrategy waitStrategy;
@@ -132,7 +133,9 @@ public final class LockOptions {
      * 是否开启自动续期。
      *
      * <p>
-     * autoRenew=true 时，组件会启动 watchdog 定时调用 renew。
+     * autoRenew=true 时会启用统一 watchdog 生命周期。
+     * CORE_MANAGED Provider（自研 Redis Lua）由 Core 定时调用 renew；
+     * PROVIDER_MANAGED Provider（Redisson）由 Provider 自己续期，Core 只监视 owner 与 maxRenewTime。
      * </p>
      */
     private final boolean autoRenew;
@@ -180,9 +183,12 @@ public final class LockOptions {
     /**
      * 指定底层 Provider 名称。
      *
-     * <p>
-     * 为空表示使用默认 Provider，例如 redis。
-     * </p>
+     * <p>为空表示使用默认 Provider，例如 redis。</p>
+     *
+     * <p><strong>重要：</strong>Provider 名称不只是实现选择，它同时决定协调域。
+     * 当前自研 redis Provider 与 redisson Provider 使用不同物理锁对象/Key 结构，
+     * 同一个业务 lockName 在两个 Provider 之间不会天然互斥。因此生产切换 Provider 时必须
+     * 先排空旧 Provider 的执行/租约，或通过业务 fencing 等迁移方案保护，不能无保护滚动混跑。</p>
      */
     private final String providerName;
 

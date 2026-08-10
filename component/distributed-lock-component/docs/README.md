@@ -6,6 +6,11 @@
 - `metrics.md`：Micrometer 指标与告警建议。
 - `phase2-fencing-token.md`：二期完整设计、失败语义和业务防旧写模板。
 - `v24-balanced-client-refactor.md`：Client、acquire、execute 的平衡拆分与合并说明。
+- `redisson-integration-design.md`：Redisson Provider 的 owner/watchdog/fencing 语义适配。
+- `redisson-provider-contract-matrix.md`：Redis Lua 与 Redisson Provider 统一契约。
+- `pom-governance.md`：组件 BOM、Provider 聚合器与子模块依赖规则。
+- `provider-migration-safety.md`：redis/redisson Provider 切换的协调域风险。
+- `v26-change-log.md`：本版真实基线合入与修复清单。
 
 ## Component Diagrams
 

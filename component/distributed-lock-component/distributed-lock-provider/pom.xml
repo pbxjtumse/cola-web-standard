@@ -1,17 +1,28 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+
     <parent>
         <groupId>com.xjtu.iron</groupId>
         <artifactId>distributed-lock-component</artifactId>
         <version>1.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
+
     <artifactId>distributed-lock-provider</artifactId>
     <packaging>pom</packaging>
     <name>distributed-lock-provider</name>
+
+    <!--
+        Provider 聚合关系只在本层维护。
+        根 distributed-lock-component 不直接越级聚合具体 Provider，
+        后续 ZK/Etcd 也统一在这里新增 module。
+    -->
     <modules>
         <module>distributed-lock-provider-redis</module>
+        <module>distributed-lock-provider-redisson</module>
         <module>distributed-lock-fencing-provider-jdbc</module>
     </modules>
 </project>

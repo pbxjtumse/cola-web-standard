@@ -2,6 +2,7 @@ package com.xjtu.iron.distributed.lock.core.acquire;
 
 import com.xjtu.iron.distributed.lock.api.LockHandle;
 import com.xjtu.iron.distributed.lock.api.LockOptions;
+import com.xjtu.iron.distributed.lock.api.LockWaitStrategy;
 import com.xjtu.iron.distributed.lock.api.LockResult;
 import com.xjtu.iron.distributed.lock.api.LockStage;
 import com.xjtu.iron.distributed.lock.api.LockStatus;
@@ -61,7 +62,8 @@ public final class LockAcquisitionService {
             LockAcquireOutcomeHandlerRegistry outcomeHandlerRegistry
     ) {
         this.providerRegistry = Objects.requireNonNull(providerRegistry, "providerRegistry must not be null");
-        this.ownerTokenGenerator = Objects.requireNonNull(ownerTokenGenerator, "ownerTokenGenerator must not be null");
+        this.ownerTokenGenerator = Objects.requireNonNull(
+                ownerTokenGenerator, "ownerTokenGenerator must not be null");
         this.waiterFactory = Objects.requireNonNull(waiterFactory, "waiterFactory must not be null");
         this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
         this.eventFactory = Objects.requireNonNull(eventFactory, "eventFactory must not be null");
@@ -69,8 +71,10 @@ public final class LockAcquisitionService {
         this.defaultOptions = defaultOptions == null ? LockOptions.defaults() : defaultOptions;
         this.defaultOptions.validate();
         this.clock = clock == null ? Clock.systemUTC() : clock;
-        this.fencingTokenCoordinator = Objects.requireNonNull(fencingTokenCoordinator, "fencingTokenCoordinator must not be null");
-        this.outcomeHandlerRegistry = Objects.requireNonNull(outcomeHandlerRegistry, "outcomeHandlerRegistry must not be null");
+        this.fencingTokenCoordinator = Objects.requireNonNull(
+                fencingTokenCoordinator, "fencingTokenCoordinator must not be null");
+        this.outcomeHandlerRegistry = Objects.requireNonNull(
+                outcomeHandlerRegistry, "outcomeHandlerRegistry must not be null");
     }
 
     /** 返回公开 tryLock 所需的最终结果。 */
@@ -83,88 +87,51 @@ public final class LockAcquisitionService {
      */
     public AcquireAttempt acquire(String lockName, LockOptions options) {
         Instant operationStart = Instant.now(clock);
-
         try {
             LockOptions actualOptions = resolveAndValidate(lockName, options);
             LockProvider provider = providerRegistry.getProvider(actualOptions.getProviderName());
             FencingTokenPlan fencingPlan = fencingTokenCoordinator.plan(provider, actualOptions);
             validateProviderCapabilities(provider, actualOptions);
+
             String ownerToken = ownerTokenGenerator.generate(actualOptions.getNamespace(), lockName);
-            LockAcquireRequest request = createAcquireRequest(
-                    lockName,
-                    ownerToken,
-                    actualOptions,
-                    fencingPlan
-            );
-            publishAcquireAttempt(provider, request);
+            LockAcquireRequest request = LockAcquireRequest.builder()
+                    .lockName(lockName)
+                    .ownerToken(ownerToken)
+                    .options(actualOptions)
+                    .nativeFencingRequired(fencingPlan.isNative())
+                    .build();
+
+            eventPublisher.publish(eventFactory.fromAcquireRequest(
+                    provider,
+                    request,
+                    LockEventType.ACQUIRE_ATTEMPT,
+                    LockStage.ACQUIRE,
+                    null,
+                    null));
+
             LockWaiter waiter = waiterFactory.getWaiter(actualOptions.getWaitStrategy());
             Instant acquireStart = Instant.now(clock);
-            LockAcquireResponse response = waiter.waitForLock(new LockWaitContext(request, provider, clock));
+            LockAcquireResponse response = waiter.waitForLock(
+                    new LockWaitContext(request, provider, clock));
             Duration waitDuration = Duration.between(acquireStart, Instant.now(clock));
-            LockAcquireOutcomeContext outcomeContext = createOutcomeContext(
-                    lockName,
-                    provider,
-                    actualOptions,
-                    request,
-                    response,
-                    fencingPlan,
-                    waitDuration
-            );
-            LockResult<LockHandle> result = outcomeHandlerRegistry.handle(outcomeContext);
-            return AcquireAttempt.completed(result, actualOptions);
+
+            LockAcquireOutcomeContext outcomeContext = LockAcquireOutcomeContext.builder()
+                    .lockName(lockName)
+                    .provider(provider)
+                    .options(actualOptions)
+                    .request(request)
+                    .response(response)
+                    .fencingPlan(fencingPlan)
+                    .waitDuration(waitDuration)
+                    .build();
+
+            return AcquireAttempt.completed(
+                    outcomeHandlerRegistry.handle(outcomeContext),
+                    actualOptions);
         } catch (IllegalArgumentException | InvalidLockOptionsException error) {
             return AcquireAttempt.invalid(invalidOptionsResult(lockName, error, operationStart));
         }
     }
-
-
-    private static LockAcquireRequest createAcquireRequest(
-            String lockName,
-            String ownerToken,
-            LockOptions options,
-            FencingTokenPlan fencingPlan
-    ) {
-        return LockAcquireRequest.builder()
-                .lockName(lockName)
-                .ownerToken(ownerToken)
-                .options(options)
-                .nativeFencingRequired(fencingPlan.isNative())
-                .build();
-    }
-
-    private static LockAcquireOutcomeContext createOutcomeContext(
-            String lockName,
-            LockProvider provider,
-            LockOptions options,
-            LockAcquireRequest request,
-            LockAcquireResponse response,
-            FencingTokenPlan fencingPlan,
-            Duration waitDuration
-    ) {
-        return LockAcquireOutcomeContext.builder()
-                .lockName(lockName)
-                .provider(provider)
-                .options(options)
-                .request(request)
-                .response(response)
-                .fencingPlan(fencingPlan)
-                .waitDuration(waitDuration)
-                .build();
-    }
-
-    private void publishAcquireAttempt(LockProvider provider, LockAcquireRequest request) {
-        eventPublisher.publish(
-                eventFactory.fromAcquireRequest(
-                        provider,
-                        request,
-                        LockEventType.ACQUIRE_ATTEMPT,
-                        LockStage.ACQUIRE,
-                        null,
-                        null
-                )
-        );
-    }
-
 
     private LockOptions resolveAndValidate(String lockName, LockOptions options) {
         lockNameValidator.validate(lockName);
@@ -178,9 +145,21 @@ public final class LockAcquisitionService {
             throw new IllegalArgumentException(
                     "provider does not support auto renew: " + provider.providerName());
         }
+        if (options.getWaitStrategy() == LockWaitStrategy.PROVIDER_NATIVE
+                && !provider.capabilities().isNativeWaitSupported()) {
+            throw new IllegalArgumentException(
+                    "provider does not support provider-native waiting: " + provider.providerName());
+        }
+
+        // 通用能力校验之后，再给具体 Provider 一次校验自身约束的机会。
+        provider.validateOptions(options);
     }
 
-    private LockResult<LockHandle> invalidOptionsResult(String lockName, RuntimeException error, Instant operationStart) {
+    private LockResult<LockHandle> invalidOptionsResult(
+            String lockName,
+            RuntimeException error,
+            Instant operationStart
+    ) {
         return LockResult.<LockHandle>builder()
                 .status(LockStatus.INVALID_OPTIONS)
                 .stage(LockStage.VALIDATE)

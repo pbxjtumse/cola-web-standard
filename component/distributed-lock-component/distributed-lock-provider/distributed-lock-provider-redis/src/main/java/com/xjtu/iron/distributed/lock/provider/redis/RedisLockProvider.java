@@ -1,5 +1,6 @@
 package com.xjtu.iron.distributed.lock.provider.redis;
 
+import com.xjtu.iron.distributed.lock.core.spi.LockAutoRenewMode;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.core.spi.LockProviderCapabilities;
 import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
@@ -126,9 +127,10 @@ public final class RedisLockProvider implements LockProvider {
     @Override
     public LockProviderCapabilities capabilities() {
         return LockProviderCapabilities.builder()
-                .autoRenewSupported(true)
+                .autoRenewMode(LockAutoRenewMode.CORE_MANAGED)
+                .manualRenewSupported(true)
                 .fencingTokenSupported(true)
-                .pubSubWaitSupported(false)
+                .nativeWaitSupported(false)
                 .fairLockSupported(false)
                 .reentrantSupported(false)
                 .build();

@@ -1,0 +1,40 @@
+@startuml
+!include ../../_common/style.puml
+
+title Redisson Provider-managed Watchdog
+
+participant LockExecutionTemplate as Execute
+participant ScheduledLockWatchdog as CoreWatchdog
+participant DefaultLockHandle as Handle
+participant RedissonLockProvider as Provider
+participant RedissonOwnershipRegistry as Ownership
+participant "Redisson internal watchdog" as RedissonWatchdog
+participant Redis
+
+Execute -> Provider : acquire(autoRenew=true)
+Provider -> Ownership : reserve(ownerToken, lockKey, acquireThreadId)
+Provider -> RedissonWatchdog : acquire without explicit leaseTime
+RedissonWatchdog -> Redis : periodically extend lock TTL
+Execute -> CoreWatchdog : start(handle, maxRenewTime)
+note right of CoreWatchdog
+  PROVIDER_MANAGED：
+  Redisson 真正续期；
+  Core 不调用 renew()，只 checkHeld
+  并统一控制 maxRenewTime。
+end note
+loop every renewInterval
+  CoreWatchdog -> Handle : checkHeld()
+  Handle -> Provider : check(ownerToken)
+  Provider -> Ownership : find(ownerToken)
+  Ownership --> Provider : original acquireThreadId
+  Provider -> Redis : isHeldByThread(acquireThreadId)
+end
+alt maxRenewTime reached
+  CoreWatchdog -> Handle : markLostByWatchdog()
+  CoreWatchdog -> Handle : unlock()
+  Handle -> Provider : release(ownerToken)
+  Provider -> Ownership : find(ownerToken)
+  Provider -> Redis : unlock using original acquireThreadId
+  Provider -> Ownership : remove(ownerToken)
+end
+@enduml

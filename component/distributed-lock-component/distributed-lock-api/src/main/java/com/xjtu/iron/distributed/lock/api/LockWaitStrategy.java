@@ -3,32 +3,22 @@ package com.xjtu.iron.distributed.lock.api;
 /**
  * 锁等待策略。
  *
- * <p>等待策略用于描述“第一次没有抢到锁之后怎么等”。组件不建议提供无限等待能力，业务应显式设置
- * waitTime，超时后返回 NOT_ACQUIRED。</p>
+ * <p>这里只描述 Core 与 Provider 的等待职责，不绑定某个具体产品。这样未来 Redisson 的 Pub/Sub、
+ * ZooKeeper 的 watch、Etcd 的 watch 都可以映射到同一个 {@link #PROVIDER_NATIVE} 语义。</p>
  */
 public enum LockWaitStrategy {
 
-    /** 不等待，抢不到立即返回。适合定时任务抢占、缓存重建等场景。 */
+    /** 不等待，抢不到立即返回。 */
     NO_WAIT,
 
-    /** 指数退避 + jitter。适合短等待、轻微竞争的用户请求或批处理抢占。 */
+    /** 由 iron-lock Core 使用退避 + jitter 周期性重新 acquire。 */
     BACKOFF,
 
-    /** Pub/Sub 释放通知 + 本地退避兜底。适合中长等待，通常二期再实现。
-     * 适用场景如下 ：
-     *  1. 锁竞争比较激烈；
-     *  2. waitTime 比较长，例如 3 秒、5 秒、10 秒；
-     *  3. 不希望大量线程一直轮询 Redis；
-     *  4. unlock 时可以发布释放通知；
-     *  5. 等待方可以订阅 release channel，被通知后再尝试抢锁。
-     * 处理场景较为复杂 需要注意
-     *  1. 订阅刚建立前，锁已经释放了怎么办？
-     *  2. pub/sub 消息丢了怎么办？
-     *  3. Redis 连接断开怎么办？
-     *  4. 多个等待者同时收到通知，惊群怎么办？
-     *  5. channel 管理在哪里做？
-     *  6. 订阅线程池如何管理？
-     *  7. Redis Cluster 下 channel 和 key 如何设计？
-     * */
-    PUBSUB_BACKOFF
+    /**
+     * 由 Provider 自己完成等待与唤醒。
+     *
+     * <p>当前 Redisson 使用 RLock/RFencedLock 的原生 Pub/Sub 等待；未来 ZooKeeper/Etcd 可以使用
+     * watch 机制。Core 只调用 Provider.acquire() 一次，并把完整 waitTime 交给 Provider。</p>
+     */
+    PROVIDER_NATIVE
 }

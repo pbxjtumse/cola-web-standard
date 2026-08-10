@@ -1,3 +1,35 @@
+# v26 Redisson Provider + POM 治理收口
+
+当前组件在原有 Redis Lua Provider + JDBC fencing 基础上正式纳入 `redisson` LockProvider，并修正上一版 POM 聚合/BOM 关系。业务仍然只依赖 `DistributedLockClient`，不会直接依赖 `RedissonClient/RLock/RFencedLock`。
+
+
+本版额外收口：
+
+- `distributed-lock-component` 恢复 import `component-bom`；
+- Redisson Provider 只由 `distributed-lock-provider` 二级聚合器聚合，不再根 POM 越级挂载；
+- 子模块内部依赖全部无版本，由 `component-bom` 管自研版本、最外层根 POM 管 Redisson 第三方版本；
+- Health 增加 Redisson “已启用但 Provider 未成功注册”的装配失败检测；
+- watchdog 使用可注入 `Clock`，提升时间语义与测试一致性；
+- 新增 `docs/provider-migration-safety.md`，明确 redis 与 redisson 是两个不同协调域，禁止无保护滚动混跑。
+
+新增能力：
+
+- `providerName=redisson`；
+- `PROVIDER_NATIVE`：Provider 原生等待，Redisson 映射为 Pub/Sub waiting；
+- `LockAutoRenewMode.PROVIDER_MANAGED`：Redisson 内部 watchdog 负责 TTL 续期；
+- `RFencedLock.tryLockAndGetToken(...)` 映射为既有 `FencingTokenMode.NATIVE`；
+- `RedissonOwnershipRegistry` 适配 iron ownerToken 与 Redisson threadId owner 语义；
+- Redisson / Redis Lua 双 Provider 能力矩阵与 Contract Test；
+- Spring Boot Starter 可复用 `spring.data.redis.*` 自动创建 RedissonClient，也支持选择业务已有 RedissonClient Bean。
+
+详细设计见：
+
+- `docs/redisson-integration-design.md`
+- `docs/redisson-provider-contract-matrix.md`
+- `docs/redisson-global-pom-changes.md`
+
+---
+
 一期：Redis Provider 做好，支持 token、Lua 解锁、Lua 续期、watchdog、事件、指标、执行模板。
 二期：增加 fencing token 能力，先用 Redis INCR 或 DB sequence 实现。
 三期：增加 ZK/Etcd Provider，服务强协调和公平锁。

@@ -11,20 +11,16 @@ import java.util.Set;
 
 /**
  * 默认 fencing token Provider 注册表。
+ *
+ * <p>只维护 providerName -> Provider 的稳定映射。这里刻意不设计 defaultProvider：
+ * external fencing 的选择必须由 {@link FencingTokenCoordinator} 根据显式配置完成，
+ * 避免容器中 Bean 数量变化悄悄改变一致性策略。</p>
  */
 public final class DefaultFencingTokenProviderRegistry implements FencingTokenProviderRegistry {
 
     private final Map<String, FencingTokenProvider> providers;
-    private final String defaultProviderName;
 
     public DefaultFencingTokenProviderRegistry(Collection<? extends FencingTokenProvider> providers) {
-        this(null, providers);
-    }
-
-    public DefaultFencingTokenProviderRegistry(
-            String defaultProviderName,
-            Collection<? extends FencingTokenProvider> providers
-    ) {
         Map<String, FencingTokenProvider> mapped = new LinkedHashMap<>();
         if (providers != null) {
             for (FencingTokenProvider provider : providers) {
@@ -37,11 +33,6 @@ public final class DefaultFencingTokenProviderRegistry implements FencingTokenPr
             }
         }
         this.providers = Collections.unmodifiableMap(mapped);
-        this.defaultProviderName = normalizeNullable(defaultProviderName);
-        if (this.defaultProviderName != null && !mapped.containsKey(this.defaultProviderName)) {
-            throw new IllegalArgumentException(
-                    "default fencing token provider not found: " + this.defaultProviderName);
-        }
     }
 
     @Override
@@ -51,18 +42,6 @@ public final class DefaultFencingTokenProviderRegistry implements FencingTokenPr
             return Optional.empty();
         }
         return Optional.ofNullable(providers.get(normalized));
-    }
-
-    @Override
-    public Optional<FencingTokenProvider> defaultProvider() {
-        if (defaultProviderName != null) {
-            return Optional.ofNullable(providers.get(defaultProviderName));
-        }
-        /* 只有一个独立 Provider 时可以安全推导默认值；多个 Provider 时禁止猜测。 */
-        if (providers.size() == 1) {
-            return providers.values().stream().findFirst();
-        }
-        return Optional.empty();
     }
 
     @Override

@@ -17,7 +17,6 @@ import com.xjtu.iron.distributed.lock.core.metrics.LockMetricsFacade;
 import com.xjtu.iron.distributed.lock.core.result.ExecutionOutcome;
 import com.xjtu.iron.distributed.lock.core.result.LockReleaseOutcome;
 import com.xjtu.iron.distributed.lock.core.result.LockResultResolver;
-import com.xjtu.iron.distributed.lock.core.watchdog.LockWatchdog;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -27,14 +26,13 @@ import java.util.Objects;
 /**
  * 持锁业务执行模板。
  *
- * <p>这里保留 callback 异常分类、watchdog、release 和最终结果归并，因为它们共同组成一次
- * execute 生命周期。没有再为每一个 private 方法额外创建 Invoker、Coordinator、Mapper，
- * 避免把一条连续流程拆成过多跳转。</p>
+ * <p>这里保留 callback 异常分类、release 和最终结果归并，因为它们共同组成一次 execute 生命周期。
+ * watchdog 已前移到“成功 acquire -> LockHandle 创建”节点统一启动，因此 tryLock/execute 共享同一自动续期语义。
+ * 本类不再重复控制 watchdog，避免两套生命周期入口。</p>
  */
 public final class LockExecutionTemplate {
 
     private final LockAcquisitionService acquisitionService;
-    private final LockWatchdog watchdog;
     private final LockEventPublisher eventPublisher;
     private final LockEventFactory eventFactory;
     private final LockMetricsFacade metricsFacade;
@@ -43,7 +41,6 @@ public final class LockExecutionTemplate {
 
     public LockExecutionTemplate(
             LockAcquisitionService acquisitionService,
-            LockWatchdog watchdog,
             LockEventPublisher eventPublisher,
             LockEventFactory eventFactory,
             LockMetricsFacade metricsFacade,
@@ -52,7 +49,6 @@ public final class LockExecutionTemplate {
     ) {
         this.acquisitionService = Objects.requireNonNull(
                 acquisitionService, "acquisitionService must not be null");
-        this.watchdog = Objects.requireNonNull(watchdog, "watchdog must not be null");
         this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
         this.eventFactory = Objects.requireNonNull(eventFactory, "eventFactory must not be null");
         this.metricsFacade = Objects.requireNonNull(metricsFacade, "metricsFacade must not be null");
@@ -60,7 +56,11 @@ public final class LockExecutionTemplate {
         this.resultResolver = Objects.requireNonNull(resultResolver, "resultResolver must not be null");
     }
 
-    public <T> LockResult<T> execute(String lockName, LockOptions options, LockCallback<T> callback) {
+    public <T> LockResult<T> execute(
+            String lockName,
+            LockOptions options,
+            LockCallback<T> callback
+    ) {
         Objects.requireNonNull(callback, "callback must not be null");
 
         LockAcquisitionService.AcquireAttempt attempt = acquisitionService.acquire(lockName, options);
@@ -71,22 +71,16 @@ public final class LockExecutionTemplate {
 
         DefaultLockHandle handle = requireDefaultHandle(acquireResult);
         LockOptions actualOptions = attempt.requireOptions();
-        if (actualOptions.isAutoRenew()) {
-            watchdog.start(handle, actualOptions);
-        }
 
+        // watchdog 已在成功 acquire 创建 LockHandle 时统一启动，
+        // execute 与手工 tryLock 因此共享完全相同的 autoRenew 生命周期。
         ExecutionOutcome<T> executionOutcome = invokeCallback(
                 lockName,
                 handle,
                 actualOptions,
                 callback);
 
-        LockReleaseOutcome releaseOutcome;
-        try {
-            releaseOutcome = handle.releaseWithOutcome();
-        } finally {
-            watchdog.stop(handle);
-        }
+        LockReleaseOutcome releaseOutcome = handle.releaseWithOutcome();
 
         Duration holdDuration = Duration.between(handle.acquiredAt(), Instant.now(clock));
         LockResult<T> result = resultResolver.resolve(
@@ -109,7 +103,12 @@ public final class LockExecutionTemplate {
         return result;
     }
 
-    private <T> ExecutionOutcome<T> invokeCallback(String lockName, DefaultLockHandle handle, LockOptions options, LockCallback<T> callback) {
+    private <T> ExecutionOutcome<T> invokeCallback(
+            String lockName,
+            DefaultLockHandle handle,
+            LockOptions options,
+            LockCallback<T> callback
+    ) {
         try {
             eventPublisher.publish(eventFactory.fromLease(
                     handle.lease(),

@@ -3,6 +3,7 @@ package com.xjtu.iron.distributed.lock.demo;
 import com.xjtu.iron.distributed.lock.api.DistributedLockClient;
 import com.xjtu.iron.distributed.lock.api.LockOptions;
 import com.xjtu.iron.distributed.lock.api.LockResult;
+import com.xjtu.iron.distributed.lock.api.LockWaitStrategy;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,6 +35,50 @@ public class DistributedLockDemoController {
     public Map<String, Object> executeWithConfiguredDefaults(@PathVariable String bizKey) {
         LockResult<String> result = lockClient.execute("demo:configured:job:" + bizKey,
                 handle -> "processed-with-configured-defaults:" + bizKey);
+        return toBody(result);
+    }
+
+    /**
+     * 显式使用 Redisson Provider，并使用 Redisson 原生 Pub/Sub waiting + provider-managed watchdog。
+     */
+    @GetMapping("/redisson/{bizKey}")
+    public Map<String, Object> executeWithRedisson(@PathVariable String bizKey) {
+        LockOptions options = LockOptions.builder()
+                .providerName("redisson")
+                .namespace("demo")
+                .leaseTime(Duration.ofSeconds(30))
+                .waitTime(Duration.ofSeconds(3))
+                .waitStrategy(LockWaitStrategy.PROVIDER_NATIVE)
+                .autoRenew(true)
+                .maxRenewTime(Duration.ofMinutes(1))
+                .build();
+        LockResult<String> result = lockClient.execute(
+                "demo:redisson:job:" + bizKey, options,
+                handle -> "processed-by-redisson:" + bizKey);
+        return toBody(result);
+    }
+
+    /**
+     * Redisson RFencedLock 原生 fencing 演示。
+     */
+    @GetMapping("/redisson/fencing/{bizKey}")
+    public Map<String, Object> executeWithRedissonFencing(@PathVariable String bizKey) {
+        LockOptions options = LockOptions.builder()
+                .providerName("redisson")
+                .namespace("demo")
+                .leaseTime(Duration.ofSeconds(30))
+                .waitTime(Duration.ofSeconds(3))
+                .waitStrategy(LockWaitStrategy.PROVIDER_NATIVE)
+                .autoRenew(true)
+                .maxRenewTime(Duration.ofMinutes(1))
+                .fencingRequired(true)
+                .fencingTokenProviderName("redisson")
+                .build();
+        LockResult<String> result = lockClient.execute(
+                "demo:redisson:fencing:" + bizKey, options, handle -> {
+                    long token = handle.fencingToken().orElseThrow();
+                    return "processed-by-redisson-fenced:" + bizKey + ", token=" + token;
+                });
         return toBody(result);
     }
 

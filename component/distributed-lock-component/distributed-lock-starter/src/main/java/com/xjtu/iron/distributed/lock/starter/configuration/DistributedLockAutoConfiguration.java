@@ -45,6 +45,7 @@ import com.xjtu.iron.distributed.lock.starter.event.SpringLockEventPublisher;
 import com.xjtu.iron.distributed.lock.starter.metrics.MicrometerLockMetricsRecorder;
 import com.xjtu.iron.distributed.lock.starter.properties.DistributedLockProperties;
 import com.xjtu.iron.distributed.lock.starter.properties.JdbcFencingTokenProperties;
+import com.xjtu.iron.distributed.lock.starter.properties.RedissonDistributedLockProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -61,8 +62,10 @@ import java.time.Clock;
 import java.util.List;
 
 /** 分布式锁核心自动配置。 */
-@AutoConfiguration(after = {RedisDistributedLockAutoConfiguration.class, JdbcFencingTokenAutoConfiguration.class})
-@EnableConfigurationProperties({DistributedLockProperties.class, JdbcFencingTokenProperties.class})
+@AutoConfiguration(after = {RedisDistributedLockAutoConfiguration.class, RedissonDistributedLockAutoConfiguration.class,
+        JdbcFencingTokenAutoConfiguration.class})
+@EnableConfigurationProperties({DistributedLockProperties.class, JdbcFencingTokenProperties.class,
+        RedissonDistributedLockProperties.class})
 @ConditionalOnProperty(prefix = "xjtu.iron.distributed-lock", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class DistributedLockAutoConfiguration {
 
@@ -76,7 +79,9 @@ public class DistributedLockAutoConfiguration {
 
     @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean
-    public LockWatchdog lockWatchdog() { return new ScheduledLockWatchdog(); }
+    public LockWatchdog lockWatchdog(ObjectProvider<Clock> clockProvider) {
+        return new ScheduledLockWatchdog(clockProvider.getIfAvailable(Clock::systemUTC));
+    }
 
     @Bean
     @ConditionalOnMissingBean
@@ -133,14 +138,13 @@ public class DistributedLockAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public FencingTokenProviderRegistry fencingTokenProviderRegistry(
-            List<FencingTokenProvider> providers,
-            DistributedLockProperties properties
+            List<FencingTokenProvider> providers
     ) {
-        String configuredName = properties.getFencingTokenProviderName();
-        boolean configuredExternalProvider = configuredName != null
-                && providers.stream().anyMatch(provider -> configuredName.equals(provider.providerName()));
-        return new DefaultFencingTokenProviderRegistry(
-                configuredExternalProvider ? configuredName : null, providers);
+        /*
+         * Registry 只维护“名称 -> Provider”映射，不在这里推导默认 external fencing Provider。
+         * 真正的选择由 FencingTokenCoordinator 根据 LockOptions 显式决定。
+         */
+        return new DefaultFencingTokenProviderRegistry(providers);
     }
 
     @Bean
@@ -188,9 +192,13 @@ public class DistributedLockAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public LockHandleFactory lockHandleFactory(LockEventPublisher eventPublisher, LockEventFactory eventFactory,
-                                                LockMetricsFacade metricsFacade) {
-        return new LockHandleFactory(eventPublisher, eventFactory, metricsFacade);
+    public LockHandleFactory lockHandleFactory(
+            LockEventPublisher eventPublisher,
+            LockEventFactory eventFactory,
+            LockMetricsFacade metricsFacade,
+            LockWatchdog watchdog
+    ) {
+        return new LockHandleFactory(eventPublisher, eventFactory, metricsFacade, watchdog);
     }
 
     @Bean
@@ -260,7 +268,6 @@ public class DistributedLockAutoConfiguration {
     @ConditionalOnMissingBean
     public LockExecutionTemplate lockExecutionTemplate(
             LockAcquisitionService acquisitionService,
-            LockWatchdog watchdog,
             LockEventPublisher eventPublisher,
             LockEventFactory eventFactory,
             LockMetricsFacade metricsFacade,
@@ -269,7 +276,6 @@ public class DistributedLockAutoConfiguration {
     ) {
         return new LockExecutionTemplate(
                 acquisitionService,
-                watchdog,
                 eventPublisher,
                 eventFactory,
                 metricsFacade,

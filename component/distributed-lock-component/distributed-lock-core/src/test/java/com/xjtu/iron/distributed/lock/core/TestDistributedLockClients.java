@@ -73,10 +73,12 @@ final class TestDistributedLockClients {
                 new ExternalFencingTokenFlow(flowSupport));
         FencingTokenFlowRegistry flowRegistry = new DefaultFencingTokenFlowRegistry(flows);
 
+        NoOpLockWatchdog watchdog = new NoOpLockWatchdog();
         LockHandleFactory handleFactory = new LockHandleFactory(
                 eventPublisher,
                 eventFactory,
-                metricsFacade);
+                metricsFacade,
+                watchdog);
         List<LockAcquireOutcomeHandler> handlers = Arrays.asList(
                 new AcquiredLockAcquireOutcomeHandler(
                         flowRegistry,
@@ -107,7 +109,6 @@ final class TestDistributedLockClients {
 
         LockExecutionTemplate executionTemplate = new LockExecutionTemplate(
                 acquisitionService,
-                new NoOpLockWatchdog(),
                 eventPublisher,
                 eventFactory,
                 metricsFacade,

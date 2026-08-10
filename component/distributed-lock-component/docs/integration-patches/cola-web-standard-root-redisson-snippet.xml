@@ -1,0 +1,10 @@
+<!-- cola-web-standard/pom.xml -->
+<!-- properties -->
+<redisson.version>4.7.0</redisson.version>
+
+<!-- dependencyManagement / dependencies -->
+<dependency>
+    <groupId>org.redisson</groupId>
+    <artifactId>redisson</artifactId>
+    <version>${redisson.version}</version>
+</dependency>

@@ -6,6 +6,7 @@ import com.xjtu.iron.distributed.lock.starter.health.DistributedLockHealthIndica
 import com.xjtu.iron.distributed.lock.starter.properties.DistributedLockProperties;
 import com.xjtu.iron.distributed.lock.starter.properties.JdbcFencingTokenProperties;
 import com.xjtu.iron.distributed.lock.starter.properties.RedisDistributedLockProperties;
+import com.xjtu.iron.distributed.lock.starter.properties.RedissonDistributedLockProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -27,13 +28,15 @@ public class DistributedLockActuatorAutoConfiguration {
             FencingTokenProviderRegistry fencingRegistry,
             DistributedLockProperties properties,
             ObjectProvider<RedisDistributedLockProperties> redisPropertiesProvider,
-            ObjectProvider<JdbcFencingTokenProperties> jdbcPropertiesProvider
+            ObjectProvider<JdbcFencingTokenProperties> jdbcPropertiesProvider,
+            ObjectProvider<RedissonDistributedLockProperties> redissonPropertiesProvider
     ) {
         return new DistributedLockHealthIndicator(
                 providerRegistry,
                 fencingRegistry,
                 properties,
                 redisPropertiesProvider.getIfAvailable(),
-                jdbcPropertiesProvider.getIfAvailable());
+                jdbcPropertiesProvider.getIfAvailable(),
+                redissonPropertiesProvider.getIfAvailable());
     }
 }

@@ -9,6 +9,7 @@ import com.xjtu.iron.distributed.lock.core.event.LockEventType;
 import com.xjtu.iron.distributed.lock.core.metrics.LockMetricsFacade;
 import com.xjtu.iron.distributed.lock.core.result.LockReleaseOutcome;
 import com.xjtu.iron.distributed.lock.core.runtime.LockRuntimeState;
+import com.xjtu.iron.distributed.lock.core.spi.LockAutoRenewMode;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
 import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
@@ -17,6 +18,7 @@ import com.xjtu.iron.distributed.lock.core.spi.request.LockRenewRequest;
 import com.xjtu.iron.distributed.lock.core.spi.response.LockCheckResponse;
 import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
 import com.xjtu.iron.distributed.lock.core.spi.response.LockRenewResponse;
+import com.xjtu.iron.distributed.lock.core.watchdog.LockWatchdog;
 import com.xjtu.iron.distributed.lock.core.watchdog.WatchdogLockHandle;
 
 import java.time.Duration;
@@ -43,6 +45,17 @@ public final class DefaultLockHandle implements WatchdogLockHandle {
     private final LockEventFactory eventFactory;
     private final LockMetricsFacade metricsFacade;
 
+    /**
+     * 与本 Handle 绑定的 watchdog。
+     *
+     * <p>watchdog 在 acquire 成功创建 Handle 时启动，而不是只在 execute(callback) 中启动。
+     * 这样手工 tryLock(autoRenew=true) 与 execute(autoRenew=true) 具有一致语义。</p>
+     */
+    private final LockWatchdog watchdog;
+
+    /**
+     * 兼容原有直接构造场景；不绑定 watchdog。生产默认通过 LockHandleFactory 创建。
+     */
     public DefaultLockHandle(
             LockProvider provider,
             LockLease lease,
@@ -51,12 +64,25 @@ public final class DefaultLockHandle implements WatchdogLockHandle {
             LockEventFactory eventFactory,
             LockMetricsFacade metricsFacade
     ) {
+        this(provider, lease, runtimeState, eventPublisher, eventFactory, metricsFacade, null);
+    }
+
+    public DefaultLockHandle(
+            LockProvider provider,
+            LockLease lease,
+            LockRuntimeState runtimeState,
+            LockEventPublisher eventPublisher,
+            LockEventFactory eventFactory,
+            LockMetricsFacade metricsFacade,
+            LockWatchdog watchdog
+    ) {
         this.provider = Objects.requireNonNull(provider, "provider must not be null");
         this.lease = Objects.requireNonNull(lease, "lease must not be null");
         this.runtimeState = Objects.requireNonNull(runtimeState, "runtimeState must not be null");
         this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
         this.eventFactory = Objects.requireNonNull(eventFactory, "eventFactory must not be null");
         this.metricsFacade = Objects.requireNonNull(metricsFacade, "metricsFacade must not be null");
+        this.watchdog = watchdog;
     }
 
     public LockLease lease() { return lease; }
@@ -120,33 +146,50 @@ public final class DefaultLockHandle implements WatchdogLockHandle {
     /** 执行释放并返回 core 内部释放解释结果。 */
     public LockReleaseOutcome releaseWithOutcome() {
         if (!runtimeState.markReleaseAttemptedOnce()) {
+            stopWatchdog();
             return LockReleaseOutcome.alreadyAttempted();
         }
-        LockReleaseResponse response = provider.release(LockReleaseRequest.fromLease(lease));
-        LockReleaseOutcome outcome = LockReleaseOutcome.fromProviderResponse(response);
-        switch (outcome.getType()) {
-            case RELEASED:
-                metricsFacade.recordRelease(lease, true);
-                publish(LockEventType.RELEASED, LockStage.RELEASE, null, null);
-                break;
-            case LOCK_LOST:
-                metricsFacade.recordRelease(lease, false);
-                markLost(LockStage.RELEASE, null);
-                break;
-            case RELEASE_FAILED:
-                metricsFacade.recordRelease(lease, false);
-                publish(LockEventType.RELEASE_FAILED, LockStage.RELEASE, LockStatus.RELEASE_FAILED, outcome.getError());
-                break;
-            case ALREADY_ATTEMPTED:
-            default:
-                break;
+        try {
+            LockReleaseResponse response = provider.release(LockReleaseRequest.fromLease(lease));
+            LockReleaseOutcome outcome = LockReleaseOutcome.fromProviderResponse(response);
+            switch (outcome.getType()) {
+                case RELEASED:
+                    metricsFacade.recordRelease(lease, true);
+                    publish(LockEventType.RELEASED, LockStage.RELEASE, null, null);
+                    break;
+                case LOCK_LOST:
+                    metricsFacade.recordRelease(lease, false);
+                    markLost(LockStage.RELEASE, null);
+                    break;
+                case RELEASE_FAILED:
+                    metricsFacade.recordRelease(lease, false);
+                    publish(LockEventType.RELEASE_FAILED, LockStage.RELEASE, LockStatus.RELEASE_FAILED, outcome.getError());
+                    break;
+                case ALREADY_ATTEMPTED:
+                default:
+                    break;
+            }
+            return outcome;
+        } finally {
+            // 手工 tryLock 也会启动 watchdog，因此释放时必须立即清理任务，不能等到下一个 tick。
+            stopWatchdog();
         }
-        return outcome;
+    }
+
+    private void stopWatchdog() {
+        if (watchdog != null) {
+            watchdog.stop(this);
+        }
     }
 
     @Override
     public void assertHeld() {
         if (!checkHeld()) { throw new LockLostException("lock lost: " + lease.getLockName()); }
+    }
+
+    @Override
+    public LockAutoRenewMode autoRenewMode() {
+        return provider.capabilities().getAutoRenewMode();
     }
 
     @Override

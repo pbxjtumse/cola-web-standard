@@ -6,6 +6,8 @@ import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenProviderRegistry;
 import com.xjtu.iron.distributed.lock.provider.jdbc.fencing.JdbcFencingTokenConstants;
 import com.xjtu.iron.distributed.lock.provider.redis.RedisLockProvider;
 import com.xjtu.iron.distributed.lock.provider.redis.RedisLockScriptExecutor;
+import com.xjtu.iron.distributed.lock.provider.redisson.RedissonLockProvider;
+import org.redisson.api.RedissonClient;
 import com.xjtu.iron.distributed.lock.starter.health.DistributedLockHealthIndicator;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -23,6 +25,7 @@ class DistributedLockAutoConfigurationTest {
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
                     RedisDistributedLockAutoConfiguration.class,
+                    RedissonDistributedLockAutoConfiguration.class,
                     JdbcFencingTokenAutoConfiguration.class,
                     DistributedLockAutoConfiguration.class,
                     DistributedLockActuatorAutoConfiguration.class));
@@ -35,6 +38,43 @@ class DistributedLockAutoConfigurationTest {
                     assertThat(context).hasSingleBean(RedisLockProvider.class);
                     assertThat(context).hasSingleBean(DistributedLockClient.class);
                     assertThat(context).hasSingleBean(DistributedLockHealthIndicator.class);
+                });
+    }
+
+
+    @Test
+    void shouldCreateRedissonProviderWithoutLeakingRedissonIntoClientApi() {
+        contextRunner
+                .withBean(RedissonClient.class, () -> mock(RedissonClient.class))
+                .withPropertyValues(
+                        "xjtu.iron.distributed-lock.redisson.enabled=true",
+                        "xjtu.iron.distributed-lock.default-provider=redisson")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(RedissonLockProvider.class);
+                    assertThat(context).hasSingleBean(DistributedLockClient.class);
+                    assertThat(context.getBean(DistributedLockClient.class))
+                            .isNotInstanceOf(RedissonClient.class);
+                });
+    }
+
+
+    @Test
+    void healthShouldBeDownWhenRedissonIsExplicitlyEnabledButProviderIsNotRegistered() {
+        contextRunner
+                .withBean(RedisLockScriptExecutor.class,
+                        () -> (script, keys, args) -> Arrays.asList(0L, 1L))
+                .withPropertyValues(
+                        "xjtu.iron.distributed-lock.redisson.enabled=true",
+                        "xjtu.iron.distributed-lock.redisson.create-client-if-missing=false",
+                        "xjtu.iron.distributed-lock.default-provider=redis")
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(RedissonLockProvider.class);
+                    DistributedLockHealthIndicator health = context.getBean(DistributedLockHealthIndicator.class);
+                    assertThat(health.health().getStatus().getCode()).isEqualTo("DOWN");
+                    assertThat(health.health().getDetails())
+                            .containsEntry("redissonEnabled", true)
+                            .containsEntry("redissonProviderRegistered", false)
+                            .containsEntry("redissonConfigurationReady", false);
                 });
     }
 
@@ -77,8 +117,8 @@ class DistributedLockAutoConfigurationTest {
                     assertThat(context).hasBean("jdbcSequenceFencingTokenProvider");
                     FencingTokenProviderRegistry registry = context.getBean(FencingTokenProviderRegistry.class);
                     assertThat(registry.providerNames()).contains(JdbcFencingTokenConstants.PROVIDER_NAME);
-                    assertThat(registry.defaultProvider()).isPresent();
-                    assertThat(registry.defaultProvider().orElseThrow().providerName())
+                    assertThat(registry.findProvider(JdbcFencingTokenConstants.PROVIDER_NAME)).isPresent();
+                    assertThat(registry.getRequired(JdbcFencingTokenConstants.PROVIDER_NAME).providerName())
                             .isEqualTo(JdbcFencingTokenConstants.PROVIDER_NAME);
                 });
     }

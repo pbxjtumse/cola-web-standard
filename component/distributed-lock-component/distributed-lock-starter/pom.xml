@@ -25,6 +25,10 @@
         </dependency>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
+            <artifactId>distributed-lock-provider-redisson</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.xjtu.iron</groupId>
             <artifactId>distributed-lock-fencing-provider-jdbc</artifactId>
         </dependency>
         <dependency>

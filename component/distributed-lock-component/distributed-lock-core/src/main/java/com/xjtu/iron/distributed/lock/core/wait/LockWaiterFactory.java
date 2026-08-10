@@ -7,32 +7,30 @@ import java.util.Objects;
 /**
  * 锁等待器工厂。
  *
- * <p>一期只支持 {@link LockWaitStrategy#NO_WAIT} 和 {@link LockWaitStrategy#BACKOFF}。
- * Pub/Sub 等复杂等待策略不在一期暴露，避免 API 能力与实现能力不一致。</p>
+ * <p>NO_WAIT/BACKOFF 由 Core 控制；PROVIDER_NATIVE 委托给具备原生 Pub/Sub waiting 能力的 Provider，
+ * 当前首先由 Redisson Provider 实现。</p>
  */
 public final class LockWaiterFactory {
 
-    /** 不等待实现。 */
     private final LockWaiter noWaitLockWaiter;
-
-    /** 退避等待实现。 */
     private final LockWaiter backoffLockWaiter;
+    private final LockWaiter providerNativeLockWaiter;
 
     public LockWaiterFactory() {
-        this(new NoWaitLockWaiter(), new BackoffLockWaiter());
+        this(new NoWaitLockWaiter(), new BackoffLockWaiter(), new ProviderNativeLockWaiter());
     }
 
-    public LockWaiterFactory(LockWaiter noWaitLockWaiter, LockWaiter backoffLockWaiter) {
+    public LockWaiterFactory(
+            LockWaiter noWaitLockWaiter,
+            LockWaiter backoffLockWaiter,
+            LockWaiter providerNativeLockWaiter
+    ) {
         this.noWaitLockWaiter = Objects.requireNonNull(noWaitLockWaiter, "noWaitLockWaiter must not be null");
         this.backoffLockWaiter = Objects.requireNonNull(backoffLockWaiter, "backoffLockWaiter must not be null");
+        this.providerNativeLockWaiter = Objects.requireNonNull(
+                providerNativeLockWaiter, "providerNativeLockWaiter must not be null");
     }
 
-    /**
-     * 根据等待策略选择等待器。
-     *
-     * @param strategy 等待策略。
-     * @return 对应等待器。
-     */
     public LockWaiter getWaiter(LockWaitStrategy strategy) {
         Objects.requireNonNull(strategy, "strategy must not be null");
         switch (strategy) {
@@ -40,6 +38,8 @@ public final class LockWaiterFactory {
                 return noWaitLockWaiter;
             case BACKOFF:
                 return backoffLockWaiter;
+            case PROVIDER_NATIVE:
+                return providerNativeLockWaiter;
             default:
                 throw new IllegalArgumentException("unsupported wait strategy: " + strategy);
         }

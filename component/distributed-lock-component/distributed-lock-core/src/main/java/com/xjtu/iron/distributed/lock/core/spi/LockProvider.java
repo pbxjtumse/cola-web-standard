@@ -1,5 +1,6 @@
 package com.xjtu.iron.distributed.lock.core.spi;
 
+import com.xjtu.iron.distributed.lock.api.LockOptions;
 import com.xjtu.iron.distributed.lock.core.spi.request.LockAcquireRequest;
 import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
 import com.xjtu.iron.distributed.lock.core.spi.request.LockReleaseRequest;
@@ -66,4 +67,17 @@ public interface LockProvider {
      * @return Provider 能力。
      */
     LockProviderCapabilities capabilities();
+
+    /**
+     * Provider 对本次 LockOptions 做额外校验。
+     *
+     * <p>Core 只校验通用语义；Provider 可以在这里校验自己的约束。例如 Redisson 的 watchdog timeout
+     * 是 RedissonClient 级配置，当 autoRenew=true 时，本次 leaseTime 必须与该 timeout 一致。</p>
+     *
+     * @param options 已完成通用校验的锁选项
+     * @throws IllegalArgumentException Provider 不接受当前配置时抛出
+     */
+    default void validateOptions(LockOptions options) {
+        // 默认无 Provider 特有约束。
+    }
 }

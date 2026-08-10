@@ -48,3 +48,13 @@ Not started:
 - fair waiting semantics;
 - session/lease-loss mapping;
 - provider capability matrix and compatibility tests.
+
+
+## v26 Redisson / POM 收口补充
+
+- Redis Lua Provider：保留，作为轻量、自研、Core-managed watchdog Provider。
+- Redisson Provider：已加入基础互斥、Provider-native wait、Provider-managed watchdog、RFencedLock native fencing。
+- JDBC fencing：继续作为 external fencing Provider，与 redis/redisson 均可组合。
+- POM：组件根导入 component-bom；Provider 由二级 aggregator 聚合；Redisson 第三方版本由最外层根 POM 管理。
+- 待完整仓库同步：component-bom 增加 `distributed-lock-provider-redisson`；root dependencyManagement 增加 `org.redisson:redisson` 版本。
+- 生产迁移：redis 与 redisson 不属于同一协调域，切换 Provider 必须按 `provider-migration-safety.md` 执行。

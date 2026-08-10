@@ -10,20 +10,23 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class DefaultFencingTokenProviderRegistryTest {
 
     @Test
-    void soleProviderShouldBeImplicitDefault() {
+    void shouldFindProviderOnlyByExplicitName() {
         FencingTokenProvider jdbc = provider("jdbc-sequence");
         DefaultFencingTokenProviderRegistry registry =
                 new DefaultFencingTokenProviderRegistry(List.of(jdbc));
 
-        assertThat(registry.defaultProvider()).contains(jdbc);
+        assertThat(registry.findProvider("jdbc-sequence")).contains(jdbc);
+        assertThat(registry.findProvider("missing")).isEmpty();
+        assertThat(registry.providerNames()).containsExactly("jdbc-sequence");
     }
 
     @Test
-    void multipleProvidersShouldNotBeGuessedWithoutConfiguredDefault() {
+    void blankProviderNameShouldNotImplicitlySelectSoleProvider() {
         DefaultFencingTokenProviderRegistry registry =
-                new DefaultFencingTokenProviderRegistry(List.of(provider("jdbc-a"), provider("jdbc-b")));
+                new DefaultFencingTokenProviderRegistry(List.of(provider("jdbc-sequence")));
 
-        assertThat(registry.defaultProvider()).isEmpty();
+        assertThat(registry.findProvider(null)).isEmpty();
+        assertThat(registry.findProvider("   ")).isEmpty();
     }
 
     @Test

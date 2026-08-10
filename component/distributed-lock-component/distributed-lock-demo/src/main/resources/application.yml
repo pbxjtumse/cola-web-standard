@@ -8,10 +8,10 @@ spring:
   # Demo 作为独立应用负责提供 Redis 连接；starter/core/provider 不携带连接配置。
   data:
     redis:
-      host: ${REDIS_HOST:www.xjtu-iron.online}
-      port: ${REDIS_PORT:30379}
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
       username: ${REDIS_USERNAME:}
-      password: ${REDIS_PASSWORD:765YSa77TA}
+      password: ${REDIS_PASSWORD:}
       database: ${REDIS_DATABASE:0}
       connect-timeout: ${REDIS_CONNECT_TIMEOUT:3s}
       timeout: ${REDIS_TIMEOUT:3s}
@@ -27,14 +27,14 @@ spring:
   datasource:
     url: ${MYSQL_URL:jdbc:mysql://127.0.0.1:3306/test?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${MYSQL_USERNAME:root}
-    password: ${MYSQL_PASSWORD:root}
+    password: ${MYSQL_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
 xjtu:
   iron:
     distributed-lock:
       enabled: true
-      default-provider: redis
+      default-provider: ${LOCK_PROVIDER:redis}
       namespace: demo
       lease-time: 30s
       wait-time: 0s
@@ -51,6 +51,17 @@ xjtu:
         key-prefix: iron:lock
         release-channel-prefix: iron:lock:release
         fencing-key-suffix: fence
+
+      redisson:
+        # 开启第二个 LockProvider。业务仍然只依赖 DistributedLockClient。
+        enabled: ${REDISSON_LOCK_ENABLED:true}
+        key-prefix: iron:lock:redisson
+        watchdog-timeout: 30s
+        check-lock-synced-slaves: true
+        slaves-sync-timeout: 1s
+        create-client-if-missing: true
+        # 多 RedissonClient 时可指定：
+        # client-bean-name: businessRedissonClient
 
       fencing:
         jdbc:

@@ -22,9 +22,14 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
     private final LockAcquisitionService acquisitionService;
     private final LockExecutionTemplate executionTemplate;
 
-    public DefaultDistributedLockClient(LockAcquisitionService acquisitionService, LockExecutionTemplate executionTemplate) {
-        this.acquisitionService = Objects.requireNonNull(acquisitionService, "acquisitionService must not be null");
-        this.executionTemplate = Objects.requireNonNull(executionTemplate, "executionTemplate must not be null");
+    public DefaultDistributedLockClient(
+            LockAcquisitionService acquisitionService,
+            LockExecutionTemplate executionTemplate
+    ) {
+        this.acquisitionService = Objects.requireNonNull(
+                acquisitionService, "acquisitionService must not be null");
+        this.executionTemplate = Objects.requireNonNull(
+                executionTemplate, "executionTemplate must not be null");
     }
 
     @Override
@@ -33,7 +38,11 @@ public final class DefaultDistributedLockClient implements DistributedLockClient
     }
 
     @Override
-    public <T> LockResult<T> execute(String lockName, LockOptions options, LockCallback<T> callback) {
+    public <T> LockResult<T> execute(
+            String lockName,
+            LockOptions options,
+            LockCallback<T> callback
+    ) {
         return executionTemplate.execute(lockName, options, callback);
     }
 }

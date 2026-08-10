@@ -1,6 +1,7 @@
 package com.xjtu.iron.distributed.lock.core.watchdog;
 
 import com.xjtu.iron.distributed.lock.api.LockHandle;
+import com.xjtu.iron.distributed.lock.core.spi.LockAutoRenewMode;
 
 /**
  * watchdog 可操作的锁句柄视图。
@@ -16,6 +17,12 @@ public interface WatchdogLockHandle extends LockHandle {
      * @return 用于注册和取消续期任务的唯一 id。
      */
     String watchdogId();
+
+    /**
+     * 当前 Provider 的自动续期模式。
+     * CORE_MANAGED 时 watchdog 调 renew；PROVIDER_MANAGED 时 watchdog 只做存活监视和 maxRenewTime 边界控制。
+     */
+    LockAutoRenewMode autoRenewMode();
 
     /**
      * 由 watchdog 将当前 handle 标记为失锁。

@@ -1,7 +1,9 @@
 package com.xjtu.iron.distributed.lock.core.watchdog;
 
 import com.xjtu.iron.distributed.lock.api.LockOptions;
+import com.xjtu.iron.distributed.lock.core.spi.LockAutoRenewMode;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -15,41 +17,70 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 基于 ScheduledExecutorService 的 watchdog 实现。
+ * 统一 watchdog 调度器。
  *
- * <p>每个开启 autoRenew 的 LockHandle 会注册一个周期性续期任务。任务会在 renewInterval 到达时调用
- * handle.renew()，续期成功则继续，确定失锁则停止。达到 maxRenewTime 时也会停止续期并把 handle 标记为 lost，
- * 防止业务卡死后无限续期。</p>
+ * <p>它同时支持两种 Provider：</p>
+ * <ul>
+ *     <li>CORE_MANAGED：例如自研 Redis Lua，每个周期主动调用 handle.renew()；</li>
+ *     <li>PROVIDER_MANAGED：例如 Redisson，真正 TTL 续期由 Redisson 内部完成，本类周期 checkHeld()，
+ *         并在 maxRenewTime 到达时标记失锁、主动释放，从而给 Provider watchdog 增加统一的上限。</li>
+ * </ul>
+ *
+ * <p>这样 Core 不需要出现 if (providerName == "redisson") 之类的产品分支。</p>
  */
 public final class ScheduledLockWatchdog implements LockWatchdog, AutoCloseable {
 
-    /** 续期调度线程池。 */
     private final ScheduledExecutorService scheduler;
-
-    /** watchdogId 到续期任务的映射。 */
+    private final Clock clock;
     private final Map<String, ScheduledFuture<?>> tasks = new ConcurrentHashMap<>();
 
+    /**
+     * 默认构造器：生产环境使用 UTC 系统时钟。
+     */
     public ScheduledLockWatchdog() {
-        this(Executors.newScheduledThreadPool(1, new WatchdogThreadFactory()));
+        this(Executors.newScheduledThreadPool(1, new WatchdogThreadFactory()), Clock.systemUTC());
     }
 
+    /**
+     * Spring/业务装配可只注入 Clock，调度线程仍由组件自己的 ThreadFactory 创建。
+     */
+    public ScheduledLockWatchdog(Clock clock) {
+        this(Executors.newScheduledThreadPool(1, new WatchdogThreadFactory()), clock);
+    }
+
+    /**
+     * 兼容已有测试/手工装配：调度器由调用方提供，时钟仍使用 UTC 系统时钟。
+     */
     public ScheduledLockWatchdog(ScheduledExecutorService scheduler) {
+        this(scheduler, Clock.systemUTC());
+    }
+
+    /**
+     * 完整构造器。Clock 显式注入后，maxRenewTime 的判断可以稳定测试，
+     * 也和 Core 其它使用 Clock 的流程保持一致。
+     */
+    public ScheduledLockWatchdog(ScheduledExecutorService scheduler, Clock clock) {
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler must not be null");
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
     @Override
     public void start(WatchdogLockHandle handle, LockOptions options) {
         Objects.requireNonNull(handle, "handle must not be null");
         Objects.requireNonNull(options, "options must not be null");
-        if (!options.isAutoRenew()) {
+        if (!options.isAutoRenew() || handle.autoRenewMode() == LockAutoRenewMode.UNSUPPORTED) {
             return;
         }
+
         String watchdogId = handle.watchdogId();
         stop(handle);
         Duration interval = options.getRenewInterval();
         Instant maxRenewDeadline = handle.acquiredAt().plus(options.getMaxRenewTime());
-        ScheduledFuture<?> future = scheduler.scheduleWithFixedDelay(() -> renewOnce(handle, maxRenewDeadline),
-                interval.toMillis(), interval.toMillis(), TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> future = scheduler.scheduleWithFixedDelay(
+                () -> tick(handle, maxRenewDeadline),
+                interval.toMillis(),
+                interval.toMillis(),
+                TimeUnit.MILLISECONDS);
         tasks.put(watchdogId, future);
     }
 
@@ -64,19 +95,40 @@ public final class ScheduledLockWatchdog implements LockWatchdog, AutoCloseable 
         }
     }
 
-    private void renewOnce(WatchdogLockHandle handle, Instant maxRenewDeadline) {
+    private void tick(WatchdogLockHandle handle, Instant maxRenewDeadline) {
         if (handle.isReleaseAttempted() || handle.isLost()) {
             stop(handle);
             return;
         }
-        if (!Instant.now().isBefore(maxRenewDeadline)) {
+
+        if (!Instant.now(clock).isBefore(maxRenewDeadline)) {
+            /*
+             * CORE_MANAGED：停止续期后让底层 leaseTime 自然到期。
+             * PROVIDER_MANAGED：Redisson 自己会继续 watchdog，因此必须显式释放才能真正停止续期。
+             * 无论哪种模式，都先标记 lost，保证 execute 最终不会把超限执行解释成正常 SUCCESS。
+             */
             handle.markLostByWatchdog("maxRenewTime exceeded", null);
+            if (handle.autoRenewMode() == LockAutoRenewMode.PROVIDER_MANAGED) {
+                handle.unlock();
+            }
             stop(handle);
             return;
         }
-        boolean renewed = handle.renew();
-        if (!renewed && handle.isLost()) {
-            stop(handle);
+
+        if (handle.autoRenewMode() == LockAutoRenewMode.CORE_MANAGED) {
+            boolean renewed = handle.renew();
+            if (!renewed && handle.isLost()) {
+                stop(handle);
+            }
+            return;
+        }
+
+        if (handle.autoRenewMode() == LockAutoRenewMode.PROVIDER_MANAGED) {
+            // Provider 自己续期；Core 只检查锁是否仍属于本次 ownerToken。
+            boolean held = handle.checkHeld();
+            if (!held && handle.isLost()) {
+                stop(handle);
+            }
         }
     }
 

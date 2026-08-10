@@ -16,7 +16,7 @@ public final class RedisLockKeyBuilder {
     /** Redis key 前缀。 */
     private final String keyPrefix;
 
-    /** Redis 释放通知 channel 前缀。二期 PUBSUB_BACKOFF 才会使用。 */
+    /** Redis 释放通知 channel 前缀。Provider-native waiting 扩展时可使用。 */
     private final String releaseChannelPrefix;
 
     /** fencing key 后缀。Redis 原生 INCR fencing 使用。 */
@@ -59,7 +59,7 @@ public final class RedisLockKeyBuilder {
     /**
      * 构造 Redis 解锁发布 channel。
      *
-     * <p>一期不实现 PUBSUB_BACKOFF，因此该 channel 暂时只作为预留。</p>
+     * <p>当前自研 Redis Provider 不实现 provider-native waiting，因此该 channel 暂时只作为预留。</p>
      */
     public String buildReleaseChannel(String namespace, String lockName) {
         return releaseChannelPrefix + ':' + buildHashTag(namespace, lockName);

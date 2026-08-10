@@ -42,7 +42,8 @@ public final class FencingTokenCoordinator {
             if (explicitProviderName.equals(lockProvider.providerName())) {
                 if (!lockProvider.capabilities().isFencingTokenSupported()) {
                     throw new IllegalArgumentException(
-                            "lock provider does not support native fencing token: "+lockProvider.providerName());
+                            "lock provider does not support native fencing token: "
+                                    + lockProvider.providerName());
                 }
                 return FencingTokenPlan.nativeProvider();
             }
