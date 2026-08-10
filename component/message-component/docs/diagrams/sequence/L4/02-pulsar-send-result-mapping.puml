@@ -1,0 +1,35 @@
+@startuml
+!include ../../_common/style.puml
+title L4：Pulsar Provider 发送结果映射
+
+participant PulsarMessageProvider as Provider
+participant PulsarProducer as Producer
+queue PulsarBroker as Broker
+participant "ProviderSendResult" as Result
+
+Provider -> Producer: sendAsync(Message<byte[]>)
+Producer -> Broker: publish
+
+alt CompletableFuture complete with MessageId
+  Broker --> Producer: MessageId
+  Producer --> Provider: MessageId
+  Provider -> Result: CONFIRMED + providerMessageId
+else AuthorizationException / ProducerBusyException / InvalidConfigurationException
+  Producer --> Provider: PulsarClientException
+  Provider -> Result: REJECTED or FAILED + non-retryable failureType
+else LookupException / BrokerMetadataException / ConnectException
+  Producer --> Provider: PulsarClientException
+  Provider -> Result: FAILED + NETWORK_ERROR / CLIENT_ERROR
+else TimeoutException / future timeout
+  Producer --x Provider: future not completed in confirmTimeout
+  Provider -> Result: UNKNOWN + TIMEOUT
+else exception after publish state unclear
+  Producer --> Provider: exception
+  Provider -> Result: UNKNOWN + UNKNOWN_OUTCOME
+end
+
+note over Provider
+Pulsar sendAsync 如果没有拿到 MessageId，不能简单断定 Broker 没收到。
+确认超时默认映射 UNKNOWN，由 message-core 决定是否继续重试。
+end note
+@enduml

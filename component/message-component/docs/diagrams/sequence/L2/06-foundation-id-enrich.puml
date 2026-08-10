@@ -1,0 +1,30 @@
+@startuml
+!include ../../_common/style.puml
+title L2：messageId 生成复用 foundation-id
+
+participant "MessageTemplate" as Template
+participant "MessageEnvelopeEnricher\ncore.enrich" as Enricher
+participant "MessageIdGenerator\nmessage domain SPI" as MsgIdGenerator
+participant "FoundationMessageIdGenerator\ncore.id" as FoundationAdapter
+participant "IdGenerator\nfoundation-component" as FoundationId
+participant "MessageEnvelope" as Envelope
+
+Template -> Enricher: enrich(envelope)
+alt envelope 已有 messageId
+  Enricher -> Enricher: 保留已有 messageId
+else messageId 缺失
+  Enricher -> MsgIdGenerator: nextId()
+  MsgIdGenerator -> FoundationAdapter: delegate
+  FoundationAdapter -> FoundationId: nextId()
+  FoundationId --> FoundationAdapter: generated id
+  FoundationAdapter --> MsgIdGenerator: String messageId
+  MsgIdGenerator --> Enricher: messageId
+  Enricher -> Envelope: set metadata.messageId
+end
+Enricher --> Template: enriched envelope
+
+note over MsgIdGenerator,FoundationId
+message-component 保留 MessageIdGenerator 领域接口，
+默认实现委托 foundation-id，避免各技术组件重复发明 ID 体系。
+end note
+@enduml

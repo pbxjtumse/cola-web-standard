@@ -1,0 +1,41 @@
+@startuml
+!include ../../_common/style.puml
+title L4：RocketMQ4 Provider 发送结果映射
+
+participant RocketMqMessageProvider as Provider
+participant DefaultMQProducer as Producer
+queue RocketMQBroker as Broker
+participant "ProviderSendResult" as Result
+
+Provider -> Producer: send(Message)
+Producer -> Broker: Remoting publish
+
+alt SendStatus = SEND_OK
+  Broker --> Producer: SendResult(SEND_OK, msgId)
+  Producer --> Provider: SendResult
+  Provider -> Result: CONFIRMED + providerMessageId=msgId
+else SendStatus = FLUSH_DISK_TIMEOUT
+  Broker --> Producer: SendResult(FLUSH_DISK_TIMEOUT)
+  Provider -> Result: UNKNOWN + TIMEOUT
+else SendStatus = FLUSH_SLAVE_TIMEOUT
+  Broker --> Producer: SendResult(FLUSH_SLAVE_TIMEOUT)
+  Provider -> Result: UNKNOWN + UNKNOWN_OUTCOME
+else SendStatus = SLAVE_NOT_AVAILABLE
+  Broker --> Producer: SendResult(SLAVE_NOT_AVAILABLE)
+  Provider -> Result: UNKNOWN + UNKNOWN_OUTCOME
+else RemotingConnectException / RemotingTimeoutException before broker accept
+  Producer --> Provider: exception
+  Provider -> Result: FAILED + NETWORK_ERROR
+else MQClientException 参数错误 / topic 错误 / 权限错误
+  Producer --> Provider: exception
+  Provider -> Result: REJECTED + CLIENT_ERROR / BROKER_REJECTED
+else future or call timeout
+  Producer --x Provider: no final acknowledgement
+  Provider -> Result: UNKNOWN + TIMEOUT
+end
+
+note over Provider,Result
+RocketMQ4 的 FLUSH_* / SLAVE_NOT_AVAILABLE 不是简单“没发出去”。
+消息可能已经到达 Broker，只是同步刷盘或主从确认未满足，第一版保守映射 UNKNOWN。
+end note
+@enduml

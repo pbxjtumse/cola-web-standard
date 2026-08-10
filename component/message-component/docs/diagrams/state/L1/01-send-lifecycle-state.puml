@@ -1,0 +1,37 @@
+@startuml
+!include ../../_common/style.puml
+title State L1：发送生命周期状态图
+hide empty description
+
+[*] --> VALIDATE
+
+VALIDATE --> REJECTED : message/destination/options 非法
+VALIDATE --> ENRICH : 校验通过
+
+ENRICH --> REJECTED : enrich 失败 / messageId 生成失败
+ENRICH --> RESOLVE : metadata/context 补齐成功
+
+RESOLVE --> REJECTED : 路由不存在 / provider 未注册 / capability 不支持
+RESOLVE --> SERIALIZE : provider + physical destination 已解析
+
+SERIALIZE --> FAILED : payload 序列化失败
+SERIALIZE --> SEND_READY : ProviderSendRequest 构建成功
+
+SEND_READY --> DIRECT_SEND : reliability.send.enabled=false
+SEND_READY --> RELIABLE_SEND : reliability.send.enabled=true
+
+DIRECT_SEND --> CONFIRMED : ProviderSendResult.CONFIRMED
+DIRECT_SEND --> FAILED : ProviderSendResult.FAILED
+DIRECT_SEND --> REJECTED : ProviderSendResult.REJECTED
+DIRECT_SEND --> UNKNOWN : ProviderSendResult.UNKNOWN / confirm timeout
+
+RELIABLE_SEND --> CONFIRMED : RetryResult.SUCCESS
+RELIABLE_SEND --> FAILED : EXHAUSTED / EXECUTION_FAILED / ABORTED
+RELIABLE_SEND --> REJECTED : NOT_RETRYABLE + Provider REJECTED
+RELIABLE_SEND --> UNKNOWN : Provider UNKNOWN / retry timeout / interrupted
+
+CONFIRMED --> [*]
+FAILED --> [*]
+REJECTED --> [*]
+UNKNOWN --> [*]
+@enduml

@@ -35,6 +35,6 @@ end
 
 note over Worker
 当前一个 ConsumerDefinition 对应一个 Topic、一个 Worker、一个 poll 线程。
-注册多个订阅可并发消费多个 Topic；单个 Worker 内分区暂不并行。
+消费可靠性、DLQ 和毒消息治理属于后续阶段。
 end note
 @enduml

@@ -1,13 +1,33 @@
-' PlantUML 批量入口：一次处理该文件可展开 L0-L3 全部时序图。
-!include L0/00-message-lifecycle-overview.puml
-!include L1/01-send-core-flow.puml
-!include L1/02-consume-core-flow.puml
-!include L1/03-child-message-context.puml
-!include L2/01-kafka-send.puml
-!include L2/02-kafka-consume-partitions.puml
-!include L2/03-rocketmq-basic.puml
-!include L2/04-pulsar-basic.puml
-!include L3/01-send-preparation-errors.puml
-!include L3/02-send-confirm-timeout.puml
-!include L3/03-consume-errors.puml
-!include L3/04-kafka-partition-failure.puml
+' PlantUML 批量入口：一次处理该文件可展开 message-component L0-L4 全部图。
+' 如果渲染工具不支持多 @startuml 文件拼接，请分别渲染具体 puml 文件。
+
+!include sequence/L0/00-message-lifecycle-overview.puml
+
+!include sequence/L1/01-send-core-flow.puml
+!include sequence/L1/02-consume-core-flow.puml
+!include sequence/L1/03-child-message-context.puml
+!include sequence/L1/04-reliable-send-overview.puml
+
+!include sequence/L2/01-kafka-send.puml
+!include sequence/L2/02-kafka-consume-partitions.puml
+!include sequence/L2/03-rocketmq-basic.puml
+!include sequence/L2/04-pulsar-basic.puml
+!include sequence/L2/05-retry-executor-flow.puml
+!include sequence/L2/06-foundation-id-enrich.puml
+
+!include sequence/L3/01-send-preparation-errors.puml
+!include sequence/L3/02-send-confirm-timeout.puml
+!include sequence/L3/03-consume-errors.puml
+!include sequence/L3/04-kafka-partition-failure.puml
+!include sequence/L3/05-unknown-stop-no-retry.puml
+!include sequence/L3/06-retry-exhausted.puml
+!include sequence/L3/07-reliability-autoconfig-guard.puml
+
+!include sequence/L4/01-kafka-send-result-mapping.puml
+!include sequence/L4/02-pulsar-send-result-mapping.puml
+!include sequence/L4/03-rocketmq4-send-result-mapping.puml
+
+!include state/L1/01-send-lifecycle-state.puml
+!include state/L2/01-reliable-send-retry-state.puml
+!include state/L3/01-send-result-mapping-state.puml
+!include state/L4/01-provider-result-mapping-state.puml

@@ -1,42 +1,54 @@
 @startuml
 !include ../../_common/style.puml
-title L1：普通消息发送核心流程
+title L1：普通消息发送核心流程（二期可靠发送版）
 
-actor Caller
-participant MessageTemplate
-participant MessageEnvelopeEnricher as Enricher
-participant DestinationResolver as Resolver
-participant MessageProviderRegistry as Registry
-participant MessageWireCodec as Codec
-participant MessageProvider as Provider
+actor Caller as "业务代码"
+participant "MessageTemplate" as Template
+participant "MessageEnvelopeEnricher\ncore.enrich" as Enricher
+participant "MessageIdGenerator\ncore.id" as IdGenerator
+participant "DestinationResolver\ncore.routing" as Resolver
+participant "MessageProviderRegistry\ncore.provider" as Registry
+participant "MessageWireCodec\ncore.codec" as Codec
+participant "MessageSendExecutor\ncore.send" as SendExecutor
+participant "DirectMessageSender" as DirectSender
+participant "DefaultReliableMessageSender" as ReliableSender
+participant "MessageProvider" as Provider
 
-Caller -> MessageTemplate: sendAsync(destination, message, options)
-MessageTemplate -> MessageTemplate: validate arguments / resolve timeout
-MessageTemplate -> Enricher: enrich(message)
-Enricher -> Enricher: messageId、version、time、context
-Enricher --> MessageTemplate: enrichedMessage
-MessageTemplate -> Resolver: resolve(destination)
-Resolver --> MessageTemplate: ProviderDestination
-MessageTemplate -> Registry: getRequired(providerName)
-Registry --> MessageTemplate: Provider
-MessageTemplate -> Provider: capabilities()
-Provider --> MessageTemplate: BASIC_PUBLISH
-MessageTemplate -> Codec: encode(destination, providerDestination, message)
-Codec -> Codec: serialize payload + encode system headers
-Codec --> MessageTemplate: ProviderSendRequest
-MessageTemplate -> Provider: send(request)
+Caller -> Template: send(destination, message, options)
+Template -> Template: validate arguments / resolve confirmTimeout
+Template -> Enricher: enrich(message)
+Enricher -> IdGenerator: nextId() when messageId missing
+IdGenerator --> Enricher: messageId
+Enricher --> Template: enrichedMessage
+Template -> Resolver: resolve(destination)
+Resolver --> Template: ProviderDestination(providerName, physicalName)
+Template -> Registry: getRequired(providerName)
+Registry --> Template: MessageProvider
+Template -> Provider: capabilities()
+Provider --> Template: BASIC_PUBLISH supported
+Template -> Codec: encode(destination, providerDestination, enrichedMessage)
+Codec --> Template: ProviderSendRequest
+Template -> Template: new PreparedMessageSend(...)
+Template -> SendExecutor: send(prepared)
 
-alt CONFIRMED
-  Provider --> MessageTemplate: confirmed(providerMessageId, metadata)
-  MessageTemplate --> Caller: SendResult.CONFIRMED
-else REJECTED
-  Provider --> MessageTemplate: rejected(failureType)
-  MessageTemplate --> Caller: SendResult.REJECTED
-else FAILED
-  Provider --> MessageTemplate: failed(failureType)
-  MessageTemplate --> Caller: SendResult.FAILED
-else UNKNOWN
-  Provider --> MessageTemplate: unknown(timeout/network)
-  MessageTemplate --> Caller: SendResult.UNKNOWN
+alt reliability.send.enabled=false
+  SendExecutor -> DirectSender: send(prepared)
+  DirectSender -> Provider: provider.send(request)
+  Provider --> DirectSender: ProviderSendResult
+  DirectSender --> SendExecutor: SendResult
+else reliability.send.enabled=true
+  SendExecutor -> ReliableSender: send(prepared)
+  ReliableSender -> ReliableSender: build RetryExecution(message-send)
+  ReliableSender -> Provider: provider.send(request) through RetryExecutor
+  Provider --> ReliableSender: ProviderSendResult
+  ReliableSender --> SendExecutor: SendResult + SendReliabilityInfo
 end
+
+SendExecutor --> Template: SendResult
+Template --> Caller: SendResult
+
+note over Template,SendExecutor
+MessageTemplate 只负责准备发送：校验、补齐、路由、序列化。
+Provider 发送、确认等待、retry 编排由 MessageSendExecutor 负责。
+end note
 @enduml

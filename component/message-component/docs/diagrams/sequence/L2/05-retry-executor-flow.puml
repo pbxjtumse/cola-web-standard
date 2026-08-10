@@ -1,0 +1,38 @@
+@startuml
+!include ../../_common/style.puml
+title L2：可靠发送与 retry-component 内部协作
+
+participant "DefaultReliableMessageSender" as Sender
+participant "RetryPolicyRegistry" as PolicyRegistry
+participant "RetryPolicy(message-send)" as Policy
+participant "RetryExecutor" as Retry
+participant "MessageSendRetryClassifier" as Classifier
+participant "MessageProvider" as Provider
+
+Sender -> PolicyRegistry: getRequired("message-send")
+PolicyRegistry --> Sender: base RetryPolicy
+Sender -> Sender: clone policy + replace classifier
+Sender -> Retry: execute(RetryExecution<ProviderSendResult>)
+
+loop attempt
+  Retry -> Sender: operation.apply(RetryContext)
+  Sender -> Provider: provider.send(request)
+  Provider --> Sender: ProviderSendResult
+  Sender --> Retry: ProviderSendResult
+  Retry -> Classifier: classify(RetryAttempt)
+  Classifier --> Retry: RetryDecision
+  alt RETRY
+    Retry -> Retry: backoff by policy
+  else SUCCESS / STOP / ABORT
+    Retry -> Retry: finish execution
+  end
+end
+
+Retry --> Sender: RetryResult(status, attempts, failureCode)
+Sender -> Sender: mapRetryResult -> SendResult
+
+note over Sender,Classifier
+retry-component 提供次数、时长、退避、监听和结果状态。
+message-component 提供 MQ 发送语义分类器。
+end note
+@enduml

@@ -1,27 +1,39 @@
 @startuml
 !include ../../_common/style.puml
-title L3：同步等待超时为何返回 UNKNOWN
+title L3：发送确认超时为何返回 UNKNOWN（二期发送执行器版）
 
 actor Caller
 participant MessageTemplate
-participant MessageProvider
+participant MessageSendExecutor as Executor
+participant DefaultReliableMessageSender as Sender
+participant RetryExecutor as Retry
+participant MessageProvider as Provider
 queue Broker
 
 Caller -> MessageTemplate: send(confirmTimeout = 3s)
-MessageTemplate -> MessageProvider: send(request)
-MessageProvider -> Broker: publish
-MessageTemplate -> MessageTemplate: wait future up to 3s
+MessageTemplate -> Executor: send(PreparedMessageSend)
+Executor -> Sender: send(prepared)
+Sender -> Retry: execute(message-send)
+Retry -> Sender: attempt #1
+Sender -> Provider: provider.send(request)
+Provider -> Broker: publish
+Sender -> Sender: wait provider future up to 3s
 
 ... 3 秒到达但 Future 未完成 ...
-MessageTemplate --> Caller: UNKNOWN / TIMEOUT / CONFIRM
+Sender --> Retry: ProviderSendResult.UNKNOWN / TIMEOUT
+Retry -> Retry: classify UNKNOWN
+Retry --> Sender: RetryResult.NOT_RETRYABLE
+Sender --> Executor: SendResult.UNKNOWN / TIMEOUT / CONFIRM
+Executor --> MessageTemplate: SendResult.UNKNOWN
+MessageTemplate --> Caller: SendResult.UNKNOWN
 
 ... 之后 Broker 可能才确认 ...
-Broker --> MessageProvider: confirmed at 5s
-MessageProvider -> MessageProvider: complete future CONFIRMED
+Broker --> Provider: confirmed at 5s
+Provider -> Provider: complete future CONFIRMED
 
 note over Caller,Broker
 UNKNOWN 不是 FAILED。
-调用方不能因为超时就无条件创建新 messageId 重发，
-否则可能产生重复业务消息。
+超时只说明调用方没有等到确认，不能证明 Broker 没收到。
+V1 默认不对 UNKNOWN 继续重试，避免重复业务消息。
 end note
 @enduml

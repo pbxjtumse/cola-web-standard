@@ -1,0 +1,34 @@
+@startuml
+!include ../../_common/style.puml
+title State L2：可靠发送 retry 状态机
+hide empty description
+
+[*] --> CREATE_EXECUTION
+CREATE_EXECUTION --> ATTEMPTING : build RetryExecution(message-send)
+
+ATTEMPTING --> PROVIDER_SEND : attempt starts
+PROVIDER_SEND --> WAIT_CONFIRM : provider.send returns future/stage
+PROVIDER_SEND --> CLASSIFY : provider returns immediate ProviderSendResult
+
+WAIT_CONFIRM --> CLASSIFY : ProviderSendResult completed
+WAIT_CONFIRM --> CLASSIFY : confirmTimeout -> UNKNOWN
+WAIT_CONFIRM --> CLASSIFY : Interrupted -> UNKNOWN
+WAIT_CONFIRM --> CLASSIFY : ExecutionException -> mapped ProviderSendResult
+
+CLASSIFY --> SUCCESS : CONFIRMED -> RetryDecision.SUCCESS
+CLASSIFY --> BACKOFF : retryable FAILED -> RetryDecision.RETRY
+CLASSIFY --> STOP_UNKNOWN : UNKNOWN + retryWhenUnknown=false
+CLASSIFY --> STOP_REJECTED : REJECTED / non-retryable FAILED
+CLASSIFY --> ABORTED : invalid result / abort exception
+
+BACKOFF --> ATTEMPTING : maxAttempts/maxDuration 未耗尽
+BACKOFF --> EXHAUSTED : maxAttempts 或 maxDuration 耗尽
+
+SUCCESS --> MAP_RESULT
+STOP_UNKNOWN --> MAP_RESULT
+STOP_REJECTED --> MAP_RESULT
+EXHAUSTED --> MAP_RESULT
+ABORTED --> MAP_RESULT
+
+MAP_RESULT --> [*] : SendResult
+@enduml

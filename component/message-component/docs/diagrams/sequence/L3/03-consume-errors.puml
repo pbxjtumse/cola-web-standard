@@ -43,7 +43,7 @@ else 解码成功
 end
 
 note over MessageTemplate
-一期所有不可识别消息都保守 RETRY。
-二期必须加入最大次数、毒消息识别和 DLQ，避免永久阻塞。
+当前图仍是消费一期异常策略：保守 RETRY。
+消费可靠性、最大重试、毒消息和 DLQ 是后续阶段。
 end note
 @enduml

@@ -1,83 +1,50 @@
 @startuml
-' message-component phase2 reliable send sequence
-hide footbox
-title message-component 二期可靠发送时序图
+!include _common/style.puml
+title message-component 二期可靠发送总览图
 
 actor Biz as "业务代码"
-participant Template as "MessageTemplate"
-participant Prepare as "prepare()"
-participant Sender as "DefaultReliableMessageSender"
-participant Retry as "RetryExecutor\n(retry-component)"
-participant Classifier as "MessageSendRetryClassifier"
-participant Provider as "MessageProvider\nKafka/Pulsar/RocketMQ4"
-participant Broker as "Broker"
-participant Result as "SendResult"
+participant "MessageTemplate" as Template
+participant "prepare()\nvalidate/enrich/resolve/serialize" as Prepare
+participant "PreparedMessageSend" as Prepared
+participant "MessageSendExecutor" as Executor
+participant "DefaultReliableMessageSender" as Sender
+participant "RetryExecutor\n(retry-component)" as Retry
+participant "MessageSendRetryClassifier" as Classifier
+participant "MessageProvider\nKafka/Pulsar/RocketMQ4" as Provider
+queue Broker
+participant "SendResult" as Result
 
-Biz -> Template : send(destination, envelope)
-Template -> Prepare : validate / enrich / route / serialize
+Biz -> Template: send(destination, envelope)
+Template -> Prepare: prepare send
 
-alt 准备阶段失败
-    Prepare --> Template : PreparationException(stage, failureType)
-    Template -> Result : SendResult(REJECTED/FAILED)
-    Result --> Biz : 标准失败结果
-else 准备成功
-    Prepare --> Template : PreparedMessageSend
-    Template -> Sender : send(prepared)
-    Sender -> Retry : execute(RetryExecution<ProviderSendResult>)
+alt preparation failed
+  Prepare --> Template: PreparationException(stage, failureType)
+  Template -> Result: REJECTED / FAILED
+  Result --> Biz: SendResult
+else preparation succeeded
+  Prepare --> Template: PreparedMessageSend
+  Template -> Executor: send(prepared)
+  Executor -> Sender: send(prepared)
+  Sender -> Retry: execute(message-send)
 
-    loop attempt <= maxAttempts && within maxDuration
-        Retry -> Sender : execute attempt
-        Sender -> Provider : provider.send(request)
-        Provider -> Broker : 写入或提交发送请求
+  loop retry attempts
+    Retry -> Sender: attempt
+    Sender -> Provider: provider.send(request)
+    Provider -> Broker: native publish
+    Broker --> Provider: ack / reject / error / timeout
+    Provider --> Sender: ProviderSendResult
+    Retry -> Classifier: classify(result)
+    Classifier --> Retry: SUCCESS / RETRY / STOP / ABORT
+  end
 
-        alt Broker 明确确认
-            Broker --> Provider : ack / providerMessageId
-            Provider --> Sender : ProviderSendResult(CONFIRMED)
-            Retry -> Classifier : classify(CONFIRMED)
-            Classifier --> Retry : RetryDecision.SUCCESS
-            Retry --> Sender : RetryResult.SUCCESS
-            Sender -> Result : SendResult(CONFIRMED, reliabilityInfo)
-            Result --> Template : confirmed result
-            Template --> Biz : SendResult.CONFIRMED
-        else 明确可重试失败
-            Provider --> Sender : ProviderSendResult(FAILED, NETWORK_ERROR/CLIENT_ERROR)
-            Retry -> Classifier : classify(FAILED)
-            Classifier --> Retry : RetryDecision.RETRY
-            Retry -> Retry : backoff
-        else 明确不可重试失败
-            Provider --> Sender : ProviderSendResult(REJECTED/FAILED, non-retryable)
-            Retry -> Classifier : classify(non-retryable)
-            Classifier --> Retry : RetryDecision.STOP
-            Retry --> Sender : RetryResult.NOT_RETRYABLE
-            Sender -> Result : SendResult(REJECTED/FAILED, reliabilityInfo)
-            Result --> Template : stopped result
-            Template --> Biz : SendResult
-        else 确认超时或结果未知
-            Broker --x Provider : ack 丢失或响应超时
-            Provider --> Sender : UNKNOWN/TIMEOUT
-            Retry -> Classifier : classify(UNKNOWN)
-            alt retryWhenUnknown=false
-                Classifier --> Retry : STOP，避免重复消息
-                Retry --> Sender : RetryResult.NOT_RETRYABLE
-                Sender -> Result : SendResult.UNKNOWN
-                Result --> Template : unknown result
-                Template --> Biz : SendResult.UNKNOWN
-            else retryWhenUnknown=true
-                Classifier --> Retry : RETRY，显式接受重复风险
-                Retry -> Retry : backoff
-            end
-        end
-    end
-
-    alt 重试耗尽
-        Retry --> Sender : RetryResult.EXHAUSTED
-        alt last result = UNKNOWN
-            Sender -> Result : SendResult(UNKNOWN, RETRY_EXHAUSTED)
-        else last result = FAILED
-            Sender -> Result : SendResult(FAILED, RETRY_EXHAUSTED)
-        end
-        Result --> Template : exhausted result
-        Template --> Biz : SendResult
-    end
+  Retry --> Sender: RetryResult
+  Sender -> Result: map to SendResult + SendReliabilityInfo
+  Result --> Template: SendResult
+  Template --> Biz: SendResult
 end
+
+note over Classifier
+UNKNOWN 默认 STOP，不继续重试。
+RETRY_EXHAUSTED 是 failureType，不是 SendStatus。
+end note
 @enduml

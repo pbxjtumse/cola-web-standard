@@ -22,4 +22,12 @@ skinparam sequence {
   NoteBorderColor #D97706
   NoteFontColor #78350F
 }
+skinparam state {
+  BackgroundColor #F8FAFC
+  BorderColor #475569
+  FontColor #0F172A
+  StartColor #16A34A
+  EndColor #DC2626
+  ArrowColor #3F4A5A
+}
 hide footbox

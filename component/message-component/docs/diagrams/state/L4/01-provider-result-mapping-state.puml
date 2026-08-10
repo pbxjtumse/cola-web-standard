@@ -1,0 +1,24 @@
+@startuml
+!include ../../_common/style.puml
+title State L4：Provider 原生结果到 ProviderSendResult 映射
+hide empty description
+
+[*] --> NATIVE_RESULT
+
+NATIVE_RESULT --> CONFIRMED : Kafka RecordMetadata
+NATIVE_RESULT --> CONFIRMED : Pulsar MessageId
+NATIVE_RESULT --> CONFIRMED : RocketMQ SEND_OK
+
+NATIVE_RESULT --> REJECTED : 参数非法 / 权限错误 / topic 错误 / unsupported capability
+NATIVE_RESULT --> FAILED_RETRYABLE : 网络连接失败 / 临时客户端错误
+NATIVE_RESULT --> UNKNOWN : confirmTimeout / ack lost / future timeout
+NATIVE_RESULT --> UNKNOWN : RocketMQ FLUSH_DISK_TIMEOUT
+NATIVE_RESULT --> UNKNOWN : RocketMQ FLUSH_SLAVE_TIMEOUT / SLAVE_NOT_AVAILABLE
+NATIVE_RESULT --> FAILED_NON_RETRYABLE : 序列化失败 / 明确 Broker 拒绝
+
+CONFIRMED --> [*] : ProviderSendResult.CONFIRMED
+REJECTED --> [*] : ProviderSendResult.REJECTED
+FAILED_RETRYABLE --> [*] : ProviderSendResult.FAILED + NETWORK_ERROR/CLIENT_ERROR
+FAILED_NON_RETRYABLE --> [*] : ProviderSendResult.FAILED + non-retryable failureType
+UNKNOWN --> [*] : ProviderSendResult.UNKNOWN
+@enduml

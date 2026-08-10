@@ -37,6 +37,11 @@ else Handler 返回 RETRY
 else Handler 抛出运行时异常
   Handler --> MessageTemplate: exception
   MessageTemplate -> Context: close()
-  MessageTemplate --> Provider: RETRY（保守策略）
+  MessageTemplate --> Provider: RETRY（一期保守策略）
 end
+
+note over MessageTemplate,Handler
+本图仍是消费一期主流程。
+消费可靠性、消费重试、DLQ、消费幂等属于后续阶段。
+end note
 @enduml

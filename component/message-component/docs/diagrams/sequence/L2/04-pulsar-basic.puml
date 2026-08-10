@@ -2,7 +2,7 @@
 !include ../../_common/style.puml
 title L2：Pulsar 普通消息发送与 Shared 消费
 
-participant MessageTemplate
+participant "MessageSendExecutor" as Executor
 participant PulsarMessageProvider as Provider
 participant PulsarProducer as Producer
 queue PulsarBroker as Broker
@@ -10,7 +10,7 @@ participant "Shared Consumer" as Consumer
 participant CoreListener
 
 == 发送 ==
-MessageTemplate -> Provider: send(request)
+Executor -> Provider: send(ProviderSendRequest)
 Provider -> Provider: newMessage().value(body)
 opt messageKey 存在
   Provider -> Provider: key(messageKey)
@@ -20,7 +20,7 @@ Provider -> Producer: sendAsync()
 Producer -> Broker: publish
 Broker --> Producer: MessageId / error
 Producer --> Provider: completion
-Provider --> MessageTemplate: standardized result
+Provider --> Executor: ProviderSendResult
 
 == 消费 ==
 Broker -> Consumer: Message<byte[]>

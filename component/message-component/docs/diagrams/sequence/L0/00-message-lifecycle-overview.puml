@@ -1,46 +1,67 @@
 @startuml
 !include ../../_common/style.puml
-title L0：消息组件完整生命周期总览
+title L0：message-component 生命周期总览（二期可靠发送版）
 
 actor "业务发布方" as ProducerApp
-participant "MessageTemplate" as Template
-participant "EnvelopeEnricher" as Enricher
-participant "DestinationResolver" as Resolver
-participant "MessageWireCodec" as Codec
-participant "MessageProvider\nKafka / RocketMQ / Pulsar" as Provider
+participant "MessageTemplate\n(core)" as Template
+participant "MessageEnvelopeEnricher\n(core.enrich)" as Enricher
+participant "MessageIdGenerator\n(core.id)" as IdGen
+participant "Foundation ID\n(foundation-component)" as FoundationId
+participant "DestinationResolver\n(core.routing)" as Resolver
+participant "MessageWireCodec\n(core.codec)" as Codec
+participant "MessageSendExecutor\n(core.send)" as SendExecutor
+participant "DefaultReliableMessageSender\n(core.send.reliability)" as ReliableSender
+participant "RetryExecutor\n(retry-component)" as Retry
+participant "MessageProvider\nKafka / Pulsar / RocketMQ4" as Provider
 queue "Broker" as Broker
 participant "Provider Consumer" as Consumer
-participant "MessageContextAccessor" as Context
+participant "MessageContextAccessor\n(core.context)" as Context
 participant "MessageHandler" as Handler
 
+== 同步 / 异步发送 ==
 ProducerApp -> Template: send(destination, envelope)
-Template -> Enricher: 补齐 metadata/context
+Template -> Enricher: enrich(envelope)
+Enricher -> IdGen: nextId()
+IdGen -> FoundationId: nextId()
+FoundationId --> IdGen: global id
+IdGen --> Enricher: messageId
 Enricher --> Template: enriched envelope
-Template -> Resolver: 逻辑目的地解析
+Template -> Resolver: resolve(logical destination)
 Resolver --> Template: provider + physical destination
-Template -> Codec: encode(envelope)
+Template -> Codec: encode(enriched envelope)
 Codec --> Template: ProviderSendRequest
-Template -> Provider: send(request)
+Template -> SendExecutor: send(PreparedMessageSend)
+
+alt reliability.send.enabled = true
+  SendExecutor -> ReliableSender: send(prepared)
+  ReliableSender -> Retry: execute(message-send)
+  Retry -> ReliableSender: attempt provider.send()
+  ReliableSender -> Provider: send(request)
+else reliability.send.enabled = false
+  SendExecutor -> Provider: send(request)
+end
+
 Provider -> Broker: 原生消息发送
-Broker --> Provider: 确认 / 拒绝 / 结果不确定
-Provider --> Template: ProviderSendResult
+Broker --> Provider: ack / reject / timeout / unknown
+Provider --> SendExecutor: ProviderSendResult
+SendExecutor --> Template: SendResult(status + reliabilityInfo)
 Template --> ProducerApp: SendResult
 
-== 异步消费 ==
+== 消费闭环 ==
 Broker -> Consumer: 投递原生消息
 Consumer -> Template: ProviderInboundMessage
 Template -> Codec: decode(inbound)
 Codec --> Template: MessageEnvelope + ConsumeContext
-Template -> Context: open(current message)
+Template -> Context: open(CurrentMessage)
 Template -> Handler: handle(envelope, context)
 Handler --> Template: SUCCESS / RETRY
 Template -> Context: close()
 Template --> Consumer: ConsumeDecision
 Consumer --> Broker: commit / ack / retry
 
-note over Template,Handler
-一期只统一普通消息闭环。
-重试次数、DLQ、幂等、Outbox 在二期治理。
-顺序、延时、事务、回放在三期扩展。
+note over Template,ReliableSender
+二期发送可靠性只解决“单次调用维度”的进程内可靠发送增强：
+重试、超时、UNKNOWN 保守处理、结果可解释。
+它不等价于 Outbox、分布式事务或服务宕机后的补偿投递。
 end note
 @enduml

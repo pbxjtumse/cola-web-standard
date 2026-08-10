@@ -1,32 +1,35 @@
 @startuml
 !include ../../_common/style.puml
-title L2：Kafka 普通消息发送
+title L2：Kafka 发送 Provider 协作
 
-participant MessageTemplate
-participant KafkaMessageProvider as KafkaProvider
-participant KafkaProducer
-queue KafkaBroker
+participant "MessageSendExecutor" as Executor
+participant "KafkaMessageProvider" as KafkaProvider
+participant "KafkaProducer" as KafkaProducer
+queue "Kafka Broker" as KafkaBroker
 
-MessageTemplate -> KafkaProvider: send(ProviderSendRequest)
-KafkaProvider -> KafkaProvider: ProducerRecord(topic, messageKey, body)
-KafkaProvider -> KafkaProvider: 写入 UTF-8 headers
+Executor -> KafkaProvider: send(ProviderSendRequest)
+KafkaProvider -> KafkaProvider: build ProducerRecord(topic, key, body)
+KafkaProvider -> KafkaProvider: copy headers / system headers
 KafkaProvider -> KafkaProducer: send(record, callback)
 KafkaProducer -> KafkaBroker: produce request
 
 alt Broker 明确确认
-  KafkaBroker --> KafkaProducer: RecordMetadata
+  KafkaBroker --> KafkaProducer: RecordMetadata(topic, partition, offset)
   KafkaProducer --> KafkaProvider: callback(metadata, null)
-  KafkaProvider -> KafkaProvider: kafka.topic / partition / offset
-  KafkaProvider --> MessageTemplate: CONFIRMED
-else 认证、授权、非法 Topic、消息过大
-  KafkaBroker --> KafkaProducer: explicit error
+  KafkaProvider --> Executor: ProviderSendResult.CONFIRMED
+else 认证、授权、非法 topic、消息过大、序列化错误
   KafkaProducer --> KafkaProvider: callback(null, exception)
-  KafkaProvider --> MessageTemplate: REJECTED
-else Timeout / RetriableException
+  KafkaProvider --> Executor: ProviderSendResult.REJECTED / FAILED(non-retryable)
+else 网络抖动 / RetriableException
   KafkaProducer --> KafkaProvider: callback(null, exception)
-  KafkaProvider --> MessageTemplate: UNKNOWN
-else 明确客户端错误
-  KafkaProducer --> KafkaProvider: callback(null, exception)
-  KafkaProvider --> MessageTemplate: FAILED
+  KafkaProvider --> Executor: ProviderSendResult.FAILED + NETWORK_ERROR
+else Future 超时 / ack 未返回
+  KafkaProducer --x KafkaProvider: future not completed in confirmTimeout
+  KafkaProvider --> Executor: ProviderSendResult.UNKNOWN + TIMEOUT
 end
+
+note over Executor,KafkaProvider
+Kafka Provider 只负责把 Kafka 客户端结果转成 ProviderSendResult。
+是否重试由 message-core 的 MessageSendRetryClassifier 判断。
+end note
 @enduml

@@ -1,0 +1,39 @@
+@startuml
+!include ../../_common/style.puml
+title L3：重试耗尽后的结果映射
+
+actor Caller
+participant MessageTemplate as Template
+participant DefaultReliableMessageSender as Sender
+participant RetryExecutor as Retry
+participant MessageProvider as Provider
+participant MessageSendRetryClassifier as Classifier
+
+Caller -> Template: send()
+Template -> Sender: send(prepared)
+Sender -> Retry: execute(maxAttempts = 3)
+
+loop attempt 1..3
+  Retry -> Sender: execute attempt
+  Sender -> Provider: provider.send(request)
+  Provider --> Sender: ProviderSendResult.FAILED + NETWORK_ERROR
+  Retry -> Classifier: classify(FAILED + NETWORK_ERROR)
+  Classifier --> Retry: RETRY
+  Retry -> Retry: backoff if next attempt allowed
+end
+
+Retry --> Sender: RetryResult.EXHAUSTED(attempts=3)
+
+alt last ProviderSendResult = FAILED
+  Sender --> Template: SendResult.FAILED + RETRY_EXHAUSTED
+  Template --> Caller: FAILED
+else last ProviderSendResult = UNKNOWN
+  Sender --> Template: SendResult.UNKNOWN + RETRY_EXHAUSTED
+  Template --> Caller: UNKNOWN
+end
+
+note over Sender
+RETRY_EXHAUSTED 是失败原因，不是 SendStatus。
+如果最后一次结果未知，最终仍保守返回 UNKNOWN。
+end note
+@enduml

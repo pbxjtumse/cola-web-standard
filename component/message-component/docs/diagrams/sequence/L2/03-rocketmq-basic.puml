@@ -1,41 +1,42 @@
 @startuml
 !include ../../_common/style.puml
-title L2：RocketMQ 普通消息发送与消费
+title L2：RocketMQ4 普通消息发送与消费
 
-participant MessageTemplate
+participant "MessageSendExecutor" as Executor
 participant RocketMqMessageProvider as Provider
-participant RocketMQProducer as Producer
+participant DefaultMQProducer as Producer
 queue RocketMQBroker as Broker
-participant PushConsumer
+participant DefaultMQPushConsumer as PushConsumer
 participant CoreListener
 
 == 发送 ==
-MessageTemplate -> Provider: send(request)
-Provider -> Provider: setTopic / setBody / properties
+Executor -> Provider: send(ProviderSendRequest)
+Provider -> Provider: Message(topic, body)
+Provider -> Provider: properties(headers)
 opt messageKey 存在
   Provider -> Provider: setKeys(messageKey)
 end
-Provider -> Producer: sendAsync(message)
-Producer -> Broker: publish
-Broker --> Producer: SendReceipt / error
-Producer --> Provider: completion
-Provider --> MessageTemplate: CONFIRMED / REJECTED / FAILED / UNKNOWN
+Provider -> Producer: send(message)
+Producer -> Broker: Remoting publish
+Broker --> Producer: SendResult / exception
+Producer --> Provider: send status
+Provider --> Executor: ProviderSendResult
 
 == 消费 ==
-Broker -> PushConsumer: MessageView
-PushConsumer -> Provider: listener(messageView)
-Provider -> Provider: body + properties + first key
+Broker -> PushConsumer: MessageExt
+PushConsumer -> Provider: listener(messageExt)
+Provider -> Provider: body + properties + keys
 Provider -> CoreListener: onMessage(inbound)
 alt SUCCESS
   CoreListener --> Provider: SUCCESS
-  Provider --> PushConsumer: ConsumeResult.SUCCESS
+  Provider --> PushConsumer: CONSUME_SUCCESS
 else RETRY / exception
   CoreListener --> Provider: RETRY
-  Provider --> PushConsumer: ConsumeResult.FAILURE
+  Provider --> PushConsumer: RECONSUME_LATER
 end
 
 note over Provider
-messageKey 只映射 RocketMQ Keys 用于检索。
-FIFO 顺序的 MessageGroup 属于三期独立能力。
+RocketMQ4 使用 Remoting 客户端。
+SEND_OK 才能映射 CONFIRMED；刷盘/主从确认超时类状态更偏 UNKNOWN。
 end note
 @enduml

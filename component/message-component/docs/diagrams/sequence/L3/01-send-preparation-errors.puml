@@ -1,6 +1,6 @@
 @startuml
 !include ../../_common/style.puml
-title L3：发送准备阶段异常分支
+title L3：发送准备阶段异常分支（二期结构版）
 
 actor Caller
 participant MessageTemplate
@@ -8,6 +8,7 @@ participant EnvelopeEnricher
 participant DestinationResolver
 participant ProviderRegistry
 participant MessageWireCodec
+participant MessageSendExecutor
 
 Caller -> MessageTemplate: send(...)
 
@@ -24,17 +25,20 @@ else 路由缺失或歧义
 else Provider 未注册
   MessageTemplate -> ProviderRegistry: getRequired
   ProviderRegistry --> MessageTemplate: exception
-  MessageTemplate --> Caller: REJECTED / ROUTING_ERROR / SELECT_PROVIDER
+  MessageTemplate --> Caller: REJECTED / PROVIDER_NOT_FOUND / RESOLVE
 else 不支持基础发布
-  MessageTemplate --> Caller: REJECTED / UNSUPPORTED_CAPABILITY / CAPABILITY
+  MessageTemplate --> Caller: REJECTED / UNSUPPORTED_CAPABILITY / RESOLVE
 else 序列化失败
   MessageTemplate -> MessageWireCodec: encode
   MessageWireCodec --> MessageTemplate: exception
   MessageTemplate --> Caller: FAILED / SERIALIZATION_ERROR / SERIALIZE
+else 准备成功
+  MessageTemplate -> MessageSendExecutor: send(PreparedMessageSend)
 end
 
 note over MessageTemplate
-PreparationException 仅是 MessageTemplate 内部控制流载体，
-不会作为公共异常暴露给业务。
+准备阶段失败不会进入 MessageSendExecutor，
+也不会触发 retry-component。
+因为参数、路由、序列化这类错误重试没有意义。
 end note
 @enduml

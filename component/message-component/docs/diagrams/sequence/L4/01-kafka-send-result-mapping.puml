@@ -1,0 +1,35 @@
+@startuml
+!include ../../_common/style.puml
+title L4：Kafka Provider 发送结果映射
+
+participant KafkaMessageProvider as Provider
+participant KafkaProducer as Producer
+queue KafkaBroker as Broker
+participant "ProviderSendResult" as Result
+
+Provider -> Producer: send(ProducerRecord, callback)
+Producer -> Broker: ProduceRequest
+
+alt callback(metadata, null)
+  Broker --> Producer: RecordMetadata
+  Producer --> Provider: metadata(topic, partition, offset)
+  Provider -> Result: CONFIRMED + providerMessageId=topic-partition@offset
+else AuthorizationException / TopicAuthorizationException / SerializationException / RecordTooLargeException
+  Producer --> Provider: exception
+  Provider -> Result: REJECTED or FAILED + non-retryable failureType
+else RetriableException / NetworkException / DisconnectException
+  Producer --> Provider: exception
+  Provider -> Result: FAILED + NETWORK_ERROR
+else confirmTimeout waiting future
+  Producer --x Provider: future not completed in time
+  Provider -> Result: UNKNOWN + TIMEOUT
+else unknown exception after request may have been sent
+  Producer --> Provider: exception
+  Provider -> Result: UNKNOWN + UNKNOWN_OUTCOME
+end
+
+note over Provider,Result
+Kafka 客户端异常非常细，Provider 第一版先做保守映射：
+明确参数/权限/序列化类问题不重试；网络类明确失败可重试；确认超时返回 UNKNOWN。
+end note
+@enduml
