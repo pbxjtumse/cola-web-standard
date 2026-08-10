@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.core;
+package com.xjtu.iron.message.core.send;
 
 /**
  * message-core 使用的发送可靠性参数。

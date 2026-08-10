@@ -22,7 +22,6 @@
         <module>message-api</module>
         <module>message-spi</module>
         <module>message-core</module>
-        <module>message-codec-jackson</module>
         <module>message-integrations</module>
         <module>message-starter</module>
         <module>message-demo-springboot</module>

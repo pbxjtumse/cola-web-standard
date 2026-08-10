@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.codec.jackson;
+package com.xjtu.iron.message.core.codec;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

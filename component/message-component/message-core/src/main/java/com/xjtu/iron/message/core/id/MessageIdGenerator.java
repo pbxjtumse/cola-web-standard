@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.core;
+package com.xjtu.iron.message.core.id;
 
 /**
  * 定义消息唯一标识生成策略。

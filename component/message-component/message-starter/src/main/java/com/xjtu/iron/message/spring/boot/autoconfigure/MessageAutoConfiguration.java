@@ -1,16 +1,18 @@
 package com.xjtu.iron.message.spring.boot.autoconfigure;
 
 import com.xjtu.iron.message.api.MessageSerializer;
-import com.xjtu.iron.message.codec.jackson.JacksonMessageSerializer;
+import com.xjtu.iron.message.core.codec.JacksonMessageSerializer;
 import com.xjtu.iron.message.core.send.reliability.DefaultReliableMessageSender;
 import com.xjtu.iron.message.core.routing.DestinationRoute;
 import com.xjtu.iron.message.core.routing.DestinationRouteRegistry;
 import com.xjtu.iron.message.core.send.DirectMessageSender;
-import com.xjtu.iron.message.core.send.MessageComponentOptions;
+import com.xjtu.iron.message.core.MessageComponentOptions;
 import com.xjtu.iron.message.core.provider.MessageProviderRegistry;
 import com.xjtu.iron.message.core.send.MessageSendExecutor;
-import com.xjtu.iron.message.core.MessageSendReliabilityOptions;
+import com.xjtu.iron.message.core.send.MessageSendReliabilityOptions;
 import com.xjtu.iron.message.core.MessageTemplate;
+import com.xjtu.iron.message.core.id.UuidMessageIdGenerator;
+import com.xjtu.iron.message.core.id.MessageIdGenerator;
 import com.xjtu.iron.message.spi.MessageProvider;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageProperties;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageRouteProperties;
@@ -159,6 +161,24 @@ public class MessageAutoConfiguration {
                 ForkJoinPool.commonPool());
     }
 
+
+    /**
+     * 创建默认消息 ID 生成器。
+     *
+     * <p>
+     * 生产工程建议提供自己的 MessageIdGenerator Bean，
+     * 例如使用 FoundationMessageIdGenerator 适配 foundation-component 的统一 ID 能力。
+     * 没有显式 Bean 时才使用 UUID fallback，保证 demo 可以独立启动。
+     * </p>
+     *
+     * @return 消息 ID 生成器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public MessageIdGenerator messageIdGenerator() {
+        return new UuidMessageIdGenerator();
+    }
+
     /**
      * 创建统一消息模板。
      *
@@ -177,12 +197,14 @@ public class MessageAutoConfiguration {
             MessageProviderRegistry providerRegistry,
             DestinationRouteRegistry routeRegistry,
             MessageSerializer serializer,
+            MessageIdGenerator messageIdGenerator,
             MessageSendExecutor sendExecutor) {
         return MessageTemplate.create(
                 options,
                 providerRegistry,
                 routeRegistry,
                 serializer,
+                messageIdGenerator,
                 sendExecutor);
     }
 }

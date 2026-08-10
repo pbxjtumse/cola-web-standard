@@ -29,11 +29,6 @@
         </dependency>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
-            <artifactId>message-codec-jackson</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.xjtu.iron</groupId>
             <artifactId>retry-api</artifactId>
             <version>${project.version}</version>
         </dependency>

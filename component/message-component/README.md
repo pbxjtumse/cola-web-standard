@@ -72,3 +72,13 @@ curl -X DELETE http://localhost:18081/demo/messages/received
 - 业务代码不直接依赖 PulsarClient。
 - Pulsar 参数完全从 YAML 读取。
 - Jackson 配置由 foundation 管理，消息组件不再重复 new ObjectMapper。
+
+
+## phase2-send-reliability-v2-clean 结构收口
+
+本版本在二期可靠发送第一版基础上做工程收口：
+
+1. `message-core` 按 context、routing、codec、id、provider、enrich、send、send.reliability 分包。
+2. `MessageTemplate` 支持注入 `MessageIdGenerator`，生产工程可用 `FoundationMessageIdGenerator` 适配 foundation-component 统一 ID。
+3. 删除独立 `message-codec-jackson` 模块，将默认 `JacksonMessageSerializer` 合并到 `message-core.codec`。
+4. `MessageWireCodec` 继续保留，负责消息线级协议，不与 payload JSON 序列化混淆。

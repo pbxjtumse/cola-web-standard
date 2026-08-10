@@ -1,5 +1,20 @@
 package com.xjtu.iron.message.core;
 
+import com.xjtu.iron.message.core.codec.MessageWireCodec;
+import com.xjtu.iron.message.core.context.CurrentMessage;
+import com.xjtu.iron.message.core.context.MessageContextAccessor;
+import com.xjtu.iron.message.core.context.ThreadLocalMessageContextAccessor;
+import com.xjtu.iron.message.core.enrich.MessageEnvelopeEnricher;
+import com.xjtu.iron.message.core.id.UuidMessageIdGenerator;
+import com.xjtu.iron.message.core.id.MessageIdGenerator;
+import com.xjtu.iron.message.core.provider.MessageProviderRegistry;
+import com.xjtu.iron.message.core.routing.DefaultDestinationResolver;
+import com.xjtu.iron.message.core.routing.DestinationResolver;
+import com.xjtu.iron.message.core.routing.DestinationRouteRegistry;
+import com.xjtu.iron.message.core.send.DirectMessageSender;
+import com.xjtu.iron.message.core.send.MessageSendExecutor;
+import com.xjtu.iron.message.core.send.PreparedMessageSend;
+
 import com.xjtu.iron.message.api.ConsumeDecision;
 import com.xjtu.iron.message.api.ConsumerDefinition;
 import com.xjtu.iron.message.api.MessageConsumerRegistrar;
@@ -15,19 +30,6 @@ import com.xjtu.iron.message.api.SendReliabilityInfo;
 import com.xjtu.iron.message.api.SendResult;
 import com.xjtu.iron.message.api.SendStage;
 import com.xjtu.iron.message.api.SendStatus;
-import com.xjtu.iron.message.core.codec.MessageWireCodec;
-import com.xjtu.iron.message.core.context.CurrentMessage;
-import com.xjtu.iron.message.core.context.MessageContextAccessor;
-import com.xjtu.iron.message.core.context.ThreadLocalMessageContextAccessor;
-import com.xjtu.iron.message.core.enrich.MessageEnvelopeEnricher;
-import com.xjtu.iron.message.core.provider.MessageProviderRegistry;
-import com.xjtu.iron.message.core.routing.DefaultDestinationResolver;
-import com.xjtu.iron.message.core.routing.DestinationResolver;
-import com.xjtu.iron.message.core.routing.DestinationRouteRegistry;
-import com.xjtu.iron.message.core.send.DirectMessageSender;
-import com.xjtu.iron.message.core.send.MessageComponentOptions;
-import com.xjtu.iron.message.core.send.MessageSendExecutor;
-import com.xjtu.iron.message.core.send.PreparedMessageSend;
 import com.xjtu.iron.message.spi.MessageCapability;
 import com.xjtu.iron.message.spi.MessageProvider;
 import com.xjtu.iron.message.spi.ProviderDestination;
@@ -133,6 +135,7 @@ public final class MessageTemplate
                 providerRegistry,
                 routeRegistry,
                 serializer,
+                new UuidMessageIdGenerator(),
                 new DirectMessageSender(options.clock()));
     }
 
@@ -145,6 +148,25 @@ public final class MessageTemplate
             DestinationRouteRegistry routeRegistry,
             MessageSerializer serializer,
             MessageSendExecutor sendExecutor) {
+        return create(
+                options,
+                providerRegistry,
+                routeRegistry,
+                serializer,
+                new UuidMessageIdGenerator(),
+                sendExecutor);
+    }
+
+    /**
+     * 创建指定消息 ID 生成器和发送执行器的 MessageTemplate。
+     */
+    public static MessageTemplate create(
+            MessageComponentOptions options,
+            MessageProviderRegistry providerRegistry,
+            DestinationRouteRegistry routeRegistry,
+            MessageSerializer serializer,
+            MessageIdGenerator messageIdGenerator,
+            MessageSendExecutor sendExecutor) {
         ThreadLocalMessageContextAccessor contextAccessor = new ThreadLocalMessageContextAccessor();
         DefaultDestinationResolver destinationResolver = new DefaultDestinationResolver(
                 routeRegistry,
@@ -152,7 +174,7 @@ public final class MessageTemplate
                 options.routingMode());
         MessageEnvelopeEnricher envelopeEnricher = new MessageEnvelopeEnricher(
                 options,
-                new UuidMessageIdGenerator(),
+                messageIdGenerator,
                 contextAccessor);
         MessageWireCodec wireCodec = new MessageWireCodec(serializer);
         return new MessageTemplate(
