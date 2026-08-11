@@ -21,5 +21,6 @@
         <module>retry-component</module>
         <module>foundation-component</module>
         <module>message-component</module>
+        <module>idempotent-component</module>
     </modules>
 </project>

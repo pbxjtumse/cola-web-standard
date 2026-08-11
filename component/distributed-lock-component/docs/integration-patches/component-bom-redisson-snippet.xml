@@ -1,6 +1,0 @@
-<!-- component/component-bom/pom.xml : dependencyManagement / dependencies -->
-<dependency>
-    <groupId>com.xjtu.iron</groupId>
-    <artifactId>distributed-lock-provider-redisson</artifactId>
-    <version>${project.version}</version>
-</dependency>
