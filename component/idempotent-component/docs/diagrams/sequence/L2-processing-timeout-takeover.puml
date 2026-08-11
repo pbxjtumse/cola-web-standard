@@ -1,0 +1,34 @@
+@startuml
+skinparam shadowing false
+title PROCESSING Timeout Takeover
+
+participant RequestA as A
+participant IdempotencyRepository as Repo
+participant RequestB as B
+database BusinessDB as DB
+
+A -> Repo : tryAcquire(owner=A)
+Repo --> A : ACQUIRED\nversion=1, expire=T+30s
+A -> A : pause / STW / network block
+
+... processingTimeout expires ...
+
+B -> Repo : tryAcquire(owner=B)
+activate Repo
+Repo -> Repo : PROCESSING -> FAILED\nPROCESSING_TIMEOUT
+Repo -> Repo : FAILED -> PROCESSING\nowner=B, version=2
+Repo --> B : ACQUIRED\ntakeover=true
+deactivate Repo
+
+B -> DB : conditional write(version=2)
+DB --> B : accepted
+B -> Repo : markSuccess(B, 2)
+Repo --> B : UPDATED
+
+... A resumes ...
+
+A -> DB : conditional write(version=1)
+DB --> A : rejected when business uses fencing
+A -> Repo : markSuccess(A, 1)
+Repo --> A : STALE_OWNER
+@enduml

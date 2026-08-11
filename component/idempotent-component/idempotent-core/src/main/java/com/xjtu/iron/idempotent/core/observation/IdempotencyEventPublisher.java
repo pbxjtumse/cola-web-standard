@@ -1,0 +1,1 @@
+package com.xjtu.iron.idempotent.core.observation;@FunctionalInterface public interface IdempotencyEventPublisher{void publish(IdempotencyEvent event);static IdempotencyEventPublisher noop(){return event->{};}}

@@ -1,0 +1,36 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:idempotency;MODE=MySQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+xjtu:
+  iron:
+    idempotent:
+      enabled: true
+      default-mode: DURABLE
+      default-short-term-repository: redis
+      default-durable-repository: jdbc
+      processing-timeout: 30s
+      short-term-record-ttl: 10m
+      retry-on-processing-timeout: true
+      retry-failed: true
+      store-result: false
+      lock:
+        enabled: false
+        wait-time: 0s
+        lease-time: 5s
+        fallback-to-state-on-failure: true
+      redis:
+        enabled: true
+        key-prefix: iron:idempotency
+      jdbc:
+        enabled: true
+        table-name: iron_idempotency_record

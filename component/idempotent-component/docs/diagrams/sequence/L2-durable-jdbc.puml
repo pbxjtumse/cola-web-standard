@@ -1,0 +1,52 @@
+@startuml
+skinparam shadowing false
+title DURABLE - JDBC Unique + Row Lock + owner/version CAS
+
+actor Caller
+participant IdempotencyExecutor as Executor
+participant JdbcIdempotencyRepository as Repo
+database RDBMS
+participant BusinessCallback as Biz
+
+Caller -> Executor : execute(DURABLE, key)
+Executor -> Repo : tryAcquire(owner=A, version candidate)
+Repo -> RDBMS : INSERT PROCESSING(owner=A, version=1)
+
+alt INSERT success
+  RDBMS --> Repo : 1 row
+  Repo --> Executor : ACQUIRED(version=1)
+else UNIQUE conflict
+  RDBMS --> Repo : duplicate key
+  Repo -> RDBMS : BEGIN + SELECT ... FOR UPDATE
+  RDBMS --> Repo : current record
+  alt SUCCESS
+    Repo -> RDBMS : COMMIT
+    Repo --> Executor : SUCCESS
+    Executor --> Caller : REPLAYED
+  else active PROCESSING
+    Repo -> RDBMS : COMMIT
+    Repo --> Executor : PROCESSING
+    Executor --> Caller : PROCESSING
+  else expired PROCESSING / retryable FAILED
+    Repo -> RDBMS : conditional transition to FAILED if needed
+    Repo -> RDBMS : FAILED -> PROCESSING\nowner=A2, version=version+1
+    Repo -> RDBMS : COMMIT
+    Repo --> Executor : ACQUIRED(takeover=true)
+  end
+end
+
+alt ACQUIRED
+  Executor -> Biz : callback(IdempotencyContext)
+  Biz --> Executor : result
+  Executor -> Repo : markSuccess(ownerToken, version)
+  Repo -> RDBMS : UPDATE ...\nWHERE status='PROCESSING'\nAND owner_token=? AND version=?
+  RDBMS --> Repo : affected rows
+  alt 1 row
+    Repo --> Executor : UPDATED
+    Executor --> Caller : EXECUTED
+  else 0 row
+    Repo --> Executor : STALE_OWNER / ALREADY_FINAL
+    Executor --> Caller : OWNERSHIP_LOST
+  end
+end
+@enduml

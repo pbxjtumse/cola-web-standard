@@ -1,0 +1,5 @@
+在 component/pom.xml 的 <modules> 中加入：
+
+<module>idempotent-component</module>
+
+组件根 POM 已 import component-bom；子模块不硬编码内部依赖版本。

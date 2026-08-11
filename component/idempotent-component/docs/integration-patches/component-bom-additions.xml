@@ -1,0 +1,26 @@
+<!-- Add these entries to component-bom/pom.xml -> dependencyManagement/dependencies. -->
+<dependency>
+    <groupId>com.xjtu.iron</groupId>
+    <artifactId>idempotent-api</artifactId>
+    <version>${project.version}</version>
+</dependency>
+<dependency>
+    <groupId>com.xjtu.iron</groupId>
+    <artifactId>idempotent-core</artifactId>
+    <version>${project.version}</version>
+</dependency>
+<dependency>
+    <groupId>com.xjtu.iron</groupId>
+    <artifactId>idempotent-provider-redis</artifactId>
+    <version>${project.version}</version>
+</dependency>
+<dependency>
+    <groupId>com.xjtu.iron</groupId>
+    <artifactId>idempotent-provider-jdbc</artifactId>
+    <version>${project.version}</version>
+</dependency>
+<dependency>
+    <groupId>com.xjtu.iron</groupId>
+    <artifactId>idempotent-starter</artifactId>
+    <version>${project.version}</version>
+</dependency>

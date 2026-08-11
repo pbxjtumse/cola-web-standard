@@ -291,6 +291,32 @@
                 <artifactId>retry-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <!-- idempotent -->
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>idempotent-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>idempotent-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>idempotent-provider-redis</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>idempotent-provider-jdbc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>idempotent-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>

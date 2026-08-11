@@ -1,0 +1,1 @@
+package com.xjtu.iron.idempotent.api.spi;import com.xjtu.iron.idempotent.api.repository.IdempotencyFailureInfo;import java.time.Instant;public interface IdempotencyFailureClassifier{IdempotencyFailureInfo classify(Throwable error,Instant occurredAt);}

@@ -1,0 +1,54 @@
+@startuml
+skinparam shadowing false
+title Idempotency V1 - 主执行流程
+
+actor Caller
+participant IdempotencyExecutor as Executor
+participant DistributedLockClient as Lock
+participant IdempotencyRepository as Repo
+participant BusinessCallback as Biz
+
+Caller -> Executor : execute(request, callback)
+Executor -> Executor : validate / resolve repository / ownerToken
+
+alt lock.enabled
+  Executor -> Lock : execute(state:key)\n仅保护 tryAcquire 短临界区
+  Lock -> Repo : tryAcquire
+  Repo --> Lock : AcquireResult
+  Lock --> Executor : LockResult<AcquireResult>
+  alt lock failed && fallback=true
+    Executor -> Repo : tryAcquire directly
+    Repo --> Executor : AcquireResult
+  end
+else lock.disabled
+  Executor -> Repo : tryAcquire
+  Repo --> Executor : AcquireResult
+end
+
+alt SUCCESS
+  Executor --> Caller : REPLAYED
+else PROCESSING
+  Executor --> Caller : PROCESSING
+else FAILED
+  Executor --> Caller : PREVIOUS_FAILED
+else KEY_CONFLICT
+  Executor --> Caller : KEY_CONFLICT
+else ACQUIRED
+  Executor -> Biz : callback(IdempotencyContext)\nversion 可作为 fencing version
+  alt callback success
+    Biz --> Executor : value
+    Executor -> Repo : markSuccess(ownerToken, version)
+    alt UPDATED
+      Repo --> Executor : SUCCESS snapshot
+      Executor --> Caller : EXECUTED(value)
+    else STALE_OWNER / ALREADY_FINAL
+      Repo --> Executor : stale/final snapshot
+      Executor --> Caller : OWNERSHIP_LOST
+    end
+  else callback exception
+    Biz --> Executor : exception
+    Executor -> Repo : markFailed(ownerToken, version, failure)
+    Executor --> Caller : EXECUTION_FAILED
+  end
+end
+@enduml

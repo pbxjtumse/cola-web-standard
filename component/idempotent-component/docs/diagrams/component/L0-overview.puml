@@ -1,0 +1,22 @@
+@startuml
+skinparam componentStyle rectangle
+skinparam shadowing false
+title Idempotent Component V1
+component "idempotent-api" as API
+component "idempotent-core" as Core
+component "idempotent-provider-redis" as RedisProvider
+component "idempotent-provider-jdbc" as JdbcProvider
+component "idempotent-starter" as Starter
+component "distributed-lock-api" as LockApi
+database Redis
+database RDBMS
+Core --> API
+Core --> LockApi : optional coordination
+RedisProvider --> API
+JdbcProvider --> API
+RedisProvider --> Redis : Hash + Lua
+JdbcProvider --> RDBMS : Unique + Row Lock + CAS
+Starter --> Core
+Starter --> RedisProvider
+Starter --> JdbcProvider
+@enduml

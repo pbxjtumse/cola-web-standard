@@ -1,0 +1,33 @@
+@startuml
+skinparam shadowing false
+title SHORT_TERM - Redis + Lua
+
+actor Caller
+participant IdempotencyExecutor as Executor
+participant RedisIdempotencyRepository as Repo
+database Redis
+
+Caller -> Executor : execute(SHORT_TERM)
+Executor -> Repo : tryAcquire
+Repo -> Redis : EVAL try-acquire.lua\nread + decide + transition atomically
+Redis --> Repo : ACQUIRED / SUCCESS / PROCESSING / FAILED
+
+alt ACQUIRED
+  Repo --> Executor : ACQUIRED
+  Executor -> Executor : callback
+  Executor -> Repo : markSuccess(owner, version)
+  Repo -> Redis : EVAL mark-success.lua\ncompare owner/version + HSET + PEXPIRE
+  Executor --> Caller : EXECUTED
+else SUCCESS
+  Repo --> Executor : SUCCESS + resultPayload
+  Executor --> Caller : REPLAYED
+end
+
+... recordTtl expires ...
+Redis -> Redis : key deleted automatically
+
+note right of Redis
+TTL 到期后同一个 Key 可以再次执行，
+所以这是有限窗口去重，不是永久业务事实。
+end note
+@enduml
