@@ -8,6 +8,9 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>idempotent-demo</artifactId>
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
     <dependencies>
         <dependency>
             <groupId>com.xjtu.iron</groupId>

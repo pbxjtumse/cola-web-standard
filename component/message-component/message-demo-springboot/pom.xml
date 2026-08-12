@@ -8,6 +8,9 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>message-demo-springboot</artifactId>
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
     <packaging>jar</packaging>
     <dependencies>
         <dependency>
@@ -39,12 +42,4 @@
             <artifactId>spring-boot-autoconfigure</artifactId>
         </dependency>
     </dependencies>
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
 </project>
