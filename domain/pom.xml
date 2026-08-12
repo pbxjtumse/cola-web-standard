@@ -45,14 +45,6 @@
             <groupId>com.alibaba.cola</groupId>
             <artifactId>cola-component-exception</artifactId>
         </dependency>
-        <dependency>
-            <groupId>com.xjtu.iron</groupId>
-            <artifactId>concurrency-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.xjtu.iron</groupId>
-            <artifactId>concurrency-core</artifactId>
-        </dependency>
         <!-- COLA components End-->
         <dependency>
             <groupId>org.projectlombok</groupId>

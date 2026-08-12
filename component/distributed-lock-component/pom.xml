@@ -1,43 +1,15 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<?xml version='1.0' encoding='UTF-8'?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
     <parent>
         <groupId>com.xjtu.iron</groupId>
         <artifactId>component</artifactId>
         <version>1.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-
     <artifactId>distributed-lock-component</artifactId>
     <packaging>pom</packaging>
     <name>distributed-lock-component</name>
-
-    <!--
-        统一导入技术组件 BOM。
-        本 POM 只负责：
-        1. 聚合 distributed-lock 各子模块；
-        2. 把 component-bom 的版本管理能力向下传递。
-
-        注意：
-        - dependencyManagement 只管理版本，不会把依赖真正加入 classpath；
-        - distributed-lock-provider-redisson 必须同时加入外层 component-bom；
-        - org.redisson:redisson 的第三方版本仍由 cola-web-standard 根 POM 管理。
-    -->
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>component-bom</artifactId>
-                <version>${project.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
     <modules>
         <module>distributed-lock-api</module>
         <module>distributed-lock-core</module>

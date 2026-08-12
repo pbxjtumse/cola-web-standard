@@ -20,15 +20,4 @@
         <module>cache-starter</module>
         <module>cache-demo</module>
     </modules>
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>component-bom</artifactId>
-                <version>${project.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 </project>

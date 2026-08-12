@@ -10,10 +10,11 @@
     <artifactId>component-bom</artifactId>
     <packaging>pom</packaging>
     <name>component-bom</name>
-    <description>统一管理可被业务工程消费的技术组件版本，不引入任何实际运行时依赖。</description>
+    <description>对外发布的技术组件版本清单；供业务工程通过 dependencyManagement/import 消费，不参与技术组件源码内部版本继承。</description>
     <dependencyManagement>
         <dependencies>
-            <!-- cache component -->
+            <!-- 对外消费 BOM：当前发布所有可复用非 Demo JAR。源码内部构建版本由 component/pom.xml 管理。 -->
+            <!-- cache-component -->
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
                 <artifactId>cache-api</artifactId>
@@ -59,7 +60,7 @@
                 <artifactId>cache-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- concurrency component -->
+            <!-- concurrency-component -->
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
                 <artifactId>concurrency-api</artifactId>
@@ -77,7 +78,27 @@
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
+                <artifactId>concurrency-integration-governance</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
                 <artifactId>concurrency-integration-observability</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>concurrency-integration-ttl</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>concurrency-provider-local</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>concurrency-provider-redis</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -85,7 +106,7 @@
                 <artifactId>concurrency-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- distributed-lock component -->
+            <!-- distributed-lock-component -->
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
                 <artifactId>distributed-lock-api</artifactId>
@@ -116,7 +137,7 @@
                 <artifactId>distributed-lock-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- foundation component -->
+            <!-- foundation-component -->
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
                 <artifactId>foundation-codec</artifactId>
@@ -149,12 +170,7 @@
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
-                <artifactId>foundation-serialization-api</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>foundation-serialization-jackson</artifactId>
+                <artifactId>foundation-serialization</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -167,7 +183,7 @@
                 <artifactId>foundation-time</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- governance component -->
+            <!-- governance-component -->
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
                 <artifactId>governance-api</artifactId>
@@ -195,12 +211,27 @@
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
+                <artifactId>governance-extensions</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
                 <artifactId>governance-integration-spring-aop</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
                 <artifactId>governance-model</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>governance-observability</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>governance-runtime</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -213,15 +244,36 @@
                 <artifactId>governance-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- message component -->
+            <!-- idempotent-component -->
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
-                <artifactId>message-api</artifactId>
+                <artifactId>idempotent-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
-                <artifactId>message-codec-jackson</artifactId>
+                <artifactId>idempotent-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>idempotent-provider-jdbc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>idempotent-provider-redis</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>idempotent-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <!-- message-component -->
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>message-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -251,10 +303,10 @@
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
-                <artifactId>message-testkit</artifactId>
+                <artifactId>message-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- observability component -->
+            <!-- observability-component -->
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
                 <artifactId>observability-api</artifactId>
@@ -275,7 +327,7 @@
                 <artifactId>observability-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- retry component -->
+            <!-- retry-component -->
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
                 <artifactId>retry-api</artifactId>
@@ -289,32 +341,6 @@
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
                 <artifactId>retry-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <!-- idempotent -->
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>idempotent-api</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>idempotent-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>idempotent-provider-redis</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>idempotent-provider-jdbc</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.xjtu.iron</groupId>
-                <artifactId>idempotent-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

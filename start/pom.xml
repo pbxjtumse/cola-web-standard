@@ -23,18 +23,6 @@
     </dependencyManagement>
     <dependencies>
         <dependency>
-            <groupId>com.xjtu.iron</groupId>
-            <artifactId>adapter</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.xjtu.iron</groupId>
-            <artifactId>cache-starter</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.xjtu.iron</groupId>
-            <artifactId>distributed-lock-starter</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
@@ -66,6 +54,15 @@
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.xjtu.iron</groupId>
+            <artifactId>cache-starter</artifactId>
+        </dependency>
+        <!-- 依赖的技术组件启动 -->
+        <dependency>
+            <groupId>com.xjtu.iron</groupId>
+            <artifactId>distributed-lock-starter</artifactId>
         </dependency>
     </dependencies>
     <build>
