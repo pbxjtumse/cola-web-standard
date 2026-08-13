@@ -1,0 +1,53 @@
+@startuml
+title Idempotency V1.1 - Reliable Task 扫描与 recover()
+
+autonumber
+skinparam shadowing false
+
+participant "Reliable Task\nScheduler/Scanner" as TASK
+participant "IdempotencyRecoveryQueryService" as QUERY
+database "JdbcIdempotencyRepository" as DB
+participant "IdempotencyExecutor" as EXEC
+participant "DistributedLockClient\n(optional)" as LOCK
+participant "Business Callback" as BIZ
+
+TASK -> QUERY : findCandidates(namespace, routeKey, now, limit)
+QUERY -> DB : query recovery_mode=EXTERNAL_TASK\nexpired PROCESSING / retryable FAILED
+DB --> QUERY : candidate(key, routeKey, owner, version)
+QUERY --> TASK : candidates
+
+TASK -> TASK : 持久化/投递 recovery task
+TASK -> EXEC : recover(key, expectedOwner, expectedVersion)
+
+opt short lock
+  EXEC -> LOCK : lock state:route:key
+  LOCK -> DB : tryRecover()
+else no lock
+  EXEC -> DB : tryRecover()
+end
+
+alt candidate still valid
+  DB -> DB : atomic takeover\nnewOwner + version+1
+  DB --> EXEC : RECOVERY_ACQUIRED
+  EXEC -> BIZ : callback(recoveryExecution=true)
+  BIZ --> EXEC : result
+  EXEC -> DB : markSuccess(newOwner,newVersion)
+  DB --> EXEC : UPDATED
+  EXEC --> TASK : RECOVERED
+else record changed after scan
+  DB --> EXEC : STALE_CANDIDATE
+  EXEC --> TASK : STALE_RECOVERY_CANDIDATE\n安全放弃旧任务
+else PROCESSING still active
+  DB --> EXEC : PROCESSING_ACTIVE
+  EXEC --> TASK : PROCESSING
+else recovery disabled/final
+  DB --> EXEC : NOT_RECOVERABLE / FAILED_FINAL
+  EXEC --> TASK : RECOVERY_NOT_ALLOWED
+end
+
+note bottom of TASK
+定时器、分页、分片、MQ、Claim 属于 Reliable Task。
+幂等组件只提供候选查询协议与原子 recover 原语。
+end note
+
+@enduml

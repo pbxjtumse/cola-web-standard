@@ -5,30 +5,11 @@ import com.xjtu.iron.distributed.lock.api.LockCallback;
 import com.xjtu.iron.distributed.lock.api.LockOptions;
 import com.xjtu.iron.distributed.lock.api.LockResult;
 import com.xjtu.iron.distributed.lock.api.LockWaitStrategy;
-import com.xjtu.iron.idempotent.api.IdempotencyCallback;
-import com.xjtu.iron.idempotent.api.IdempotencyContext;
-import com.xjtu.iron.idempotent.api.IdempotencyExecutor;
-import com.xjtu.iron.idempotent.api.IdempotencyLockOptions;
-import com.xjtu.iron.idempotent.api.IdempotencyOptions;
-import com.xjtu.iron.idempotent.api.IdempotencyRequest;
-import com.xjtu.iron.idempotent.api.IdempotencyResult;
-import com.xjtu.iron.idempotent.api.IdempotencyResultStatus;
-import com.xjtu.iron.idempotent.api.IdempotencyStage;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyAcquireRequest;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyAcquireResult;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyFailureInfo;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyFailureRequest;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyRecord;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyRepository;
-import com.xjtu.iron.idempotent.api.repository.IdempotencySuccessRequest;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyWriteResult;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyWriteStatus;
+import com.xjtu.iron.idempotent.api.*;
+import com.xjtu.iron.idempotent.api.repository.*;
 import com.xjtu.iron.idempotent.api.spi.IdempotencyFailureClassifier;
 import com.xjtu.iron.idempotent.api.spi.IdempotencyResultCodec;
-import com.xjtu.iron.idempotent.core.observation.IdempotencyEvent;
-import com.xjtu.iron.idempotent.core.observation.IdempotencyEventPublisher;
-import com.xjtu.iron.idempotent.core.observation.IdempotencyEventType;
-import com.xjtu.iron.idempotent.core.observation.IdempotencyMetrics;
+import com.xjtu.iron.idempotent.core.observation.*;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -38,27 +19,42 @@ import java.util.Objects;
 /**
  * 默认幂等执行器。
  *
- * <p>主流程保持为四个清晰阶段：</p>
- * <ol>
- *     <li>校验请求并选择 Repository；</li>
- *     <li>原子抢占 Idempotency State；</li>
- *     <li>只有 ACQUIRED owner 执行业务 callback；</li>
- *     <li>通过 ownerToken + version 条件写入 SUCCESS / FAILED。</li>
- * </ol>
+ * <p>V1.1 把“普通执行”和“可靠恢复”拆成两个显式入口：</p>
+ * <ul>
+ *     <li>execute()：普通 API / 消息消费路径，只判断 PROCESSING 是否已超时，不自动接管；</li>
+ *     <li>recover()：由外部 Reliable Task 调用，原子接管超时 PROCESSING 或可恢复 FAILED。</li>
+ * </ul>
  *
- * <p><strong>最重要的边界：</strong>DistributedLockClient 只保护 Repository.tryAcquire 的短临界区，
- * callback 始终在锁外执行。Repository 的 UNIQUE / Lua / CAS 才是幂等正确性的根基。</p>
+ * <p><strong>重要边界：</strong>DistributedLockClient 只包住 Repository 的极短状态抢占，
+ * callback 永远在分布式锁外执行。Repository 的 UNIQUE / Lua / CAS 才是幂等正确性的根基。</p>
  */
 public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
 
+    /** 根据 mode/repositoryName 选择真正的状态存储实现。 */
     private final IdempotencyRepositoryRegistry registry;
+
+    /** Starter 组装好的组件默认策略，不让 Core 直接感知 Spring 配置。 */
     private final IdempotencyDefaults defaults;
+
+    /** 为每次新的 PROCESSING generation 创建 ownerToken。 */
     private final IdempotencyOwnerTokenGenerator ownerGenerator;
+
+    /** 把业务异常转换为 failureCode + retryable 等稳定语义。 */
     private final IdempotencyFailureClassifier failureClassifier;
+
+    /** storeResult=true 时用于保存和回放成功结果；允许为空。 */
     private final IdempotencyResultCodec codec;
+
+    /** 可选并发协调层；它只保护状态抢占短临界区，不保护整个 callback。 */
     private final DistributedLockClient lockClient;
+
+    /** 旁路事件发布器；默认 no-op。 */
     private final IdempotencyEventPublisher events;
+
+    /** 旁路指标记录器；默认 no-op。 */
     private final IdempotencyMetrics metrics;
+
+    /** 统一时间源，方便测试 processing/window/retention 语义。 */
     private final Clock clock;
 
     public DefaultIdempotencyExecutor(
@@ -83,205 +79,320 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
         this.clock = clock == null ? Clock.systemUTC() : clock;
     }
 
+    /**
+     * 普通业务执行入口。
+     *
+     * <p>主流程固定为：</p>
+     * <ol>
+     *     <li>解析 Options 并选择 Repository；</li>
+     *     <li>生成 ownerToken；</li>
+     *     <li>在可选短分布式锁内调用 Repository.tryAcquire()；</li>
+     *     <li>只有 ACQUIRED 才离开锁后执行 callback；</li>
+     *     <li>callback 成功后使用 ownerToken + version 条件写 SUCCESS；</li>
+     *     <li>callback 失败后写 FAILED。</li>
+     * </ol>
+     *
+     * <p>普通 execute() 遇到 PROCESSING_EXPIRED 或 FAILED_RETRYABLE 只返回状态，
+     * 不会自动接管。恢复必须走 {@link #recover}。</p>
+     */
     @Override
     public <T> IdempotencyResult<T> execute(
             IdempotencyRequest request,
             Class<T> resultType,
             IdempotencyCallback<T> callback) {
 
-        Instant startedAt = Instant.now(clock);
         Objects.requireNonNull(callback, "callback must not be null");
+        Instant startedAt = Instant.now(clock);
+
+        // 第 1 步：把外部请求配置解析成一次执行使用的不可变策略快照，并选择 Repository。
+        PreparedExecution prepared;
+        try {
+            prepared = prepare(request == null ? null : request.getOptions(), resultType);
+            validateNormalRequest(request);
+        } catch (RuntimeException error) {
+            return invalid(error);
+        }
+
+        IdempotencyOptions options = prepared.options;
+        IdempotencyRepository repository = prepared.repository;
+        // 第 2 步：每一次“尝试开启新 generation”都使用新的 ownerToken。
+        String ownerToken = ownerGenerator.generate(options.getNamespace(), request.getKey());
+
+        // 第 3 步：构造 Repository 层原子抢占请求。
+        // processingTimeout/window/retention 都在 Repository 内落成真正的状态语义。
+        IdempotencyAcquireRequest acquireRequest = new IdempotencyAcquireRequest(
+                options.getNamespace(),
+                request.getKey(),
+                normalize(request.getRequestHash()),
+                normalize(request.getRouteKey()),
+                ownerToken,
+                options.getMode(),
+                options.getProcessingTimeout(),
+                options.getIdempotencyWindow(),
+                options.getWindowPolicy(),
+                options.getRecordRetentionTtl(),
+                options.getRecoveryMode(),
+                Instant.now(clock));
+
+        publish(IdempotencyEventType.ACQUIRE_ATTEMPT, IdempotencyStage.ACQUIRE_STATE,
+                options, repository, null);
+
+        // 第 4 步：可选 DistributedLockClient 只包住 tryAcquire 这一小段。
+        // callback 不在锁内，因此不会把 5~30 秒的业务耗时变成长时间 Redis 锁。
+        StateInvocation<IdempotencyAcquireResult> invocation = invokeWithOptionalLock(
+                options,
+                repository,
+                request.getRouteKey(),
+                request.getKey(),
+                () -> repository.tryAcquire(acquireRequest));
+
+        if (invocation.lockRejected) {
+            return lockRejected(invocation.error);
+        }
+
+        IdempotencyAcquireResult acquire = invocation.result;
+        metrics.recordAcquire(options.getMode(), repository.providerName(), acquire.getStatus().name());
+
+        // 第 5 步：Repository 已经把持久状态翻译成明确的“决策状态”。
+        // 只有 ACQUIRED 会进入真实业务；其他分支都不会重复执行 callback。
+        return switch (acquire.getStatus()) {
+            case ACQUIRED -> executeOwned(
+                    request.getKey(), request.getRouteKey(), options, repository,
+                    acquire.getRecord(), callback, startedAt, invocation.lockFallback, false);
+            case SUCCESS -> replay(acquire.getRecord(), resultType, invocation.lockFallback);
+            case PROCESSING_ACTIVE -> simple(
+                    IdempotencyResultStatus.PROCESSING,
+                    IdempotencyStage.ACQUIRE_STATE,
+                    acquire.getRecord(), null, invocation.lockFallback);
+            case PROCESSING_EXPIRED -> simple(
+                    IdempotencyResultStatus.PROCESSING_EXPIRED,
+                    IdempotencyStage.ACQUIRE_STATE,
+                    acquire.getRecord(), null, invocation.lockFallback);
+            case FAILED_RETRYABLE -> simple(
+                    IdempotencyResultStatus.PREVIOUS_FAILED_RETRYABLE,
+                    IdempotencyStage.ACQUIRE_STATE,
+                    acquire.getRecord(), null, invocation.lockFallback);
+            case FAILED_FINAL -> simple(
+                    IdempotencyResultStatus.PREVIOUS_FAILED_FINAL,
+                    IdempotencyStage.ACQUIRE_STATE,
+                    acquire.getRecord(), null, invocation.lockFallback);
+            case KEY_CONFLICT -> simple(
+                    IdempotencyResultStatus.KEY_CONFLICT,
+                    IdempotencyStage.ACQUIRE_STATE,
+                    acquire.getRecord(), null, invocation.lockFallback);
+            case PROVIDER_ERROR -> simple(
+                    IdempotencyResultStatus.REPOSITORY_ERROR,
+                    IdempotencyStage.ACQUIRE_STATE,
+                    acquire.getRecord(), acquire.getError(), invocation.lockFallback);
+        };
+    }
+
+    /**
+     * Reliable Task 的显式恢复入口。
+     *
+     * <p>recover() 与 execute() 的最大区别是：它允许在满足 expectedOwner/version、
+     * processingTimeout、failureRetryable 等条件后开启新的 generation。</p>
+     *
+     * <p>扫描、分页、调度、MQ 投递都不在这里实现。外部任务组件只负责发现候选并调用本方法，
+     * 真正的原子接管仍由 IdempotencyRepository.tryRecover() 完成。</p>
+     */
+    @Override
+    public <T> IdempotencyResult<T> recover(
+            IdempotencyRecoveryRequest request,
+            Class<T> resultType,
+            IdempotencyCallback<T> callback) {
+
+        Objects.requireNonNull(callback, "callback must not be null");
+        Instant startedAt = Instant.now(clock);
 
         PreparedExecution prepared;
         try {
-            prepared = prepare(request, resultType);
+            prepared = prepare(request == null ? null : request.getOptions(), resultType);
+            validateRecoveryRequest(request);
         } catch (RuntimeException error) {
-            return IdempotencyResult.<T>builder()
-                    .status(IdempotencyResultStatus.INVALID_OPTIONS)
-                    .stage(IdempotencyStage.VALIDATE)
-                    .error(error)
-                    .build();
+            return invalid(error);
         }
 
         IdempotencyOptions options = prepared.options;
         IdempotencyRepository repository = prepared.repository;
 
-        String ownerToken = ownerGenerator.generate(options.getNamespace(), request.getKey());
-        IdempotencyAcquireRequest acquireRequest = new IdempotencyAcquireRequest(
+        // 只有显式声明 EXTERNAL_TASK 的记录才允许进入可靠恢复链路。
+        if (options.getRecoveryMode() != IdempotencyRecoveryMode.EXTERNAL_TASK) {
+            return simple(
+                    IdempotencyResultStatus.RECOVERY_NOT_ALLOWED,
+                    IdempotencyStage.RECOVER_STATE,
+                    null,
+                    new IllegalStateException("recoveryMode must be EXTERNAL_TASK"),
+                    false);
+        }
+
+        // 新一代恢复执行者必须拥有新的 ownerToken；Repository 还会把 version + 1。
+        String newOwner = ownerGenerator.generate(options.getNamespace(), request.getKey());
+        IdempotencyRecoveryAcquireRequest recoveryRequest = new IdempotencyRecoveryAcquireRequest(
                 options.getNamespace(),
                 request.getKey(),
                 normalize(request.getRequestHash()),
-                ownerToken,
+                normalize(request.getRouteKey()),
+                newOwner,
+                normalize(request.getExpectedOwnerToken()),
+                request.getExpectedVersion(),
                 options.getMode(),
                 options.getProcessingTimeout(),
-                options.getRecordTtl(),
-                options.isRetryOnProcessingTimeout(),
-                options.isRetryFailed(),
+                options.isRecoverFailed(),
                 Instant.now(clock));
 
-        publish(
-                IdempotencyEventType.ACQUIRE_ATTEMPT,
-                IdempotencyStage.ACQUIRE_STATE,
+        publish(IdempotencyEventType.RECOVERY_ATTEMPT, IdempotencyStage.RECOVER_STATE,
+                options, repository, null);
+
+        // 与普通抢占一样，分布式锁仍然只保护“状态接管”短临界区。
+        StateInvocation<IdempotencyRecoveryResult> invocation = invokeWithOptionalLock(
                 options,
                 repository,
-                null);
+                request.getRouteKey(),
+                request.getKey(),
+                () -> repository.tryRecover(recoveryRequest));
 
-        AcquireInvocation invocation = acquireState(repository, acquireRequest, options);
         if (invocation.lockRejected) {
-            return IdempotencyResult.<T>builder()
-                    .status(IdempotencyResultStatus.LOCK_NOT_ACQUIRED)
-                    .stage(IdempotencyStage.LOCK)
-                    .error(invocation.error)
-                    .build();
+            return lockRejected(invocation.error);
         }
 
-        IdempotencyAcquireResult acquireResult = invocation.result;
-        metrics.recordAcquire(
-                options.getMode(),
-                repository.providerName(),
-                acquireResult.getStatus().name());
-
-        return switch (acquireResult.getStatus()) {
-            case SUCCESS -> {
-                publish(IdempotencyEventType.REPLAYED, IdempotencyStage.REPLAY,
-                        options, repository, null);
-                yield replay(acquireResult.getRecord(), resultType, invocation.lockFallback);
-            }
-            case PROCESSING -> {
-                publish(IdempotencyEventType.PROCESSING, IdempotencyStage.ACQUIRE_STATE,
-                        options, repository, null);
-                yield simple(
-                        IdempotencyResultStatus.PROCESSING,
-                        IdempotencyStage.ACQUIRE_STATE,
-                        acquireResult.getRecord(),
-                        null,
-                        invocation.lockFallback);
-            }
-            case FAILED -> {
-                publish(IdempotencyEventType.PREVIOUS_FAILED, IdempotencyStage.ACQUIRE_STATE,
-                        options, repository, null);
-                yield simple(
-                        IdempotencyResultStatus.PREVIOUS_FAILED,
-                        IdempotencyStage.ACQUIRE_STATE,
-                        acquireResult.getRecord(),
-                        null,
-                        invocation.lockFallback);
-            }
-            case KEY_CONFLICT -> {
-                publish(IdempotencyEventType.KEY_CONFLICT, IdempotencyStage.ACQUIRE_STATE,
-                        options, repository, null);
-                yield simple(
-                        IdempotencyResultStatus.KEY_CONFLICT,
-                        IdempotencyStage.ACQUIRE_STATE,
-                        acquireResult.getRecord(),
-                        null,
-                        invocation.lockFallback);
-            }
-            case PROVIDER_ERROR -> {
-                publish(IdempotencyEventType.REPOSITORY_ERROR, IdempotencyStage.ACQUIRE_STATE,
-                        options, repository, acquireResult.getError());
-                yield simple(
-                        IdempotencyResultStatus.REPOSITORY_ERROR,
-                        IdempotencyStage.ACQUIRE_STATE,
-                        acquireResult.getRecord(),
-                        acquireResult.getError(),
-                        invocation.lockFallback);
-            }
-            case ACQUIRED -> {
-                publish(IdempotencyEventType.ACQUIRED, IdempotencyStage.ACQUIRE_STATE,
-                        options, repository, null);
-                yield executeOwned(
-                        request,
-                        options,
-                        repository,
-                        acquireResult.getRecord(),
-                        callback,
-                        startedAt,
-                        invocation.lockFallback);
-            }
+        IdempotencyRecoveryResult recovery = invocation.result;
+        return switch (recovery.getStatus()) {
+            case RECOVERY_ACQUIRED -> executeOwned(
+                    request.getKey(), request.getRouteKey(), options, repository,
+                    recovery.getRecord(), callback, startedAt, invocation.lockFallback, true);
+            case SUCCESS -> replay(recovery.getRecord(), resultType, invocation.lockFallback);
+            case PROCESSING_ACTIVE -> simple(
+                    IdempotencyResultStatus.PROCESSING,
+                    IdempotencyStage.RECOVER_STATE,
+                    recovery.getRecord(), null, invocation.lockFallback);
+            case NOT_RECOVERABLE, FAILED_FINAL, NOT_FOUND -> simple(
+                    IdempotencyResultStatus.RECOVERY_NOT_ALLOWED,
+                    IdempotencyStage.RECOVER_STATE,
+                    recovery.getRecord(), null, invocation.lockFallback);
+            case STALE_CANDIDATE -> simple(
+                    IdempotencyResultStatus.STALE_RECOVERY_CANDIDATE,
+                    IdempotencyStage.RECOVER_STATE,
+                    recovery.getRecord(), null, invocation.lockFallback);
+            case KEY_CONFLICT -> simple(
+                    IdempotencyResultStatus.KEY_CONFLICT,
+                    IdempotencyStage.RECOVER_STATE,
+                    recovery.getRecord(), null, invocation.lockFallback);
+            case PROVIDER_ERROR -> simple(
+                    IdempotencyResultStatus.REPOSITORY_ERROR,
+                    IdempotencyStage.RECOVER_STATE,
+                    recovery.getRecord(), recovery.getError(), invocation.lockFallback);
         };
     }
 
     /**
-     * 请求级准备工作。这里不访问外部存储，因此失败统一归为 VALIDATE。
+     * 统一完成 Options 默认值、参数校验和 Repository 选择。
+     *
+     * <p>storeResult=true 时必须同时具备 codec + resultType，否则第一次虽然能保存，
+     * 后续 replay 却无法可靠反序列化，所以在业务执行前直接 fail fast。</p>
      */
-    private PreparedExecution prepare(IdempotencyRequest request, Class<?> resultType) {
-        validateRequest(request);
-
-        IdempotencyOptions options = request.getOptions() == null
-                ? defaults.defaultOptions()
-                : request.getOptions();
+    private PreparedExecution prepare(IdempotencyOptions requestOptions, Class<?> resultType) {
+        IdempotencyOptions options = requestOptions == null ? defaults.defaultOptions() : requestOptions;
         options.validate();
-
         if (options.isStoreResult() && codec == null) {
             throw new IllegalArgumentException("storeResult=true requires IdempotencyResultCodec");
         }
         if (options.isStoreResult() && resultType == null) {
             throw new IllegalArgumentException(
-                    "storeResult=true requires resultType so replay can safely deserialize the stored result");
+                    "storeResult=true requires resultType so replay can deserialize stored result");
         }
+        return new PreparedExecution(
+                options,
+                registry.resolve(options.getMode(), options.getRepositoryName()));
+    }
 
-        IdempotencyRepository repository = registry.resolve(
-                options.getMode(), options.getRepositoryName());
-        return new PreparedExecution(options, repository);
+    private void validateNormalRequest(IdempotencyRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("request must not be null");
+        }
+        validateKey(request.getKey());
+    }
+
+    private void validateRecoveryRequest(IdempotencyRecoveryRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("recovery request must not be null");
+        }
+        validateKey(request.getKey());
+    }
+
+    private void validateKey(String key) {
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException("idempotency key must not be blank");
+        }
     }
 
     /**
-     * 真正持有 PROCESSING 执行权的 owner 才会进入这里。
+     * 已经拿到 PROCESSING 执行权后的真实业务执行阶段。
+     *
+     * <p>进入本方法时，外层短分布式锁已经释放。此后是否仍有执行权，
+     * 最终由 markSuccess/markFailed 的 ownerToken + version CAS 再次确认。</p>
+     *
+     * <p>未来 Transaction Template 接入后，这里最关键的改造点是：
+     * callback 的业务写 + markSuccess 应进入同一个业务事务；
+     * tryAcquire 仍保持独立短事务。</p>
      */
     private <T> IdempotencyResult<T> executeOwned(
-            IdempotencyRequest request,
+            String key,
+            String routeKey,
             IdempotencyOptions options,
             IdempotencyRepository repository,
             IdempotencyRecord record,
             IdempotencyCallback<T> callback,
             Instant startedAt,
-            boolean lockFallback) {
+            boolean lockFallback,
+            boolean recoveryExecution) {
 
+        publish(IdempotencyEventType.EXECUTION_STARTED, IdempotencyStage.EXECUTE,
+                options, repository, null);
+
+        // 把当前 generation 的 owner/version 暴露给业务。
+        // 高风险业务可以使用 context.fencingVersion() 做业务表条件更新。
         IdempotencyContext context = new IdempotencyContext(
                 options.getNamespace(),
-                request.getKey(),
+                key,
+                normalize(routeKey),
                 record.getOwnerToken(),
                 record.getVersion(),
                 options.getMode(),
-                Instant.now(clock),
+                recoveryExecution,
+                record.getUpdatedAt() == null ? Instant.now(clock) : record.getUpdatedAt(),
                 record.getProcessingExpireAt());
 
-        publish(
-                IdempotencyEventType.EXECUTION_STARTED,
-                IdempotencyStage.EXECUTE,
-                options,
-                repository,
-                null);
-
         try {
+            // 真正业务执行。注意：此时 DistributedLock 已经释放。
             T value = callback.doWithIdempotency(context);
-            String payload = encodeResultIfNecessary(
-                    value, request, options, repository, record);
+            String resultPayload = encodeResultIfNeeded(value, options);
+            Instant now = Instant.now(clock);
 
-            // encodeResultIfNecessary 发生异常时会抛 ResultEncodeException，统一进入下面 catch。
-            IdempotencyWriteResult writeResult = repository.markSuccess(
+            // 业务成功后尝试 PROCESSING -> SUCCESS。
+            // Repository 必须用 ownerToken + version 做条件更新，拒绝已经过期的旧执行者。
+            IdempotencyWriteResult write = repository.markSuccess(
                     new IdempotencySuccessRequest(
                             options.getNamespace(),
-                            request.getKey(),
+                            key,
                             record.getOwnerToken(),
                             record.getVersion(),
-                            payload,
-                            options.getRecordTtl(),
-                            Instant.now(clock)));
+                            resultPayload,
+                            options.getMode(),
+                            options.getIdempotencyWindow(),
+                            options.getWindowPolicy(),
+                            options.getRecordRetentionTtl(),
+                            now));
 
-            if (writeResult.getStatus() == IdempotencyWriteStatus.UPDATED) {
-                publish(
-                        IdempotencyEventType.EXECUTION_SUCCESS,
-                        IdempotencyStage.COMPLETE_STATE,
-                        options,
-                        repository,
-                        null);
+            if (write.getStatus() == IdempotencyWriteStatus.UPDATED) {
+                publish(IdempotencyEventType.EXECUTION_SUCCESS, IdempotencyStage.COMPLETE_STATE,
+                        options, repository, null);
                 return finish(
-                        IdempotencyResultStatus.EXECUTED,
+                        recoveryExecution ? IdempotencyResultStatus.RECOVERED
+                                : IdempotencyResultStatus.EXECUTED,
                         IdempotencyStage.COMPLETE_STATE,
                         value,
-                        writeResult.getRecord(),
+                        write.getRecord(),
                         null,
                         options,
                         repository,
@@ -289,19 +400,15 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                         lockFallback);
             }
 
-            if (writeResult.getStatus() == IdempotencyWriteStatus.STALE_OWNER
-                    || writeResult.getStatus() == IdempotencyWriteStatus.ALREADY_FINAL) {
-                publish(
-                        IdempotencyEventType.OWNERSHIP_LOST,
-                        IdempotencyStage.COMPLETE_STATE,
-                        options,
-                        repository,
-                        null);
+            if (write.getStatus() == IdempotencyWriteStatus.STALE_OWNER
+                    || write.getStatus() == IdempotencyWriteStatus.ALREADY_FINAL) {
+                publish(IdempotencyEventType.OWNERSHIP_LOST, IdempotencyStage.COMPLETE_STATE,
+                        options, repository, null);
                 return finish(
                         IdempotencyResultStatus.OWNERSHIP_LOST,
                         IdempotencyStage.COMPLETE_STATE,
-                        value,
-                        writeResult.getRecord(),
+                        null,
+                        write.getRecord(),
                         null,
                         options,
                         repository,
@@ -309,40 +416,31 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                         lockFallback);
             }
 
-            Throwable error = writeResult.getError() != null
-                    ? writeResult.getError()
-                    : new IllegalStateException("cannot mark SUCCESS: " + writeResult.getStatus());
-            publish(
-                    IdempotencyEventType.REPOSITORY_ERROR,
-                    IdempotencyStage.COMPLETE_STATE,
-                    options,
-                    repository,
-                    error);
             return finish(
                     IdempotencyResultStatus.REPOSITORY_ERROR,
                     IdempotencyStage.COMPLETE_STATE,
-                    value,
-                    writeResult.getRecord(),
-                    error,
+                    null,
+                    write.getRecord(),
+                    write.getError(),
                     options,
                     repository,
                     startedAt,
                     lockFallback);
 
-        } catch (ResultEncodeException encodeError) {
+        } catch (ResultEncodeException error) {
             return finish(
                     IdempotencyResultStatus.RESULT_CODEC_ERROR,
                     IdempotencyStage.COMPLETE_STATE,
                     null,
-                    encodeError.record,
-                    encodeError.getCause(),
+                    error.record,
+                    error.getCause(),
                     options,
                     repository,
                     startedAt,
                     lockFallback);
-        } catch (Exception businessError) {
+        } catch (Throwable businessError) {
             return handleBusinessFailure(
-                    request,
+                    key,
                     options,
                     repository,
                     record,
@@ -353,89 +451,73 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
     }
 
     /**
-     * 结果快照默认关闭。开启后，编码失败会把当前 PROCESSING 显式落为不可重试 FAILED，
-     * 避免业务已经成功返回但幂等记录长期卡在 PROCESSING。
+     * 根据 storeResult 配置生成可持久化结果快照。
+     *
+     * <p>结果编码失败不能被误判为业务 callback 失败，因此单独包装 ResultEncodeException。</p>
      */
-    private <T> String encodeResultIfNecessary(
-            T value,
-            IdempotencyRequest request,
-            IdempotencyOptions options,
-            IdempotencyRepository repository,
-            IdempotencyRecord record) throws ResultEncodeException {
-
+    private String encodeResultIfNeeded(Object value, IdempotencyOptions options)
+            throws ResultEncodeException {
         if (!options.isStoreResult()) {
             return null;
         }
-
         try {
             return codec.encode(value);
-        } catch (Exception codecError) {
-            Instant failedAt = Instant.now(clock);
-            IdempotencyFailureInfo failure = new IdempotencyFailureInfo(
-                    "RESULT_ENCODE_FAILED",
-                    codecError.getMessage(),
-                    false,
-                    failedAt);
-
-            IdempotencyWriteResult writeResult = repository.markFailed(
-                    new IdempotencyFailureRequest(
-                            options.getNamespace(),
-                            request.getKey(),
-                            record.getOwnerToken(),
-                            record.getVersion(),
-                            failure,
-                            options.getRecordTtl(),
-                            failedAt));
-
-            IdempotencyRecord resultRecord = writeResult.getRecord() == null
-                    ? record : writeResult.getRecord();
-            throw new ResultEncodeException(codecError, resultRecord);
+        } catch (Exception error) {
+            throw new ResultEncodeException(error, null);
         }
     }
 
+    /**
+     * callback 抛异常后的失败收敛逻辑。
+     *
+     * <p>先通过 FailureClassifier 判断 failureRetryable，再尝试把当前 generation 写成 FAILED。
+     * 这里不会立即重试。未来 Reliable Task 是否恢复，由 recoveryMode + recover() 决定。</p>
+     *
+     * <p>未来事务集成要特别注意：如果 callback 所在业务事务已回滚，markFailed 需要在
+     * 独立新事务中提交，否则 FAILED 也会跟着业务事务回滚。</p>
+     */
     private <T> IdempotencyResult<T> handleBusinessFailure(
-            IdempotencyRequest request,
+            String key,
             IdempotencyOptions options,
             IdempotencyRepository repository,
             IdempotencyRecord record,
-            Exception businessError,
+            Throwable businessError,
             Instant startedAt,
             boolean lockFallback) {
 
         if (businessError instanceof InterruptedException) {
-            // 不能吞掉线程中断信号，否则上层线程池/取消机制无法感知。
             Thread.currentThread().interrupt();
         }
 
         Instant failedAt = Instant.now(clock);
         IdempotencyFailureInfo failure = failureClassifier.classify(businessError, failedAt);
-        IdempotencyWriteResult writeResult = repository.markFailed(
+        // PROCESSING -> FAILED 仍然必须校验 owner/version，避免旧执行者污染新 generation。
+        IdempotencyWriteResult write = repository.markFailed(
                 new IdempotencyFailureRequest(
                         options.getNamespace(),
-                        request.getKey(),
+                        key,
                         record.getOwnerToken(),
                         record.getVersion(),
                         failure,
-                        options.getRecordTtl(),
+                        options.getMode(),
+                        options.getIdempotencyWindow(),
+                        options.getWindowPolicy(),
+                        options.getRecordRetentionTtl(),
                         failedAt));
 
-        if (writeResult.getStatus() == IdempotencyWriteStatus.PROVIDER_ERROR
-                && writeResult.getError() != null) {
-            businessError.addSuppressed(writeResult.getError());
+        if (write.getStatus() == IdempotencyWriteStatus.PROVIDER_ERROR
+                && write.getError() != null) {
+            businessError.addSuppressed(write.getError());
         }
 
-        publish(
-                IdempotencyEventType.EXECUTION_FAILED,
-                IdempotencyStage.EXECUTE,
-                options,
-                repository,
-                businessError);
+        publish(IdempotencyEventType.EXECUTION_FAILED, IdempotencyStage.EXECUTE,
+                options, repository, businessError);
 
         return finish(
                 IdempotencyResultStatus.EXECUTION_FAILED,
                 IdempotencyStage.EXECUTE,
                 null,
-                writeResult.getRecord() == null ? record : writeResult.getRecord(),
+                write.getRecord() == null ? record : write.getRecord(),
                 businessError,
                 options,
                 repository,
@@ -446,32 +528,32 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
     /**
      * 可选分布式锁只减少同 key 同时打到 Repository 的竞争。
      *
-     * <p>如果 fallbackToStateOnFailure=true，锁不可用时仍直接调用 Repository.tryAcquire。
-     * 这反向验证了 Repository 必须独立正确，而不能依赖锁。</p>
+     * <p>锁名包含 routeKey，避免分片场景下不同路由域错误共享同一个协调键。</p>
      */
-    private AcquireInvocation acquireState(
+    private <R> StateInvocation<R> invokeWithOptionalLock(
+            IdempotencyOptions options,
             IdempotencyRepository repository,
-            IdempotencyAcquireRequest request,
-            IdempotencyOptions options) {
+            String routeKey,
+            String key,
+            StateOperation<R> operation) {
 
         IdempotencyLockOptions lock = options.getLockOptions();
         if (!lock.isEnabled()) {
-            return AcquireInvocation.direct(repository.tryAcquire(request));
+            return StateInvocation.direct(operation.invoke());
         }
 
         if (lockClient == null) {
             if (lock.isFallbackToStateOnFailure()) {
                 publish(IdempotencyEventType.LOCK_FALLBACK, IdempotencyStage.LOCK,
                         options, repository, null);
-                return AcquireInvocation.fallback(repository.tryAcquire(request));
+                return StateInvocation.fallback(operation.invoke());
             }
-            return AcquireInvocation.lockRejected(
+            return StateInvocation.lockRejected(
                     new IllegalStateException("lock enabled but DistributedLockClient unavailable"));
         }
 
         LockWaitStrategy waitStrategy = lock.getWaitTime().isZero()
-                ? LockWaitStrategy.NO_WAIT
-                : LockWaitStrategy.BACKOFF;
+                ? LockWaitStrategy.NO_WAIT : LockWaitStrategy.BACKOFF;
 
         LockOptions lockOptions = LockOptions.builder()
                 .namespace("idempotency:" + options.getNamespace())
@@ -483,38 +565,44 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                 .fencingRequired(false)
                 .build();
 
-        LockResult<IdempotencyAcquireResult> lockResult = lockClient.execute(
-                "state:" + request.getKey(),
+        String lockName = "state:" + routePart(routeKey) + ":" + key;
+        LockResult<R> result = lockClient.execute(
+                lockName,
                 lockOptions,
-                (LockCallback<IdempotencyAcquireResult>) handle -> repository.tryAcquire(request));
+                (LockCallback<R>) handle -> operation.invoke());
 
-        if (lockResult.isSuccess() && lockResult.value().isPresent()) {
-            return AcquireInvocation.direct(lockResult.value().get());
+        if (result.isSuccess() && result.value().isPresent()) {
+            return StateInvocation.direct(result.value().get());
         }
 
         if (lock.isFallbackToStateOnFailure()) {
-            publish(
-                    IdempotencyEventType.LOCK_FALLBACK,
-                    IdempotencyStage.LOCK,
-                    options,
-                    repository,
-                    lockResult.error().orElse(null));
-            return AcquireInvocation.fallback(repository.tryAcquire(request));
+            publish(IdempotencyEventType.LOCK_FALLBACK, IdempotencyStage.LOCK,
+                    options, repository, result.error().orElse(null));
+            return StateInvocation.fallback(operation.invoke());
         }
 
-        return AcquireInvocation.lockRejected(
-                lockResult.error().orElseGet(() -> new IllegalStateException(
-                        "distributed lock not acquired: " + lockResult.status())));
+        return StateInvocation.lockRejected(
+                result.error().orElseGet(() -> new IllegalStateException(
+                        "distributed lock not acquired: " + result.status())));
     }
 
+    private String routePart(String routeKey) {
+        String normalized = normalize(routeKey);
+        return normalized == null ? "_" : normalized;
+    }
+
+    /**
+     * SUCCESS 重复请求的结果回放。
+     *
+     * <p>如果没有保存 resultPayload，也仍然返回 REPLAYED，表示“历史上已经成功”；
+     * 如果保存了 payload，则需要 codec + resultType 才能恢复成 T。</p>
+     */
     private <T> IdempotencyResult<T> replay(
             IdempotencyRecord record,
             Class<T> resultType,
             boolean lockFallback) {
 
-        if (record == null
-                || record.getResultPayload() == null
-                || record.getResultPayload().isBlank()) {
+        if (record == null || record.getResultPayload() == null || record.getResultPayload().isBlank()) {
             return IdempotencyResult.<T>builder()
                     .status(IdempotencyResultStatus.REPLAYED)
                     .stage(IdempotencyStage.REPLAY)
@@ -528,8 +616,7 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                     .status(IdempotencyResultStatus.RESULT_CODEC_ERROR)
                     .stage(IdempotencyStage.REPLAY)
                     .record(record)
-                    .error(new IllegalStateException(
-                            "stored result exists but resultType/codec missing"))
+                    .error(new IllegalStateException("stored result exists but resultType/codec missing"))
                     .lockFallback(lockFallback)
                     .build();
         }
@@ -551,6 +638,22 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                     .lockFallback(lockFallback)
                     .build();
         }
+    }
+
+    private <T> IdempotencyResult<T> invalid(Throwable error) {
+        return IdempotencyResult.<T>builder()
+                .status(IdempotencyResultStatus.INVALID_OPTIONS)
+                .stage(IdempotencyStage.VALIDATE)
+                .error(error)
+                .build();
+    }
+
+    private <T> IdempotencyResult<T> lockRejected(Throwable error) {
+        return IdempotencyResult.<T>builder()
+                .status(IdempotencyResultStatus.LOCK_NOT_ACQUIRED)
+                .stage(IdempotencyStage.LOCK)
+                .error(error)
+                .build();
     }
 
     private <T> IdempotencyResult<T> simple(
@@ -580,9 +683,7 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
             boolean lockFallback) {
 
         metrics.recordExecution(
-                options.getMode(),
-                repository.providerName(),
-                status,
+                options.getMode(), repository.providerName(), status,
                 Duration.between(startedAt, Instant.now(clock)));
 
         return IdempotencyResult.<T>builder()
@@ -595,15 +696,6 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                 .build();
     }
 
-    private void validateRequest(IdempotencyRequest request) {
-        if (request == null) {
-            throw new IllegalArgumentException("request must not be null");
-        }
-        if (request.getKey() == null || request.getKey().isBlank()) {
-            throw new IllegalArgumentException("idempotency key must not be blank");
-        }
-    }
-
     private void publish(
             IdempotencyEventType type,
             IdempotencyStage stage,
@@ -611,19 +703,21 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
             IdempotencyRepository repository,
             Throwable error) {
         events.publish(new IdempotencyEvent(
-                type,
-                stage,
-                options.getMode(),
-                repository.providerName(),
-                Instant.now(clock),
-                error));
+                type, stage, options.getMode(), repository.providerName(),
+                Instant.now(clock), error));
     }
 
     private String normalize(String value) {
         return value == null || value.isBlank() ? null : value;
     }
 
-    /** 只在 execute 内部使用，避免为一个小型流程对象额外创建公共类。 */
+    /** Repository 状态操作的延迟执行封装，用于决定是否套可选 DistributedLock。 */
+    @FunctionalInterface
+    private interface StateOperation<R> {
+        R invoke();
+    }
+
+    /** 一次调用完成 prepare() 后的内部快照，避免后续重复解析 Options/Repository。 */
     private static final class PreparedExecution {
         private final IdempotencyOptions options;
         private final IdempotencyRepository repository;
@@ -634,41 +728,38 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
         }
     }
 
-    /** 分布式锁包装 tryAcquire 后的内部结果。 */
-    private static final class AcquireInvocation {
-        private final IdempotencyAcquireResult result;
+    /**
+     * 可选分布式锁执行结果。
+     *
+     * <p>lockFallback=true 表示锁失败后按配置直接退化到 Repository 原子状态机；
+     * lockRejected=true 表示配置要求锁失败即终止。</p>
+     */
+    private static final class StateInvocation<R> {
+        private final R result;
         private final boolean lockFallback;
         private final boolean lockRejected;
         private final Throwable error;
 
-        private AcquireInvocation(
-                IdempotencyAcquireResult result,
-                boolean lockFallback,
-                boolean lockRejected,
-                Throwable error) {
+        private StateInvocation(R result, boolean lockFallback, boolean lockRejected, Throwable error) {
             this.result = result;
             this.lockFallback = lockFallback;
             this.lockRejected = lockRejected;
             this.error = error;
         }
 
-        private static AcquireInvocation direct(IdempotencyAcquireResult result) {
-            return new AcquireInvocation(result, false, false, null);
+        private static <R> StateInvocation<R> direct(R result) {
+            return new StateInvocation<>(result, false, false, null);
         }
 
-        private static AcquireInvocation fallback(IdempotencyAcquireResult result) {
-            return new AcquireInvocation(result, true, false, null);
+        private static <R> StateInvocation<R> fallback(R result) {
+            return new StateInvocation<>(result, true, false, null);
         }
 
-        private static AcquireInvocation lockRejected(Throwable error) {
-            return new AcquireInvocation(null, false, true, error);
+        private static <R> StateInvocation<R> lockRejected(Throwable error) {
+            return new StateInvocation<>(null, false, true, error);
         }
     }
 
-    /**
-     * 仅用于把 result codec 失败从业务 callback 异常中区分出来。
-     * 这是 Core 内部控制流异常，不暴露给 API。
-     */
     private static final class ResultEncodeException extends Exception {
         private final IdempotencyRecord record;
 

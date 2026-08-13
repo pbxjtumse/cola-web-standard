@@ -41,10 +41,11 @@ public final class IdempotencyResult<T> {
     }
 
     /**
-     * EXECUTED 和 REPLAYED 都属于调用方可直接使用的成功结果。
+     * EXECUTED / RECOVERED / REPLAYED 都属于调用方可直接使用的成功结果。
      */
     public boolean isSuccess() {
         return status == IdempotencyResultStatus.EXECUTED
+                || status == IdempotencyResultStatus.RECOVERED
                 || status == IdempotencyResultStatus.REPLAYED;
     }
 

@@ -13,10 +13,19 @@ public final class IdempotencyLockOptions {
     public static final Duration DEFAULT_WAIT_TIME = Duration.ZERO;
     public static final Duration DEFAULT_LEASE_TIME = Duration.ofSeconds(5);
 
+    /** 是否启用可选分布式锁协调层。 */
     private final boolean enabled;
+
+    /** redis/redisson/...；为空时使用 DistributedLockClient 默认 Provider。 */
     private final String providerName;
+
+    /** 抢不到短锁时最多等待多久；默认 0 表示立即返回/降级。 */
     private final Duration waitTime;
+
+    /** 短临界区锁租约；这里只保护 tryAcquire/tryRecover，不应配置成长业务时长。 */
     private final Duration leaseTime;
+
+    /** 锁失败时是否继续依赖 Repository 的原子状态机保证正确性。 */
     private final boolean fallbackToStateOnFailure;
 
     private IdempotencyLockOptions(Builder builder) {

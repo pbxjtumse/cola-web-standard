@@ -1,0 +1,49 @@
+@startuml
+title Idempotency V1.1 - 短锁方案与“全业务锁”对比
+
+autonumber
+skinparam shadowing false
+
+actor A
+actor B
+participant "DistributedLock" as LOCK
+database "Idempotency DB" as DB
+participant "Business" as BIZ
+
+== 推荐：短锁 ==
+A -> LOCK : lock
+A -> DB : tryAcquire -> PROCESSING(A,v1)
+DB --> A : ACQUIRED
+A -> LOCK : unlock
+A -> BIZ : long business 10s
+
+B -> LOCK : lock
+B -> DB : tryAcquire
+DB --> B : PROCESSING_ACTIVE(A,v1)
+B -> LOCK : unlock
+B <-- DB : 可立即知道“正在处理”
+
+...10s...
+A -> DB : markSuccess(A,v1)
+
+== 不推荐：锁包完整业务 ==
+A -> LOCK : lock
+A -> DB : tryAcquire -> PROCESSING
+A -> BIZ : long business 10s
+B -> LOCK : wait / timeout
+note right of B
+B 先被锁挡住，
+看不到 DB 中的 PROCESSING，
+请求等待时间被业务耗时放大。
+end note
+A -> DB : markSuccess
+A -> LOCK : unlock
+B -> LOCK : finally acquire
+B -> DB : query SUCCESS
+
+note bottom
+全业务锁还会引入：lease/watchdog、GC 暂停、锁丢失后旧执行者继续运行等问题。
+因此 Lock 只能是并发收敛层，State 才是正确性核心。
+end note
+
+@enduml

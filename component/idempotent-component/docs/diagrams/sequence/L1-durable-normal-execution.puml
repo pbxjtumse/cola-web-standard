@@ -1,0 +1,62 @@
+@startuml
+title Idempotency V1.1 - DURABLE 普通执行（短锁 + JDBC State）
+
+autonumber
+skinparam shadowing false
+
+actor Caller
+participant "IdempotencyExecutor" as EXEC
+participant "DistributedLockClient\n(optional)" as LOCK
+database "JdbcIdempotencyRepository" as IDEM
+participant "Business Callback" as BIZ
+
+Caller -> EXEC : execute(key, routeKey, hash)
+
+opt lock.enabled
+  EXEC -> LOCK : execute(state:route:key)
+  LOCK -> IDEM : tryAcquire()
+  note right of IDEM
+  这里已经完成数据库状态操作：
+  INSERT PROCESSING 或
+  SELECT FOR UPDATE + 状态判断。
+  end note
+  IDEM --> LOCK : ACQUIRED / SUCCESS / PROCESSING_*
+  LOCK --> EXEC : result\n随后立即释放锁
+else lock disabled / fallback
+  EXEC -> IDEM : tryAcquire()
+  IDEM --> EXEC : decision
+end
+
+alt ACQUIRED
+  note over EXEC,BIZ
+  此时数据库已经存在：
+  PROCESSING + ownerToken + version。
+  分布式锁已经释放。
+  end note
+  EXEC -> BIZ : callback(context)
+  alt callback success
+    BIZ --> EXEC : value
+    EXEC -> IDEM : markSuccess(owner, version)
+    IDEM --> EXEC : UPDATED
+    EXEC --> Caller : EXECUTED
+  else callback failure
+    BIZ --> EXEC : exception
+    EXEC -> IDEM : markFailed(owner, version)
+    IDEM --> EXEC : UPDATED
+    EXEC --> Caller : EXECUTION_FAILED
+  end
+else SUCCESS
+  EXEC --> Caller : REPLAYED
+else PROCESSING_ACTIVE
+  EXEC --> Caller : PROCESSING
+else PROCESSING_EXPIRED
+  EXEC --> Caller : PROCESSING_EXPIRED\n不自动恢复
+else FAILED_RETRYABLE
+  EXEC --> Caller : PREVIOUS_FAILED_RETRYABLE
+else FAILED_FINAL
+  EXEC --> Caller : PREVIOUS_FAILED_FINAL
+else KEY_CONFLICT
+  EXEC --> Caller : KEY_CONFLICT
+end
+
+@enduml

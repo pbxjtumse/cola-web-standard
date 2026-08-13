@@ -5,47 +5,71 @@ import com.xjtu.iron.idempotent.api.IdempotencyMode;
 import java.util.Optional;
 
 /**
- * 幂等状态存储 SPI。
+ * 幂等状态正确性的核心 SPI。
  *
- * <p>这是整个组件最重要的正确性边界。实现必须满足以下契约：</p>
- * <ol>
- *     <li>{@link #tryAcquire(IdempotencyAcquireRequest)} 的“读取 + 判断 + 状态转换”必须原子；</li>
- *     <li>同一 namespace + key 同时只能有一个 owner 获得当前 version 的 PROCESSING 执行权；</li>
- *     <li>{@code markSuccess/markFailed} 必须校验 ownerToken + version；</li>
- *     <li>旧 owner 恢复后不能覆盖新 owner 已经产生的状态；</li>
- *     <li>PROCESSING 超时恢复必须通过 CAS / 行锁 / Lua 等原子机制完成。</li>
- * </ol>
+ * <p>这是整个组件最重要的扩展点。DistributedLockClient 只能减少竞争，
+ * 即使完全关闭分布式锁，Repository 自己也必须保证以下操作的原子状态语义。</p>
  *
- * <p>分布式锁不是该 SPI 正确性的前提。即使完全没有 DistributedLockClient，Repository
- * 也必须独立满足上述契约。</p>
+ * <p>不同实现的典型保证方式：</p>
+ * <ul>
+ *     <li>JDBC：UNIQUE KEY、短事务、SELECT FOR UPDATE、owner/version 条件更新；</li>
+ *     <li>Redis：Lua 一次完成读取、判断和修改。</li>
+ * </ul>
  */
 public interface IdempotencyRepository {
 
-    /** Provider 唯一名称，例如 redis / jdbc。 */
+    /**
+     * Provider 唯一名称，例如 jdbc / redis。
+     * 用于 Registry 选择、配置和指标标签。
+     */
     String providerName();
 
-    /** 当前 Repository 是否支持指定持久化模式。 */
+    /**
+     * 当前 Repository 是否支持指定模式。
+     * 例如 Redis Provider V1.1 默认只支持 SHORT_TERM。
+     */
     boolean supports(IdempotencyMode mode);
 
     /**
-     * 尝试获取 key 的业务执行权。
+     * 普通 execute() 的原子状态判定/抢占入口。
      *
-     * <p>可能返回 ACQUIRED、SUCCESS、PROCESSING、FAILED、KEY_CONFLICT 或 PROVIDER_ERROR。</p>
+     * <p>必须满足：</p>
+     * <ul>
+     *     <li>记录不存在时，最多只有一个调用者能创建 PROCESSING；</li>
+     *     <li>已有 SUCCESS 时返回 SUCCESS，不再执行业务；</li>
+     *     <li>PROCESSING 超时时只返回 PROCESSING_EXPIRED，不自动恢复；</li>
+     *     <li>SHORT_TERM 窗口到期时可原子开启新 generation。</li>
+     * </ul>
      */
     IdempotencyAcquireResult tryAcquire(IdempotencyAcquireRequest request);
 
     /**
-     * 将当前 owner 的 PROCESSING 标记为 SUCCESS。
-     * 必须同时比较 ownerToken 和 version。
+     * 显式 recover() 的原子接管入口。
+     *
+     * <p>只有 Reliable Task 等恢复调用方应使用。实现必须再次校验 expectedOwner/version，
+     * 避免扫描候选在排队期间已经失效却仍被执行。</p>
+     */
+    IdempotencyRecoveryResult tryRecover(IdempotencyRecoveryAcquireRequest request);
+
+    /**
+     * 当前 generation 完成成功。
+     *
+     * <p>必须使用 ownerToken + version 条件写，旧 owner 不能覆盖新 generation。</p>
      */
     IdempotencyWriteResult markSuccess(IdempotencySuccessRequest request);
 
     /**
-     * 将当前 owner 的 PROCESSING 标记为 FAILED。
-     * 必须同时比较 ownerToken 和 version。
+     * 当前 generation 完成失败。
+     *
+     * <p>同样必须使用 ownerToken + version 条件写。</p>
      */
     IdempotencyWriteResult markFailed(IdempotencyFailureRequest request);
 
-    /** 查询当前状态快照。 */
+    /**
+     * 读取当前状态快照。
+     *
+     * <p>该查询用于诊断、展示或辅助流程，不应通过“find -> Java 判断 -> update”
+     * 自行实现并发状态转换。</p>
+     */
     Optional<IdempotencyRecord> find(String namespace, String key);
 }

@@ -22,6 +22,7 @@
         <module>foundation-component</module>
         <module>message-component</module>
         <module>idempotent-component</module>
+        <module>transaction-component</module>
     </modules>
     <dependencyManagement>
         <dependencies>

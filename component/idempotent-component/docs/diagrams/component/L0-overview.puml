@@ -1,22 +1,48 @@
 @startuml
-skinparam componentStyle rectangle
+title Idempotency V1.1 - Component Overview
+
 skinparam shadowing false
-title Idempotent Component V1
-component "idempotent-api" as API
-component "idempotent-core" as Core
-component "idempotent-provider-redis" as RedisProvider
-component "idempotent-provider-jdbc" as JdbcProvider
-component "idempotent-starter" as Starter
-component "distributed-lock-api" as LockApi
-database Redis
-database RDBMS
-Core --> API
-Core --> LockApi : optional coordination
-RedisProvider --> API
-JdbcProvider --> API
-RedisProvider --> Redis : Hash + Lua
-JdbcProvider --> RDBMS : Unique + Row Lock + CAS
-Starter --> Core
-Starter --> RedisProvider
-Starter --> JdbcProvider
+skinparam componentStyle rectangle
+
+component "Idempotency API" as API {
+  [IdempotencyExecutor]
+  [IdempotencyRecoveryQueryService]
+  [IdempotencyRequestHasher]
+}
+
+component "Idempotency Core" as CORE {
+  [DefaultIdempotencyExecutor]
+  [RepositoryRegistry]
+  [RecoveryQueryService]
+}
+
+component "Optional Coordination" as COORD {
+  [DistributedLockClient]
+}
+
+component "State Providers" as PROVIDERS {
+  [RedisIdempotencyRepository\nSHORT_TERM]
+  [JdbcIdempotencyRepository\nDURABLE]
+}
+
+component "Future External Components" as FUTURE {
+  [Reliable Task]
+  [Transaction Template]
+  [Data Routing]
+}
+
+API --> CORE
+CORE --> COORD : optional short lock
+CORE --> PROVIDERS : required state correctness
+[RecoveryQueryService] --> [JdbcIdempotencyRepository\nDURABLE]
+[Reliable Task] --> [IdempotencyRecoveryQueryService] : scan candidates
+[Reliable Task] --> [IdempotencyExecutor] : recover()
+[Transaction Template] ..> [JdbcIdempotencyRepository\nDURABLE] : transaction-aware JdbcExecutionManager
+[Data Routing] ..> [JdbcIdempotencyRepository\nDURABLE] : routeKey -> shard
+
+note bottom of PROVIDERS
+Repository 是正确性核心：
+Redis 使用 Lua；JDBC 使用 UNIQUE / row lock / CAS。
+end note
+
 @enduml

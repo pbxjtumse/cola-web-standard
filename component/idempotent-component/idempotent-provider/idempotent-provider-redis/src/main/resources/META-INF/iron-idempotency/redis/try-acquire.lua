@@ -1,11 +1,142 @@
--- KEYS[1] hash key
--- ARGV nowMs, owner, requestHash, processingTimeoutMs, recordTtlMs, retryFailed, retryTimeout, namespace, logicalKey
-local key=KEYS[1];local now=tonumber(ARGV[1]);local owner=ARGV[2];local reqHash=ARGV[3];local pto=tonumber(ARGV[4]);local ttl=tonumber(ARGV[5]);local retryFailed=ARGV[6]=='1';local retryTimeout=ARGV[7]=='1';local ns=ARGV[8];local logicalKey=ARGV[9]
-local function h(n)local v=redis.call('HGET',key,n);if not v then return '' end;return v end
-local function snap(code,takeover)return {tostring(code),takeover and '1' or '0',h('namespace'),h('key'),h('request_hash'),h('status'),h('owner_token'),h('version'),h('result_payload'),h('failure_code'),h('failure_message'),h('failure_retryable'),h('processing_expire_at'),h('created_at'),h('updated_at'),h('completed_at')} end
-if redis.call('EXISTS',key)==0 then redis.call('HSET',key,'namespace',ns,'key',logicalKey,'request_hash',reqHash,'status','PROCESSING','owner_token',owner,'version','1','result_payload','','failure_code','','failure_message','','failure_retryable','0','processing_expire_at',tostring(now+pto),'created_at',tostring(now),'updated_at',tostring(now),'completed_at','');redis.call('PEXPIRE',key,ttl);return snap(1,false) end
-local oldHash=h('request_hash');if oldHash~='' and reqHash~='' and oldHash~=reqHash then return snap(5,false) end
-local status=h('status');if status=='SUCCESS' then return snap(2,false) end
-if status=='PROCESSING' then local exp=tonumber(h('processing_expire_at')) or 0;if exp>now then return snap(3,false) end;redis.call('HSET',key,'status','FAILED','failure_code','PROCESSING_TIMEOUT','failure_message','processing owner lease expired','failure_retryable','1','processing_expire_at','','updated_at',tostring(now));redis.call('PEXPIRE',key,ttl);if not retryTimeout then return snap(4,false) end;status='FAILED' end
-if status=='FAILED' then local timeout=h('failure_code')=='PROCESSING_TIMEOUT';if timeout then if not retryTimeout then return snap(4,false) end else if (not retryFailed) or h('failure_retryable')~='1' then return snap(4,false) end end;local ver=(tonumber(h('version')) or 0)+1;redis.call('HSET',key,'status','PROCESSING','owner_token',owner,'version',tostring(ver),'processing_expire_at',tostring(now+pto),'result_payload','','completed_at','','updated_at',tostring(now));redis.call('PEXPIRE',key,ttl);return snap(1,true) end
-return snap(4,false)
+-- NORMAL execute() 原子状态判断。
+-- 不负责超时恢复；PROCESSING 超时只返回 PROCESSING_EXPIRED。
+--
+-- KEYS[1] redis hash key
+-- ARGV:
+-- 1 nowMs
+-- 2 ownerToken
+-- 3 requestHash
+-- 4 routeKey
+-- 5 processingTimeoutMs
+-- 6 idempotencyWindowMs
+-- 7 windowPolicy
+-- 8 recordRetentionTtlMs
+-- 9 recoveryMode
+-- 10 namespace
+-- 11 logicalKey
+local key = KEYS[1]
+local now = tonumber(ARGV[1])
+local owner = ARGV[2]
+local requestHash = ARGV[3]
+local routeKey = ARGV[4]
+local processingTimeout = tonumber(ARGV[5])
+local windowMs = tonumber(ARGV[6])
+local windowPolicy = ARGV[7]
+local retentionMs = tonumber(ARGV[8])
+local recoveryMode = ARGV[9]
+local namespace = ARGV[10]
+local logicalKey = ARGV[11]
+
+local function h(name)
+    local value = redis.call('HGET', key, name)
+    if not value then return '' end
+    return value
+end
+
+local function physical_expire_at(windowExpireAt)
+    return windowExpireAt + retentionMs
+end
+
+local function apply_physical_expiry(expireAt)
+    if expireAt and expireAt > 0 then
+        redis.call('PEXPIREAT', key, expireAt)
+    end
+end
+
+local function snapshot(code, rollover)
+    return {
+        tostring(code), rollover and '1' or '0',
+        h('namespace'), h('key'), h('route_key'), h('request_hash'),
+        h('status'), h('owner_token'), h('version'), h('result_payload'),
+        h('failure_code'), h('failure_message'), h('failure_retryable'),
+        h('recovery_mode'), h('window_policy'), h('processing_expire_at'),
+        h('window_expire_at'), h('retention_expire_at'), h('created_at'),
+        h('updated_at'), h('completed_at')
+    }
+end
+
+local function start_generation(version, createdAt)
+    local windowExpireAt = now + windowMs
+    local retentionExpireAt = physical_expire_at(windowExpireAt)
+    redis.call('HSET', key,
+        'namespace', namespace,
+        'key', logicalKey,
+        'route_key', routeKey,
+        'request_hash', requestHash,
+        'status', 'PROCESSING',
+        'owner_token', owner,
+        'version', tostring(version),
+        'result_payload', '',
+        'failure_code', '',
+        'failure_message', '',
+        'failure_retryable', '0',
+        'recovery_mode', recoveryMode,
+        'window_policy', windowPolicy,
+        'processing_expire_at', tostring(now + processingTimeout),
+        'window_expire_at', tostring(windowExpireAt),
+        'retention_expire_at', tostring(retentionExpireAt),
+        'created_at', tostring(createdAt),
+        'updated_at', tostring(now),
+        'completed_at', '')
+    apply_physical_expiry(retentionExpireAt)
+end
+
+local function touch_sliding_window()
+    if windowPolicy ~= 'SLIDING_ON_ACCESS' then return end
+    local nextWindow = now + windowMs
+    local nextRetention = physical_expire_at(nextWindow)
+    redis.call('HSET', key,
+        'window_expire_at', tostring(nextWindow),
+        'retention_expire_at', tostring(nextRetention),
+        'updated_at', tostring(now))
+    apply_physical_expiry(nextRetention)
+end
+
+if redis.call('EXISTS', key) == 0 then
+    start_generation(1, now)
+    return snapshot(1, false)
+end
+
+-- 语义窗口结束后，即使记录因为 retention 仍存在，也开启新的 generation。
+local oldWindowExpireAt = tonumber(h('window_expire_at')) or 0
+if oldWindowExpireAt > 0 and oldWindowExpireAt <= now then
+    local nextVersion = (tonumber(h('version')) or 0) + 1
+    start_generation(nextVersion, now)
+    return snapshot(1, true)
+end
+
+-- 在有效窗口内，同一个 key 不能跨 route 或跨业务请求指纹复用。
+local oldRoute = h('route_key')
+if oldRoute ~= routeKey then
+    return snapshot(7, false)
+end
+local oldHash = h('request_hash')
+if oldHash ~= '' and requestHash ~= '' and oldHash ~= requestHash then
+    return snapshot(7, false)
+end
+
+local status = h('status')
+if status == 'SUCCESS' then
+    touch_sliding_window()
+    return snapshot(2, false)
+end
+
+if status == 'PROCESSING' then
+    local processingExpireAt = tonumber(h('processing_expire_at')) or 0
+    if processingExpireAt > now then
+        touch_sliding_window()
+        return snapshot(3, false)
+    end
+    -- 只返回派生判定状态，不修改持久 status。
+    return snapshot(4, false)
+end
+
+if status == 'FAILED' then
+    touch_sliding_window()
+    if h('failure_retryable') == '1' then
+        return snapshot(5, false)
+    end
+    return snapshot(6, false)
+end
+
+return snapshot(6, false)

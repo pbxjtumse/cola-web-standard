@@ -2,31 +2,22 @@ package com.xjtu.iron.idempotent.starter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xjtu.iron.distributed.lock.api.DistributedLockClient;
-import com.xjtu.iron.idempotent.api.IdempotencyExecutor;
-import com.xjtu.iron.idempotent.api.IdempotencyLockOptions;
-import com.xjtu.iron.idempotent.api.IdempotencyMode;
-import com.xjtu.iron.idempotent.api.IdempotencyOptions;
+import com.xjtu.iron.idempotent.api.*;
 import com.xjtu.iron.idempotent.api.repository.IdempotencyRepository;
 import com.xjtu.iron.idempotent.api.spi.IdempotencyFailureClassifier;
+import com.xjtu.iron.idempotent.api.spi.IdempotencyRequestHasher;
 import com.xjtu.iron.idempotent.api.spi.IdempotencyResultCodec;
-import com.xjtu.iron.idempotent.core.DefaultIdempotencyExecutor;
-import com.xjtu.iron.idempotent.core.DefaultIdempotencyFailureClassifier;
-import com.xjtu.iron.idempotent.core.DefaultIdempotencyRepositoryRegistry;
-import com.xjtu.iron.idempotent.core.IdempotencyDefaults;
-import com.xjtu.iron.idempotent.core.IdempotencyOwnerTokenGenerator;
-import com.xjtu.iron.idempotent.core.IdempotencyRepositoryRegistry;
-import com.xjtu.iron.idempotent.core.UuidIdempotencyOwnerTokenGenerator;
+import com.xjtu.iron.idempotent.core.*;
 import com.xjtu.iron.idempotent.core.observation.IdempotencyEventPublisher;
 import com.xjtu.iron.idempotent.core.observation.IdempotencyMetrics;
+import com.xjtu.iron.idempotent.provider.jdbc.DataSourceJdbcExecutionManager;
+import com.xjtu.iron.idempotent.provider.jdbc.JdbcExecutionManager;
 import com.xjtu.iron.idempotent.provider.jdbc.JdbcIdempotencyRepository;
 import com.xjtu.iron.idempotent.provider.redis.RedisIdempotencyRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.*;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
@@ -39,8 +30,11 @@ import java.util.List;
 /**
  * 幂等组件统一自动装配入口。
  *
- * <p>Starter 负责“装配”，Core 不依赖 Spring。Redis/MySQL 连接仍由应用级
- * {@code spring.data.redis.*}/{@code spring.datasource.*} 提供。</p>
+ * <p>Starter 的职责只有“把外部配置和基础设施 Bean 组装成 Core 所需对象”。
+ * 状态机、Repository 选择、execute/recover 主流程都不写在自动配置中。</p>
+ *
+ * <p>覆盖规则遵循 Spring Boot Starter 常规约定：用户显式提供的 Bean 优先，
+ * 组件默认实现通过 {@code @ConditionalOnMissingBean} 补齐。</p>
  */
 @AutoConfiguration
 @EnableConfigurationProperties(IdempotencyProperties.class)
@@ -60,7 +54,6 @@ public class IdempotencyAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public IdempotencyFailureClassifier idempotencyFailureClassifier() {
-        // 保守默认：普通业务异常标记为不可重试。
         return new DefaultIdempotencyFailureClassifier();
     }
 
@@ -69,6 +62,13 @@ public class IdempotencyAutoConfiguration {
     @ConditionalOnMissingBean(IdempotencyResultCodec.class)
     public IdempotencyResultCodec idempotencyResultCodec(ObjectProvider<ObjectMapper> provider) {
         return new JacksonIdempotencyResultCodec(provider.getIfAvailable(ObjectMapper::new));
+    }
+
+    @Bean
+    @ConditionalOnClass(ObjectMapper.class)
+    @ConditionalOnMissingBean(IdempotencyRequestHasher.class)
+    public IdempotencyRequestHasher idempotencyRequestHasher(ObjectProvider<ObjectMapper> provider) {
+        return new JacksonSha256IdempotencyRequestHasher(provider.getIfAvailable(ObjectMapper::new));
     }
 
     @Bean
@@ -91,9 +91,7 @@ public class IdempotencyAutoConfiguration {
         return Clock.systemUTC();
     }
 
-    /**
-     * SHORT_TERM 默认 Repository。只在应用已有 StringRedisTemplate 时创建。
-     */
+    /** SHORT_TERM 默认 Redis Repository。连接信息仍复用 spring.data.redis.*。 */
     @Bean(name = "redisIdempotencyRepository")
     @ConditionalOnBean(StringRedisTemplate.class)
     @ConditionalOnProperty(
@@ -108,8 +106,19 @@ public class IdempotencyAutoConfiguration {
     }
 
     /**
-     * DURABLE 默认 Repository。只在应用已有 DataSource 时创建。
+     * V1.1 默认 JDBC Connection 管理方式。
+     *
+     * <p>未来 transaction-component 接入时，可以提供自己的 JdbcExecutionManager Bean 覆盖此实现，
+     * 让 markSuccess() 复用当前业务事务绑定的 Connection。</p>
      */
+    @Bean
+    @ConditionalOnBean(DataSource.class)
+    @ConditionalOnMissingBean(JdbcExecutionManager.class)
+    public JdbcExecutionManager idempotencyJdbcExecutionManager(DataSource dataSource) {
+        return new DataSourceJdbcExecutionManager(dataSource);
+    }
+
+    /** DURABLE 默认 JDBC Repository。业务只注入 IdempotencyExecutor，不直接依赖该 Bean。 */
     @Bean(name = "jdbcIdempotencyRepository")
     @ConditionalOnBean(DataSource.class)
     @ConditionalOnProperty(
@@ -118,9 +127,9 @@ public class IdempotencyAutoConfiguration {
             havingValue = "true",
             matchIfMissing = true)
     public IdempotencyRepository jdbcIdempotencyRepository(
-            DataSource dataSource,
+            JdbcExecutionManager jdbc,
             IdempotencyProperties properties) {
-        return new JdbcIdempotencyRepository(dataSource, properties.getJdbc().getTableName());
+        return new JdbcIdempotencyRepository(jdbc, properties.getJdbc().getTableName());
     }
 
     @Bean
@@ -134,6 +143,11 @@ public class IdempotencyAutoConfiguration {
                 properties.getDefaultDurableRepository());
     }
 
+    /**
+     * 把 ConfigurationProperties 转换成 Core 使用的不可变 Options。
+     *
+     * <p>SHORT_TERM 与 DURABLE 拥有不同默认恢复/窗口语义，因此这里分别构建两份快照。</p>
+     */
     @Bean
     @ConditionalOnMissingBean
     public IdempotencyDefaults idempotencyDefaults(IdempotencyProperties properties) {
@@ -148,9 +162,11 @@ public class IdempotencyAutoConfiguration {
         IdempotencyOptions shortTerm = IdempotencyOptions.builder()
                 .mode(IdempotencyMode.SHORT_TERM)
                 .processingTimeout(properties.getProcessingTimeout())
-                .recordTtl(properties.getShortTermRecordTtl())
-                .retryOnProcessingTimeout(properties.isRetryOnProcessingTimeout())
-                .retryFailed(properties.isRetryFailed())
+                .idempotencyWindow(properties.getShortTerm().getIdempotencyWindow())
+                .windowPolicy(properties.getShortTerm().getWindowPolicy())
+                .recordRetentionTtl(properties.getShortTerm().getRecordRetentionTtl())
+                .recoveryMode(properties.getShortTerm().getRecoveryMode())
+                .recoverFailed(false)
                 .storeResult(properties.isStoreResult())
                 .lockOptions(lock)
                 .build();
@@ -158,8 +174,8 @@ public class IdempotencyAutoConfiguration {
         IdempotencyOptions durable = IdempotencyOptions.builder()
                 .mode(IdempotencyMode.DURABLE)
                 .processingTimeout(properties.getProcessingTimeout())
-                .retryOnProcessingTimeout(properties.isRetryOnProcessingTimeout())
-                .retryFailed(properties.isRetryFailed())
+                .recoveryMode(properties.getDurable().getRecoveryMode())
+                .recoverFailed(properties.getDurable().isRecoverFailed())
                 .storeResult(properties.isStoreResult())
                 .lockOptions(lock)
                 .build();
@@ -167,6 +183,11 @@ public class IdempotencyAutoConfiguration {
         return new IdempotencyDefaults(properties.getDefaultMode(), shortTerm, durable);
     }
 
+    /**
+     * 组装业务真正注入使用的统一门面。
+     *
+     * <p>DistributedLockClient 是 ObjectProvider：未接入分布式锁组件时幂等状态机仍可独立工作。</p>
+     */
     @Bean
     @ConditionalOnMissingBean(IdempotencyExecutor.class)
     public IdempotencyExecutor idempotencyExecutor(
@@ -179,7 +200,6 @@ public class IdempotencyAutoConfiguration {
             ObjectProvider<IdempotencyEventPublisher> eventPublisher,
             ObjectProvider<IdempotencyMetrics> metrics,
             Clock clock) {
-
         return new DefaultIdempotencyExecutor(
                 registry,
                 defaults,
@@ -190,5 +210,12 @@ public class IdempotencyAutoConfiguration {
                 eventPublisher.getIfAvailable(IdempotencyEventPublisher::noop),
                 metrics.getIfAvailable(IdempotencyMetrics::noop),
                 clock);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(IdempotencyRecoveryQueryService.class)
+    public IdempotencyRecoveryQueryService idempotencyRecoveryQueryService(
+            IdempotencyRepositoryRegistry registry) {
+        return new DefaultIdempotencyRecoveryQueryService(registry);
     }
 }

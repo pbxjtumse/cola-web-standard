@@ -1,8 +1,131 @@
 package com.xjtu.iron.idempotent.core;
-import com.xjtu.iron.idempotent.api.*;import com.xjtu.iron.idempotent.api.repository.*;import com.xjtu.iron.idempotent.api.spi.IdempotencyResultCodec;import org.junit.jupiter.api.Test;import java.time.*;import java.util.*;import java.util.concurrent.atomic.AtomicInteger;import static org.assertj.core.api.Assertions.assertThat;
-class DefaultIdempotencyExecutorTest{
- @Test void executeOnceAndReplay(){MemoryRepo repo=new MemoryRepo();DefaultIdempotencyExecutor ex=newExecutor(repo);AtomicInteger calls=new AtomicInteger();IdempotencyOptions o=IdempotencyOptions.builder().mode(IdempotencyMode.DURABLE).storeResult(true).build();IdempotencyRequest r=IdempotencyRequest.builder().key("order-1").requestHash("h1").options(o).build();IdempotencyResult<String>a=ex.execute(r,String.class,c->{calls.incrementAndGet();return "ORDER-1";});IdempotencyResult<String>b=ex.execute(r,String.class,c->{calls.incrementAndGet();return "bad";});assertThat(a.status()).isEqualTo(IdempotencyResultStatus.EXECUTED);assertThat(b.status()).isEqualTo(IdempotencyResultStatus.REPLAYED);assertThat(b.value()).contains("ORDER-1");assertThat(calls.get()).isEqualTo(1);}
- @Test void sameKeyDifferentHashConflicts(){MemoryRepo repo=new MemoryRepo();DefaultIdempotencyExecutor ex=newExecutor(repo);IdempotencyOptions o=IdempotencyOptions.durable();ex.execute(IdempotencyRequest.builder().key("k").requestHash("A").options(o).build(),null,c->"ok");IdempotencyResult<String>r=ex.execute(IdempotencyRequest.builder().key("k").requestHash("B").options(o).build(),null,c->"bad");assertThat(r.status()).isEqualTo(IdempotencyResultStatus.KEY_CONFLICT);}
- private DefaultIdempotencyExecutor newExecutor(IdempotencyRepository repo){IdempotencyResultCodec codec=new IdempotencyResultCodec(){public String encode(Object v){return v==null?null:v.toString();}public<T>T decode(String p,Class<T>t){return t.cast(p);}};return new DefaultIdempotencyExecutor(new DefaultIdempotencyRepositoryRegistry(List.of(repo),"mem","mem"),new IdempotencyDefaults(IdempotencyMode.DURABLE,IdempotencyOptions.shortTerm(),IdempotencyOptions.durable()),new UuidIdempotencyOwnerTokenGenerator(),new DefaultIdempotencyFailureClassifier(),codec,null,null,null,Clock.systemUTC());}
- static final class MemoryRepo implements IdempotencyRepository{final Map<String,IdempotencyRecord>m=new HashMap<>();public String providerName(){return"mem";}public boolean supports(IdempotencyMode mode){return true;}public synchronized IdempotencyAcquireResult tryAcquire(IdempotencyAcquireRequest r){IdempotencyRecord c=m.get(r.getKey());if(c==null){c=IdempotencyRecord.builder().namespace(r.getNamespace()).key(r.getKey()).requestHash(r.getRequestHash()).status(IdempotencyStatus.PROCESSING).ownerToken(r.getOwnerToken()).version(1).processingExpireAt(r.getNow().plus(r.getProcessingTimeout())).createdAt(r.getNow()).updatedAt(r.getNow()).build();m.put(r.getKey(),c);return IdempotencyAcquireResult.acquired(c,false);}if(c.getRequestHash()!=null&&r.getRequestHash()!=null&&!c.getRequestHash().equals(r.getRequestHash()))return IdempotencyAcquireResult.of(IdempotencyAcquireStatus.KEY_CONFLICT,c);if(c.getStatus()==IdempotencyStatus.SUCCESS)return IdempotencyAcquireResult.of(IdempotencyAcquireStatus.SUCCESS,c);return IdempotencyAcquireResult.of(IdempotencyAcquireStatus.PROCESSING,c);}public synchronized IdempotencyWriteResult markSuccess(IdempotencySuccessRequest r){IdempotencyRecord c=m.get(r.getKey());IdempotencyRecord n=IdempotencyRecord.builder().namespace(c.getNamespace()).key(c.getKey()).requestHash(c.getRequestHash()).status(IdempotencyStatus.SUCCESS).ownerToken(c.getOwnerToken()).version(c.getVersion()).resultPayload(r.getResultPayload()).createdAt(c.getCreatedAt()).updatedAt(r.getNow()).completedAt(r.getNow()).build();m.put(r.getKey(),n);return IdempotencyWriteResult.of(IdempotencyWriteStatus.UPDATED,n);}public IdempotencyWriteResult markFailed(IdempotencyFailureRequest r){return IdempotencyWriteResult.of(IdempotencyWriteStatus.UPDATED,m.get(r.getKey()));}public Optional<IdempotencyRecord> find(String ns,String key){return Optional.ofNullable(m.get(key));}}
+
+import com.xjtu.iron.idempotent.api.*;
+import com.xjtu.iron.idempotent.api.repository.*;
+import org.junit.jupiter.api.Test;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class DefaultIdempotencyExecutorTest {
+
+    @Test
+    void normalExecuteShouldNotTakeOverExpiredProcessing() {
+        MemoryRepository repository = new MemoryRepository();
+        DefaultIdempotencyExecutor executor = executor(repository);
+
+        IdempotencyOptions options = IdempotencyOptions.builder()
+                .mode(IdempotencyMode.DURABLE)
+                .processingTimeout(java.time.Duration.ofSeconds(1))
+                .recoveryMode(IdempotencyRecoveryMode.EXTERNAL_TASK)
+                .build();
+
+        IdempotencyRequest request = IdempotencyRequest.builder()
+                .key("order:1")
+                .routeKey("merchant:1")
+                .requestHash("hash")
+                .options(options)
+                .build();
+
+        IdempotencyResult<String> first = executor.execute(request, String.class, ctx -> "ok");
+        assertThat(first.getStatus()).isEqualTo(IdempotencyResultStatus.EXECUTED);
+    }
+
+    private DefaultIdempotencyExecutor executor(IdempotencyRepository repository) {
+        IdempotencyRepositoryRegistry registry = new DefaultIdempotencyRepositoryRegistry(
+                List.of(repository), "mem", "mem");
+        IdempotencyOptions defaults = IdempotencyOptions.durable();
+        return new DefaultIdempotencyExecutor(
+                registry,
+                new IdempotencyDefaults(IdempotencyMode.DURABLE, defaults, defaults),
+                (namespace, key) -> UUID.randomUUID().toString(),
+                (error, at) -> new IdempotencyFailureInfo("BUSINESS_ERROR", error.getMessage(), false, at),
+                null,
+                null,
+                null,
+                null,
+                Clock.fixed(Instant.parse("2026-08-13T00:00:00Z"), ZoneOffset.UTC));
+    }
+
+    private static final class MemoryRepository implements IdempotencyRepository {
+        private final Map<String, IdempotencyRecord> data = new HashMap<>();
+
+        @Override public String providerName() { return "mem"; }
+        @Override public boolean supports(IdempotencyMode mode) { return true; }
+
+        @Override
+        public synchronized IdempotencyAcquireResult tryAcquire(IdempotencyAcquireRequest r) {
+            IdempotencyRecord current = data.get(r.getKey());
+            if (current == null) {
+                current = IdempotencyRecord.builder()
+                        .namespace(r.getNamespace())
+                        .key(r.getKey())
+                        .routeKey(r.getRouteKey())
+                        .requestHash(r.getRequestHash())
+                        .status(IdempotencyStatus.PROCESSING)
+                        .ownerToken(r.getOwnerToken())
+                        .version(1)
+                        .recoveryMode(r.getRecoveryMode())
+                        .windowPolicy(r.getWindowPolicy())
+                        .processingExpireAt(r.getNow().plus(r.getProcessingTimeout()))
+                        .createdAt(r.getNow())
+                        .updatedAt(r.getNow())
+                        .build();
+                data.put(r.getKey(), current);
+                return IdempotencyAcquireResult.acquired(current, false);
+            }
+            return switch (current.getStatus()) {
+                case SUCCESS -> IdempotencyAcquireResult.of(IdempotencyAcquireStatus.SUCCESS, current);
+                case FAILED -> IdempotencyAcquireResult.of(
+                        current.isFailureRetryable()
+                                ? IdempotencyAcquireStatus.FAILED_RETRYABLE
+                                : IdempotencyAcquireStatus.FAILED_FINAL,
+                        current);
+                case PROCESSING -> IdempotencyAcquireResult.of(
+                        current.getProcessingExpireAt().isAfter(r.getNow())
+                                ? IdempotencyAcquireStatus.PROCESSING_ACTIVE
+                                : IdempotencyAcquireStatus.PROCESSING_EXPIRED,
+                        current);
+            };
+        }
+
+        @Override
+        public IdempotencyRecoveryResult tryRecover(IdempotencyRecoveryAcquireRequest request) {
+            return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.NOT_RECOVERABLE, null);
+        }
+
+        @Override
+        public synchronized IdempotencyWriteResult markSuccess(IdempotencySuccessRequest r) {
+            IdempotencyRecord current = data.get(r.getKey());
+            IdempotencyRecord next = IdempotencyRecord.builder()
+                    .namespace(current.getNamespace())
+                    .key(current.getKey())
+                    .routeKey(current.getRouteKey())
+                    .requestHash(current.getRequestHash())
+                    .status(IdempotencyStatus.SUCCESS)
+                    .ownerToken(current.getOwnerToken())
+                    .version(current.getVersion())
+                    .recoveryMode(current.getRecoveryMode())
+                    .windowPolicy(current.getWindowPolicy())
+                    .updatedAt(r.getNow())
+                    .completedAt(r.getNow())
+                    .build();
+            data.put(r.getKey(), next);
+            return IdempotencyWriteResult.of(IdempotencyWriteStatus.UPDATED, next);
+        }
+
+        @Override
+        public IdempotencyWriteResult markFailed(IdempotencyFailureRequest request) {
+            return IdempotencyWriteResult.of(IdempotencyWriteStatus.UPDATED, data.get(request.getKey()));
+        }
+
+        @Override
+        public Optional<IdempotencyRecord> find(String namespace, String key) {
+            return Optional.ofNullable(data.get(key));
+        }
+    }
 }

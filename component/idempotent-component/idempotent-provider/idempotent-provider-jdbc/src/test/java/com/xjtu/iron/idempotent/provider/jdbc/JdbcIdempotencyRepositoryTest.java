@@ -1,16 +1,9 @@
 package com.xjtu.iron.idempotent.provider.jdbc;
 
 import com.xjtu.iron.idempotent.api.IdempotencyMode;
-import com.xjtu.iron.idempotent.api.IdempotencyStatus;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyAcquireRequest;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyAcquireResult;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyAcquireStatus;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyFailureInfo;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyFailureRequest;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyRecord;
-import com.xjtu.iron.idempotent.api.repository.IdempotencySuccessRequest;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyWriteResult;
-import com.xjtu.iron.idempotent.api.repository.IdempotencyWriteStatus;
+import com.xjtu.iron.idempotent.api.IdempotencyRecoveryMode;
+import com.xjtu.iron.idempotent.api.IdempotencyWindowPolicy;
+import com.xjtu.iron.idempotent.api.repository.*;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,155 +36,97 @@ class JdbcIdempotencyRepositoryTest {
                 }
             }
         }
-
         repository = new JdbcIdempotencyRepository(dataSource, "iron_idempotency_record");
     }
 
     @Test
-    void concurrentOwnerSeesProcessing() {
+    void normalRequestSeesActiveProcessing() {
         Instant now = Instant.now();
+        assertThat(repository.tryAcquire(acquire("A", now, Duration.ofSeconds(30))).getStatus())
+                .isEqualTo(IdempotencyAcquireStatus.ACQUIRED);
+        assertThat(repository.tryAcquire(acquire("B", now.plusMillis(1), Duration.ofSeconds(30))).getStatus())
+                .isEqualTo(IdempotencyAcquireStatus.PROCESSING_ACTIVE);
+    }
 
-        IdempotencyAcquireResult first = repository.tryAcquire(request(
-                "k", "h", "A", now, Duration.ofSeconds(30), true, true));
-        IdempotencyAcquireResult second = repository.tryAcquire(request(
-                "k", "h", "B", now.plusMillis(1), Duration.ofSeconds(30), true, true));
+    @Test
+    void normalRequestDoesNotTakeOverExpiredProcessing() {
+        Instant now = Instant.now();
+        IdempotencyAcquireResult first = repository.tryAcquire(
+                acquire("A", now, Duration.ofMillis(10)));
 
-        assertThat(first.getStatus()).isEqualTo(IdempotencyAcquireStatus.ACQUIRED);
-        assertThat(second.getStatus()).isEqualTo(IdempotencyAcquireStatus.PROCESSING);
+        IdempotencyAcquireResult second = repository.tryAcquire(
+                acquire("B", now.plusSeconds(1), Duration.ofSeconds(30)));
+
+        assertThat(second.getStatus()).isEqualTo(IdempotencyAcquireStatus.PROCESSING_EXPIRED);
         assertThat(second.getRecord().getOwnerToken()).isEqualTo("A");
+        assertThat(second.getRecord().getVersion()).isEqualTo(first.getRecord().getVersion());
     }
 
     @Test
-    void expiredProcessingCanBeTakenOverAndVersionIncrements() {
+    void recoverCanTakeOverExpiredProcessingAndRejectStaleTask() {
         Instant now = Instant.now();
-        repository.tryAcquire(request(
-                "k", "h", "A", now, Duration.ofMillis(10), true, true));
+        IdempotencyAcquireResult first = repository.tryAcquire(
+                acquire("A", now, Duration.ofMillis(10)));
 
-        IdempotencyAcquireResult result = repository.tryAcquire(request(
-                "k", "h", "B", now.plusSeconds(1), Duration.ofSeconds(30), true, true));
+        IdempotencyRecoveryResult recovered = repository.tryRecover(
+                recover("B", first.getRecord(), now.plusSeconds(1)));
 
-        assertThat(result.getStatus()).isEqualTo(IdempotencyAcquireStatus.ACQUIRED);
-        assertThat(result.isTakeover()).isTrue();
-        assertThat(result.getRecord().getOwnerToken()).isEqualTo("B");
-        assertThat(result.getRecord().getVersion()).isEqualTo(2);
+        assertThat(recovered.getStatus()).isEqualTo(IdempotencyRecoveryStatus.RECOVERY_ACQUIRED);
+        assertThat(recovered.getRecoveryReason()).isEqualTo("PROCESSING_TIMEOUT");
+        assertThat(recovered.getRecord().getOwnerToken()).isEqualTo("B");
+        assertThat(recovered.getRecord().getVersion()).isEqualTo(2);
+
+        IdempotencyRecoveryResult stale = repository.tryRecover(
+                recover("C", first.getRecord(), now.plusSeconds(2)));
+        assertThat(stale.getStatus()).isEqualTo(IdempotencyRecoveryStatus.STALE_CANDIDATE);
     }
 
     @Test
-    void expiredProcessingCanStopAtFailedWhenRetryDisabled() {
+    void retryableFailedIsDecisionOnlyUntilRecoverIsCalled() {
         Instant now = Instant.now();
-        repository.tryAcquire(request(
-                "k", "h", "A", now, Duration.ofMillis(10), false, true));
-
-        IdempotencyAcquireResult result = repository.tryAcquire(request(
-                "k", "h", "B", now.plusSeconds(1), Duration.ofSeconds(30), false, true));
-
-        assertThat(result.getStatus()).isEqualTo(IdempotencyAcquireStatus.FAILED);
-        assertThat(result.getRecord().getStatus()).isEqualTo(IdempotencyStatus.FAILED);
-        assertThat(result.getRecord().getFailureCode()).isEqualTo("PROCESSING_TIMEOUT");
-        assertThat(result.getRecord().isFailureRetryable()).isTrue();
-
-        // 后续请求仍然配置 retryOnProcessingTimeout=false 时，不能被通用 retryFailed 偷偷重新打开。
-        IdempotencyAcquireResult again = repository.tryAcquire(request(
-                "k", "h", "C", now.plusSeconds(2), Duration.ofSeconds(30), false, true));
-        assertThat(again.getStatus()).isEqualTo(IdempotencyAcquireStatus.FAILED);
-        assertThat(again.getRecord().getVersion()).isEqualTo(1);
-    }
-
-    @Test
-    void retryableFailedRecordCanBeReacquired() {
-        Instant now = Instant.now();
-        IdempotencyAcquireResult first = repository.tryAcquire(request(
-                "k", "h", "A", now, Duration.ofSeconds(30), true, true));
-
-        IdempotencyWriteResult failed = repository.markFailed(new IdempotencyFailureRequest(
-                "n",
-                "k",
-                "A",
-                first.getRecord().getVersion(),
-                new IdempotencyFailureInfo("TEMP", "temporary failure", true, now.plusSeconds(1)),
-                null,
-                now.plusSeconds(1)));
-        assertThat(failed.getStatus()).isEqualTo(IdempotencyWriteStatus.UPDATED);
-
-        IdempotencyAcquireResult second = repository.tryAcquire(request(
-                "k", "h", "B", now.plusSeconds(2), Duration.ofSeconds(30), true, true));
-
-        assertThat(second.getStatus()).isEqualTo(IdempotencyAcquireStatus.ACQUIRED);
-        assertThat(second.getRecord().getVersion()).isEqualTo(2);
-        assertThat(second.getRecord().getOwnerToken()).isEqualTo("B");
-    }
-
-    @Test
-    void nonRetryableFailedRecordIsReturnedAsFailed() {
-        Instant now = Instant.now();
-        IdempotencyAcquireResult first = repository.tryAcquire(request(
-                "k", "h", "A", now, Duration.ofSeconds(30), true, true));
+        IdempotencyAcquireResult first = repository.tryAcquire(
+                acquire("A", now, Duration.ofSeconds(30)));
 
         repository.markFailed(new IdempotencyFailureRequest(
-                "n",
-                "k",
-                "A",
-                first.getRecord().getVersion(),
-                new IdempotencyFailureInfo("BIZ", "permanent", false, now.plusSeconds(1)),
-                null,
-                now.plusSeconds(1)));
+                "n", "k", "A", first.getRecord().getVersion(),
+                new IdempotencyFailureInfo("TEMP", "temporary", true, now.plusSeconds(1)),
+                IdempotencyMode.DURABLE, null,
+                IdempotencyWindowPolicy.FIXED_FROM_FIRST_ACQUIRE,
+                Duration.ZERO, now.plusSeconds(1)));
 
-        IdempotencyAcquireResult second = repository.tryAcquire(request(
-                "k", "h", "B", now.plusSeconds(2), Duration.ofSeconds(30), true, true));
+        IdempotencyAcquireResult normal = repository.tryAcquire(
+                acquire("B", now.plusSeconds(2), Duration.ofSeconds(30)));
+        assertThat(normal.getStatus()).isEqualTo(IdempotencyAcquireStatus.FAILED_RETRYABLE);
 
-        assertThat(second.getStatus()).isEqualTo(IdempotencyAcquireStatus.FAILED);
-        assertThat(second.getRecord().getOwnerToken()).isEqualTo("A");
+        IdempotencyRecord candidate = normal.getRecord();
+        IdempotencyRecoveryResult recovered = repository.tryRecover(
+                recover("B", candidate, now.plusSeconds(3)));
+        assertThat(recovered.getStatus()).isEqualTo(IdempotencyRecoveryStatus.RECOVERY_ACQUIRED);
+        assertThat(recovered.getRecord().getVersion()).isEqualTo(2);
     }
 
-    @Test
-    void staleOwnerCannotMarkSuccessAfterTakeover() {
-        Instant now = Instant.now();
-        IdempotencyAcquireResult first = repository.tryAcquire(request(
-                "k", "h", "A", now, Duration.ofMillis(10), true, true));
-        IdempotencyAcquireResult second = repository.tryAcquire(request(
-                "k", "h", "B", now.plusSeconds(1), Duration.ofSeconds(30), true, true));
-
-        IdempotencyWriteResult bSuccess = repository.markSuccess(new IdempotencySuccessRequest(
-                "n", "k", "B", second.getRecord().getVersion(), "B-result", null, now.plusSeconds(2)));
-        IdempotencyWriteResult aLateSuccess = repository.markSuccess(new IdempotencySuccessRequest(
-                "n", "k", "A", first.getRecord().getVersion(), "A-result", null, now.plusSeconds(3)));
-
-        assertThat(bSuccess.getStatus()).isEqualTo(IdempotencyWriteStatus.UPDATED);
-        assertThat(aLateSuccess.getStatus()).isEqualTo(IdempotencyWriteStatus.ALREADY_FINAL);
-        assertThat(repository.find("n", "k").orElseThrow().getResultPayload())
-                .isEqualTo("B-result");
-    }
-
-    @Test
-    void sameKeyWithDifferentRequestHashConflicts() {
-        Instant now = Instant.now();
-        repository.tryAcquire(request(
-                "k", "hash-A", "A", now, Duration.ofSeconds(30), true, true));
-
-        IdempotencyAcquireResult result = repository.tryAcquire(request(
-                "k", "hash-B", "B", now.plusSeconds(1), Duration.ofSeconds(30), true, true));
-
-        assertThat(result.getStatus()).isEqualTo(IdempotencyAcquireStatus.KEY_CONFLICT);
-    }
-
-    private IdempotencyAcquireRequest request(
-            String key,
-            String hash,
-            String owner,
-            Instant now,
-            Duration processingTimeout,
-            boolean retryTimeout,
-            boolean retryFailed) {
+    private IdempotencyAcquireRequest acquire(String owner, Instant now, Duration timeout) {
         return new IdempotencyAcquireRequest(
-                "n",
-                key,
-                hash,
-                owner,
+                "n", "k", "hash", "merchant:1", owner,
                 IdempotencyMode.DURABLE,
-                processingTimeout,
+                timeout,
                 null,
-                retryTimeout,
-                retryFailed,
+                IdempotencyWindowPolicy.FIXED_FROM_FIRST_ACQUIRE,
+                Duration.ZERO,
+                IdempotencyRecoveryMode.EXTERNAL_TASK,
+                now);
+    }
+
+    private IdempotencyRecoveryAcquireRequest recover(
+            String newOwner,
+            IdempotencyRecord candidate,
+            Instant now) {
+        return new IdempotencyRecoveryAcquireRequest(
+                "n", "k", "hash", "merchant:1", newOwner,
+                candidate.getOwnerToken(), candidate.getVersion(),
+                IdempotencyMode.DURABLE,
+                Duration.ofSeconds(30),
+                true,
                 now);
     }
 }

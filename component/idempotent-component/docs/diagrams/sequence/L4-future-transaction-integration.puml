@@ -1,0 +1,46 @@
+@startuml
+title Future - Transaction Template 与 Idempotency DURABLE
+
+autonumber
+skinparam shadowing false
+
+participant "IdempotencyExecutor" as EXEC
+participant "TransactionTemplate" as TX
+database "Idempotency DB\n同业务分片" as IDEM
+participant "BusinessService" as BIZ
+database "Business DB\n同一 DataSource" as DB
+
+== Tx-A：短事务抢占 ==
+EXEC -> TX : requiresNew
+TX -> IDEM : INSERT/claim PROCESSING
+IDEM --> TX : ACQUIRED
+TX --> EXEC : COMMIT
+
+== Tx-B：业务 + SUCCESS 同事务 ==
+EXEC -> TX : required(routeKey)
+TX -> DB : BEGIN
+TX -> BIZ : callback
+BIZ -> DB : business writes
+BIZ --> TX : result
+TX -> IDEM : markSuccess(owner,version)\n复用同一 transaction-bound Connection
+IDEM --> TX : UPDATED
+TX -> DB : COMMIT
+TX --> EXEC : success
+
+== 失败路径 ==
+EXEC -> TX : required(routeKey)
+TX -> DB : BEGIN
+TX -> BIZ : callback
+BIZ --> TX : exception
+TX -> DB : ROLLBACK
+TX --> EXEC : exception
+EXEC -> TX : requiresNew
+TX -> IDEM : markFailed(owner,version)
+TX --> EXEC : COMMIT
+
+note bottom
+V1.1 只提供 JdbcExecutionManager 扩展点；
+真正 transaction-aware 实现留给 transaction-component。
+end note
+
+@enduml

@@ -1,5 +1,6 @@
 spring:
   datasource:
+    # Demo 使用 H2 模拟 MySQL。生产环境仍使用应用自己的 spring.datasource.*。
     url: jdbc:h2:mem:idempotency;MODE=MySQL;DB_CLOSE_DELAY=-1
     username: sa
     password:
@@ -9,28 +10,62 @@ spring:
       mode: always
   data:
     redis:
+      # SHORT_TERM Redis Repository 与 Distributed Lock 可以共享同一 Redis 基础设施配置，
+      # 但二者在代码层仍是不同技术组件。
       host: 127.0.0.1
       port: 6379
+
 xjtu:
   iron:
     idempotent:
       enabled: true
+
+      # 没有在单次请求 Options 中指定 mode 时，默认走 DURABLE。
       default-mode: DURABLE
+
+      # SHORT_TERM / DURABLE 分别可以拥有不同 Repository。
       default-short-term-repository: redis
       default-durable-repository: jdbc
+
+      # PROCESSING owner 的执行权租约，不是 Redis Key TTL，也不是幂等窗口。
       processing-timeout: 30s
-      short-term-record-ttl: 10m
-      retry-on-processing-timeout: true
-      retry-failed: true
-      store-result: false
+
+      # 是否保存 SUCCESS 结果用于后续 REPLAYED 返回历史结果。
+      store-result: true
+
+      short-term:
+        # 真正的短期幂等语义窗口。
+        idempotency-window: 10m
+
+        # FIXED：第一次抢占确定窗口终点；SLIDING：有效访问后继续顺延。
+        window-policy: FIXED_FROM_FIRST_ACQUIRE
+
+        # 窗口结束后，物理记录额外保留多久，仅用于排障/观测。
+        record-retention-ttl: 1m
+
+        # 默认短期去重不进入 Reliable Task 恢复体系。
+        recovery-mode: NONE
+
+      durable:
+        # DURABLE 默认允许未来 Reliable Task 扫描候选并显式调用 recover()。
+        recovery-mode: EXTERNAL_TASK
+        recover-failed: true
+
       lock:
+        # 分布式锁只是“状态抢占短临界区”的可选并发优化层。
+        # false 时 Repository 仍必须依靠 UNIQUE / FOR UPDATE / Lua / CAS 保证正确性。
         enabled: false
+        provider-name: redisson
         wait-time: 0s
         lease-time: 5s
+
+        # 锁不可用时是否继续直接执行 Repository 原子状态机。
         fallback-to-state-on-failure: true
+
       redis:
         enabled: true
         key-prefix: iron:idempotency
+
       jdbc:
         enabled: true
         table-name: iron_idempotency_record
