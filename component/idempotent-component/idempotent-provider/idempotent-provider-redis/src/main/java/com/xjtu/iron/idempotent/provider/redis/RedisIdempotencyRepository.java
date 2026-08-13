@@ -48,13 +48,11 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
         this.keyBuilder = new RedisIdempotencyKeyBuilder(keyPrefix);
 
         this.acquireScript = new DefaultRedisScript<>();
-        this.acquireScript.setLocation(new ClassPathResource(
-                "META-INF/iron-idempotency/redis/try-acquire.lua"));
+        this.acquireScript.setLocation(new ClassPathResource("META-INF/iron-idempotency/redis/try-acquire.lua"));
         this.acquireScript.setResultType((Class) List.class);
 
         this.successScript = new DefaultRedisScript<>();
-        this.successScript.setLocation(new ClassPathResource(
-                "META-INF/iron-idempotency/redis/mark-success.lua"));
+        this.successScript.setLocation(new ClassPathResource("META-INF/iron-idempotency/redis/mark-success.lua"));
         this.successScript.setResultType((Class) List.class);
 
         this.failedScript = new DefaultRedisScript<>();
