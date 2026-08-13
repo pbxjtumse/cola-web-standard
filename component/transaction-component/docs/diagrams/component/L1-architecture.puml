@@ -1,0 +1,42 @@
+@startuml
+skinparam componentStyle rectangle
+
+title Transaction Component L1 - Architecture
+
+package "transaction-api" {
+  [TransactionExecutor]
+  [TransactionOptions]
+  [TransactionContext]
+}
+
+package "transaction-core" {
+  [DefaultTransactionExecutor]
+}
+
+package "transaction-spi" {
+  [TransactionProvider]
+}
+
+package "transaction-provider-spring" {
+  [SpringTransactionProvider]
+}
+
+component "PlatformTransactionManager" as PTM
+component "Jdbc/DataSourceTransactionManager" as JDBC_TM
+component "JpaTransactionManager" as JPA_TM
+component "MyBatis / JDBC" as MYBATIS
+component "JPA / Hibernate" as JPA
+
+DefaultTransactionExecutor --> TransactionProvider
+SpringTransactionProvider ..|> TransactionProvider
+SpringTransactionProvider --> PTM
+PTM <|-- JDBC_TM
+PTM <|-- JPA_TM
+JDBC_TM --> MYBATIS
+JPA_TM --> JPA
+
+note right of TransactionProvider
+SPI 不是 ORM Adapter。
+它适配事务基础设施。
+end note
+@enduml

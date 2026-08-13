@@ -1,0 +1,30 @@
+@startuml
+title Transaction Component L1 - REQUIRED + REQUIRES_NEW
+
+autonumber
+actor Caller
+participant TransactionExecutor as Tx
+participant PlatformTransactionManager as PTM
+participant DB
+
+Caller -> Tx: outer REQUIRED
+Tx -> PTM: getTransaction(REQUIRED)
+PTM --> Tx: Tx-A (OWNER)
+Tx -> DB: write A
+
+Tx -> PTM: getTransaction(REQUIRES_NEW)
+PTM -> PTM: suspend Tx-A
+PTM --> Tx: Tx-B (OWNER)
+Tx -> DB: write B
+Tx -> PTM: commit Tx-B
+PTM -> PTM: resume Tx-A
+
+Tx -> Tx: outer business throws
+Tx -> PTM: rollback Tx-A
+
+note right of DB
+最终：
+B 保留
+A 回滚
+end note
+@enduml
