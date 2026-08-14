@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xjtu.iron.transaction.demo.mybatis.mapper.DemoRecordMapper">
+
+    <!--
+        Mapper 接口只定义方法，SQL 全部放在 XML。
+        事务并不在这个 XML 中开启；MyBatis 会复用当前 Spring 事务绑定的 Connection。
+    -->
+    <insert id="insert" parameterType="DemoRecord">
+        INSERT INTO tx_mybatis_demo (id, name)
+        VALUES (#{id}, #{name})
+    </insert>
+
+    <select id="count" resultType="int">
+        SELECT COUNT(*)
+        FROM tx_mybatis_demo
+    </select>
+
+    <select id="findName" parameterType="long" resultType="string">
+        SELECT name
+        FROM tx_mybatis_demo
+        WHERE id = #{id}
+    </select>
+
+    <delete id="deleteAll">
+        DELETE FROM tx_mybatis_demo
+    </delete>
+
+</mapper>

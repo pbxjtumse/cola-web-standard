@@ -1,1 +1,1 @@
-com.xjtu.iron.transaction.starter.TransactionAutoConfiguration
+com.xjtu.iron.transaction.starter.autoconfigure.TransactionAutoConfiguration

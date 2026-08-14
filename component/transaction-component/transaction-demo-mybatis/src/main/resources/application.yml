@@ -1,12 +1,27 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:tx_mybatis;MODE=MySQL;DB_CLOSE_DELAY=-1
-    username: sa
-    password:
+    # 用户真实 MySQL 地址。账号和密码不写死在代码仓库，使用环境变量注入。
+    url: jdbc:mysql://www.xjtu-iron.online:30306/test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+    username: ${TX_DEMO_MYSQL_USERNAME:root}
+    password: ${TX_DEMO_MYSQL_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:
+      # Demo 启动时只执行 CREATE TABLE IF NOT EXISTS，不会 drop 已有表。
       mode: always
+
+mybatis:
+  # 全局 MyBatis XML 配置。
+  config-location: classpath:mybatis-config.xml
+  # Mapper 接口对应的 SQL XML。
+  mapper-locations: classpath*:mapper/**/*.xml
 
 iron:
   transaction:
     enabled: true
+
+logging:
+  level:
+    org.springframework.jdbc.datasource.DataSourceTransactionManager: DEBUG
+    org.springframework.transaction: TRACE
+    com.xjtu.iron.transaction.demo.mybatis.mapper: DEBUG

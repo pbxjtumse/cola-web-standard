@@ -1,13 +1,23 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:tx_jpa;MODE=MySQL;DB_CLOSE_DELAY=-1
-    username: sa
-    password:
+    url: jdbc:mysql://www.xjtu-iron.online:30306/test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+    username: ${TX_DEMO_MYSQL_USERNAME:root}
+    password: ${TX_DEMO_MYSQL_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: always
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      # 表结构由 schema.sql 管理，避免 Demo 启动时自动 drop/重建真实 MySQL 表。
+      ddl-auto: none
     open-in-view: false
 
 iron:
   transaction:
     enabled: true
+
+logging:
+  level:
+    org.springframework.orm.jpa.JpaTransactionManager: DEBUG
+    org.springframework.transaction: TRACE

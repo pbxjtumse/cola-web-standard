@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    # 自动测试使用内存库，避免 mvn test 自动修改真实 MySQL。
+    url: jdbc:h2:mem:tx_mybatis;MODE=MySQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always
+
+mybatis:
+  config-location: classpath:mybatis-config.xml
+  mapper-locations: classpath*:mapper/**/*.xml
+
+iron:
+  transaction:
+    enabled: true

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+
+    <settings>
+        <!-- 数据库下划线字段映射 Java 驼峰属性。 -->
+        <setting name="mapUnderscoreToCamelCase" value="true"/>
+        <!-- Demo 关闭 MyBatis 二级缓存，避免学习事务时被缓存结果干扰。 -->
+        <setting name="cacheEnabled" value="false"/>
+    </settings>
+
+    <typeAliases>
+        <!-- Mapper XML 可以直接使用 DemoRecord，而不写完整类名。 -->
+        <package name="com.xjtu.iron.transaction.demo.mybatis.domain"/>
+    </typeAliases>
+
+</configuration>

@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS tx_mybatis_demo (
+CREATE TABLE IF NOT EXISTS tx_jpa_demo (
     id BIGINT PRIMARY KEY,
     name VARCHAR(128) NOT NULL
 );
