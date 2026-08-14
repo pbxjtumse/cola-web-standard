@@ -13,7 +13,6 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SpringTransactionProviderIntegrationTest {
 
@@ -27,7 +26,7 @@ class SpringTransactionProviderIntegrationTest {
         dataSource.setURL("jdbc:h2:mem:tx_provider;MODE=MySQL;DB_CLOSE_DELAY=-1");
         dataSource.setUser("sa");
 
-        // 2. JdbcTemplate 和 DataSourceTransactionManager 必须共享同一个 DataSource 才能参与同一事务。
+        // 2. JdbcTemplate 和 DataSourceTransactionManager 共享同一个 DataSource，才能参加同一 Spring 事务。
         jdbc = new JdbcTemplate(dataSource);
         jdbc.execute("drop table if exists tx_demo");
         jdbc.execute("create table tx_demo(id int primary key, name varchar(64))");
@@ -39,7 +38,7 @@ class SpringTransactionProviderIntegrationTest {
 
     @Test
     void shouldCommitSuccessfulTransaction() {
-        // callback 正常结束，OWNER 事务应被物理提交。
+        // callback 正常结束，当前没有外部事务，因此这次 REQUIRED 最终提交写入。
         executor.executeWithoutResult(ctx -> jdbc.update(
                 "insert into tx_demo(id, name) values (?, ?)", 1, "committed"));
 
@@ -48,7 +47,7 @@ class SpringTransactionProviderIntegrationTest {
 
     @Test
     void shouldRollbackAndKeepOriginalBusinessException() {
-        // 业务异常发生在 INSERT 以后，Provider 应 rollback 并把同一个业务异常继续抛出。
+        // 业务异常发生在 INSERT 之后，Provider 应 rollback，并继续抛出原始业务异常。
         IllegalStateException failure = assertThrows(IllegalStateException.class, () ->
                 executor.executeWithoutResult(ctx -> {
                     jdbc.update("insert into tx_demo(id, name) values (?, ?)", 1, "rollback");
@@ -61,60 +60,67 @@ class SpringTransactionProviderIntegrationTest {
 
     @Test
     void requiresNewShouldSurviveOuterRollback() {
-        // 1. 准备内层 REQUIRES_NEW 配置。
+        // 1. 内层显式使用 REQUIRES_NEW，要求创建一个与当前事务独立的 Tx-B。
         TransactionOptions requiresNew = TransactionOptions.builder()
                 .name("inner-new")
                 .propagation(TransactionPropagation.REQUIRES_NEW)
                 .build();
 
-        // 2. outer 写 1；inner 独立 Tx-B 写 2 并提交；随后 outer Tx-A 故意回滚。
+        // 2. 外层默认 REQUIRED 使用 Tx-A；内层 Tx-B 正常提交后，外层再故意失败回滚 Tx-A。
         assertThrows(IllegalStateException.class, () ->
                 executor.executeWithoutResult(
                         TransactionOptions.builder().name("outer").build(),
                         outer -> {
                             jdbc.update("insert into tx_demo(id, name) values (?, ?)", 1, "outer");
 
-                            executor.executeWithoutResult(requiresNew, inner -> {
-                                assertTrue(inner.isNewTransaction());
-                                jdbc.update("insert into tx_demo(id, name) values (?, ?)", 2, "inner");
-                            });
+                            executor.executeWithoutResult(requiresNew, inner ->
+                                    jdbc.update("insert into tx_demo(id, name) values (?, ?)", 2, "inner"));
 
                             throw new IllegalStateException("rollback outer");
                         }));
 
-        // 3. outer 数据消失，inner 数据保留。
+        // 3. Tx-A 中的数据消失；Tx-B 已独立提交，因此仍然存在。
         assertEquals(1, count());
         assertEquals("inner", jdbc.queryForObject(
                 "select name from tx_demo where id = 2", String.class));
     }
 
     @Test
-    void requiredInnerShouldParticipateInOuterTransaction() {
-        // outer 创建新事务；inner REQUIRED 应识别为 PARTICIPANT，而不是再次创建物理事务。
-        executor.executeWithoutResult(
-                TransactionOptions.builder().name("outer").build(),
-                outer -> {
-                    assertTrue(outer.isNewTransaction());
-                    executor.executeWithoutResult(
-                            TransactionOptions.builder().name("inner-required").build(),
-                            inner -> assertTrue(inner.isParticipating()));
-                });
+    void requiredInnerShouldRollbackTogetherWithOuter() {
+        // 1. 外层 REQUIRED 在当前无事务时建立 Tx-A。
+        assertThrows(IllegalStateException.class, () ->
+                executor.executeWithoutResult(
+                        TransactionOptions.builder().name("outer").build(),
+                        outer -> {
+                            jdbc.update("insert into tx_demo(id, name) values (?, ?)", 1, "outer-required");
+
+                            // 2. 内层仍然使用 REQUIRED，因此继续使用当前 Tx-A，而不是创建 Tx-B。
+                            executor.executeWithoutResult(
+                                    TransactionOptions.builder().name("inner-required").build(),
+                                    inner -> jdbc.update(
+                                            "insert into tx_demo(id, name) values (?, ?)", 2, "inner-required"));
+
+                            // 3. 外层失败后 Tx-A 整体回滚，两条 INSERT 都应该消失。
+                            throw new IllegalStateException("rollback same transaction");
+                        }));
+
+        assertEquals(0, count());
     }
 
     @Test
-    void rollbackOnlyShouldRollbackOwnerTransaction() {
-        // callback 不抛异常，但主动将事务标记 rollback-only。
+    void rollbackOnlyShouldRollbackCurrentTransaction() {
+        // callback 本身不抛异常，但主动把当前事务标记 rollback-only。
         executor.executeWithoutResult(ctx -> {
             jdbc.update("insert into tx_demo(id, name) values (?, ?)", 1, "rollback-only");
             ctx.setRollbackOnly();
         });
 
-        // 最终应由 Spring 在完成阶段回滚。
+        // Spring 在完成事务时看到 rollback-only，因此最终数据不会提交。
         assertEquals(0, count());
     }
 
     private int count() {
-        // 辅助查询只用于断言数据库最终状态，不参与被测事务。
+        // 辅助查询只用于断言最终数据库状态，不参与被测事务。
         Integer count = jdbc.queryForObject("select count(*) from tx_demo", Integer.class);
         return count == null ? 0 : count;
     }

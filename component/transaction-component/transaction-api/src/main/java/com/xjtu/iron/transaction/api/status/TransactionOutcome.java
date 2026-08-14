@@ -1,19 +1,26 @@
 package com.xjtu.iron.transaction.api.status;
 
 /**
- * 一次事务逻辑执行已知的最终结果。
+ * 事务基础设施能够明确表达的异常结果。
+ *
+ * <p>一期不再为正常 REQUIRED 嵌套调用制造 CREATED/JOINED、OWNER/PARTICIPANT 等公共概念。
+ * 正常执行只返回业务值；只有基础设施异常时，才需要用 outcome 表达“已知回滚”、
+ * “提交结果未知”等可靠性语义。</p>
  */
 public enum TransactionOutcome {
-    /** 当前调用拥有的新事务已确认提交。 */
-    COMMITTED,
-    /** 当前调用拥有的新事务已确认回滚。 */
+
+    /**
+     * 底层明确告诉调用方事务最终发生了回滚，例如 Spring 抛出 UnexpectedRollbackException。
+     */
     ROLLED_BACK,
-    /** 当前调用只参与外层事务，不能声称已经发生物理提交。 */
-    PARTICIPATED,
-    /** 当前参与事务已被标记 rollback-only，最终由外层完成回滚。 */
-    ROLLBACK_ONLY,
-    /** commit 阶段异常，本地调用方无法可靠确认数据库最终状态。 */
+
+    /**
+     * commit 阶段出现基础设施异常，调用方无法可靠判断数据库最终是否已经提交。
+     */
     COMMIT_UNKNOWN,
-    /** 事务基础设施失败，且没有更精确的结果。 */
+
+    /**
+     * 事务基础设施失败，但无法得到更精确的最终状态。
+     */
     FAILED
 }

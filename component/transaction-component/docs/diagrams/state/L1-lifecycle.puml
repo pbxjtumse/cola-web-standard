@@ -1,23 +1,16 @@
 @startuml
-title Transaction Component L1 - Lifecycle
-
 [*] --> VALIDATE
 VALIDATE --> BEGIN
-BEGIN --> EXECUTE : begin/join success
-BEGIN --> FAILED : begin failure
-EXECUTE --> COMMIT : callback success
-EXECUTE --> ROLLBACK : callback failure
-COMMIT --> COMMITTED : OWNER + commit success
-COMMIT --> PARTICIPATED : PARTICIPANT + logical completion
-COMMIT --> ROLLED_BACK : rollbackOnly / UnexpectedRollback
-COMMIT --> COMMIT_UNKNOWN : commit infrastructure error
-ROLLBACK --> ROLLED_BACK : OWNER
-ROLLBACK --> ROLLBACK_ONLY : PARTICIPANT
-ROLLBACK --> FAILED : rollback infrastructure error
-COMMITTED --> [*]
-PARTICIPATED --> [*]
-ROLLED_BACK --> [*]
-ROLLBACK_ONLY --> [*]
+BEGIN --> EXECUTE
+EXECUTE --> COMMIT : callback normal
+EXECUTE --> ROLLBACK : callback exception
+COMMIT --> COMPLETED : normal completion
+COMMIT --> COMMIT_UNKNOWN : infrastructure failure
+COMMIT --> ROLLED_BACK : UnexpectedRollbackException
+ROLLBACK --> BUSINESS_FAILED : rollback success, rethrow business error
+ROLLBACK --> BUSINESS_FAILED : rollback failure kept as suppressed
+COMPLETED --> [*]
 COMMIT_UNKNOWN --> [*]
-FAILED --> [*]
+ROLLED_BACK --> [*]
+BUSINESS_FAILED --> [*]
 @enduml

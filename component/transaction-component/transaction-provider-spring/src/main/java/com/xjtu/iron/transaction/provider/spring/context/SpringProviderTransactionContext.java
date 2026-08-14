@@ -1,6 +1,5 @@
 package com.xjtu.iron.transaction.provider.spring.context;
 
-import com.xjtu.iron.transaction.api.context.TransactionParticipation;
 import com.xjtu.iron.transaction.spi.provider.ProviderTransactionContext;
 import org.springframework.transaction.TransactionStatus;
 
@@ -12,25 +11,20 @@ import java.util.Objects;
 public final class SpringProviderTransactionContext implements ProviderTransactionContext {
 
     private final TransactionStatus status;
-    private final TransactionParticipation participation;
 
-    public SpringProviderTransactionContext(TransactionStatus status, TransactionParticipation participation) {
+    public SpringProviderTransactionContext(TransactionStatus status) {
         this.status = Objects.requireNonNull(status, "status");
-        this.participation = Objects.requireNonNull(participation, "participation");
     }
 
     @Override
-    public TransactionParticipation participation() { return participation; }
-
-    @Override
     public boolean isRollbackOnly() {
-        // 直接读取 Spring TransactionStatus，保持 rollback-only 状态的实时性。
+        // 始终读取 Spring TransactionStatus 的实时 rollback-only 标志。
         return status.isRollbackOnly();
     }
 
     @Override
     public void setRollbackOnly() {
-        // 由 Spring 决定 OWNER 是本地回滚、PARTICIPANT 是如何影响外层事务。
+        // 业务只表达“最终必须回滚”；具体底层事务传播与完成语义仍由 Spring TransactionManager 决定。
         status.setRollbackOnly();
     }
 }

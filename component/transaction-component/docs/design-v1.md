@@ -1,143 +1,115 @@
-# Transaction Component L1 设计说明
+# Transaction Component L1 最终设计
 
 ## 1. 核心原则
 
-1. `transaction-component` 默认表示本地事务。
-2. 不重新实现数据库事务协议，Provider 只适配成熟事务管理器。
-3. ORM 不是 Transaction Provider 的扩展维度。
-4. REQUIRED 的“内部 execute 返回”不等于外层物理事务已提交。
-5. REQUIRES_NEW 的 suspend/resume 由底层事务管理器负责。
-6. callback 业务异常触发 rollback 后原样抛出。
-7. rollback 自身失败时，原始业务异常保持 primary，rollback 基础设施异常作为 suppressed。
-8. 普通 commit 基础设施异常按 `COMMIT_UNKNOWN` 保守处理。
-9. 事件监听属于观测能力，监听器失败不能影响事务结果。
-10. 一期只支持单一默认 `PlatformTransactionManager`。
-11. MyBatis Demo 使用 XML Mapper，不使用 `@Insert/@Select` SQL 注解。
-12. 自动测试不连接真实 MySQL，真实连接只用于手工运行 Demo。
+1. `transaction-component` = 本地事务组件。
+2. 分布式事务未来独立为 `distributed-transaction-component`。
+3. 业务唯一入口是 `TransactionExecutor`。
+4. Spring 负责真实事务管理；组件不重写 TransactionManager。
+5. REQUIRED 的“新建还是复用”是 Spring 内部事实，不再映射 OWNER/PARTICIPANT。
+6. `TransactionStage` 保留，用于基础设施故障定位。
+7. `COMMIT_UNKNOWN` 保留，用于 Retry/幂等可靠性语义。
+8. 业务异常保持原类型。
+9. rollback 自身失败作为 suppressed exception 保留。
+10. 一期同步执行，不在事务内部切线程。
+11. ORM 不做专属 Provider。
+12. executionId 允许未来由 foundation-id 接管。
 
-## 2. 包结构
-
-### transaction-api
-
-```text
-com.xjtu.iron.transaction.api
-├── context
-│   ├── TransactionContext
-│   └── TransactionParticipation
-├── definition
-│   ├── TransactionOptions
-│   ├── TransactionPropagation
-│   └── TransactionIsolation
-├── event
-│   ├── TransactionEvent
-│   ├── TransactionEventType
-│   └── TransactionEventListener
-├── exception
-│   └── TransactionExecutionException
-├── execution
-│   ├── TransactionExecutor
-│   ├── TransactionCallback
-│   └── TransactionRunnable
-└── status
-    ├── TransactionStage
-    └── TransactionOutcome
-```
-
-### transaction-spi
-
-```text
-spi
-├── provider
-└── exception
-```
-
-### transaction-core
-
-```text
-core
-├── executor
-├── context
-└── validation
-```
-
-### transaction-provider-spring
-
-```text
-provider.spring
-├── transaction
-├── context
-└── mapping
-```
-
-## 3. 为什么不提供 MyBatis/JPA Provider
-
-事务组件适配的是事务基础设施，不是 SQL/ORM API。
+## 2. API
 
 ```text
 TransactionExecutor
-        ↓
-SpringTransactionProvider
-        ↓
-PlatformTransactionManager
-        ↓
- ┌──────┴────────┐
- ↓               ↓
-DataSource TM    Jpa TM
- ↓               ↓
-MyBatis/JDBC     JPA/Hibernate
+TransactionCallback
+TransactionRunnable
+TransactionOptions
+TransactionPropagation
+TransactionIsolation
+TransactionContext
+TransactionStage
+TransactionOutcome
+TransactionExecutionException
+TransactionEvent
+TransactionEventListener
 ```
 
-MyBatis Demo 的 SQL 完全放在：
+## 3. SPI
 
 ```text
-transaction-demo-mybatis/src/main/resources/mapper/DemoRecordMapper.xml
+TransactionProvider
+TransactionProviderCallback
+ProviderTransactionContext
+TransactionExecutionIdGenerator
+ProviderTransactionException
 ```
 
-全局 MyBatis XML 配置在：
+## 4. 为什么 TransactionProvider 仍然使用 callback
+
+Provider 必须表达的是一个完整事务边界：
 
 ```text
-transaction-demo-mybatis/src/main/resources/mybatis-config.xml
+拿到 TransactionOptions
+  ↓
+建立 / 复用事务
+  ↓
+执行 callback
+  ↓
+commit / rollback
 ```
 
-事务 XML 不存在，也不应该存在：事务由 Spring TransactionManager 建立，MyBatis Mapper 只参与当前事务。
+如果把 begin/commit/rollback 拆给 core 控制，core 就会重新承担 REQUIRED、REQUIRES_NEW、挂起/恢复等 Spring 已经解决的问题。
 
-## 4. 数据库配置
+所以保留：
 
-两个 Demo 的主运行配置都指向：
+```java
+<T> T execute(TransactionOptions options,
+              TransactionProviderCallback<T> callback);
+```
+
+## 5. TransactionContext 为什么很小
+
+```java
+String executionId();
+String transactionName();
+boolean isRollbackOnly();
+void setRollbackOnly();
+```
+
+业务不应该根据“我是新事务还是复用已有事务”分叉业务逻辑。
+
+## 6. Event 语义
 
 ```text
-jdbc:mysql://www.xjtu-iron.online:30306/test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+STARTED
+COMPLETED
+BUSINESS_FAILED
+INFRASTRUCTURE_FAILED
 ```
 
-用户名、密码通过环境变量提供：
+`COMPLETED` = 当前逻辑 execute 正常完成。
+
+不等于：一定发生独立数据库 COMMIT。
+
+## 7. TransactionOutcome
+
+一期仅用于异常路径：
 
 ```text
-TX_DEMO_MYSQL_USERNAME
-TX_DEMO_MYSQL_PASSWORD
+ROLLED_BACK
+COMMIT_UNKNOWN
+FAILED
 ```
 
-测试 profile 使用 H2，防止 `mvn test` 自动写入真实数据库。
+不再用 `PARTICIPATED / ROLLBACK_ONLY / COMMITTED` 建模每个嵌套逻辑事务范围。
 
-## 5. 对幂等组件的直接价值
+## 8. L1 结束标准
 
-### Atomic
+- API / SPI / Core 稳定
+- Spring Provider 稳定
+- Starter 可自动装配
+- MyBatis XML Demo 通过
+- JPA Demo 通过
+- REQUIRED / REQUIRES_NEW / rollbackOnly 场景验证
+- 真实 MySQL Demo 配置可运行
+- 单测默认不碰远端 MySQL
 
-```text
-BEGIN
- claim
- business
- success
-COMMIT
-```
-
-### Durable Processing
-
-```text
-Tx-1(REQUIRES_NEW): claim PROCESSING -> COMMIT
-business
-Tx-2(REQUIRES_NEW): mark SUCCESS -> COMMIT
-```
-
-第二种模式暴露 PROCESSING 中间状态，因此需要 timeout / scanner / recovery；这是事务边界带来的必然复杂度，不应由 Transaction Component 隐藏。
-
-详细逐流程说明见 `flow-v1-detailed.md`。
+达到这些条件后，立刻回到幂等组件。

@@ -1,6 +1,5 @@
 package com.xjtu.iron.transaction.provider.spring.transaction;
 
-import com.xjtu.iron.transaction.api.context.TransactionParticipation;
 import com.xjtu.iron.transaction.api.definition.TransactionOptions;
 import com.xjtu.iron.transaction.api.status.TransactionOutcome;
 import com.xjtu.iron.transaction.api.status.TransactionStage;
@@ -9,7 +8,6 @@ import com.xjtu.iron.transaction.provider.spring.mapping.SpringTransactionDefini
 import com.xjtu.iron.transaction.spi.exception.ProviderTransactionException;
 import com.xjtu.iron.transaction.spi.provider.TransactionProvider;
 import com.xjtu.iron.transaction.spi.provider.TransactionProviderCallback;
-import com.xjtu.iron.transaction.spi.provider.TransactionProviderResult;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.UnexpectedRollbackException;
@@ -20,8 +18,8 @@ import java.util.Objects;
 /**
  * 基于 Spring PlatformTransactionManager 的本地事务 Provider。
  *
- * <p>MyBatis/JDBC、JPA/Hibernate 的差异由 Spring 具体 TransactionManager 负责，
- * 本 Provider 只依赖统一的 PlatformTransactionManager。</p>
+ * <p>本 Provider 不关心 MyBatis、JPA 或具体数据库。MyBatis/JDBC 通常使用 DataSource/JdbcTransactionManager，
+ * JPA/Hibernate 使用 JpaTransactionManager；这里统一依赖 PlatformTransactionManager。</p>
  */
 public final class SpringTransactionProvider implements TransactionProvider {
 
@@ -32,15 +30,17 @@ public final class SpringTransactionProvider implements TransactionProvider {
     }
 
     @Override
-    public <T> TransactionProviderResult<T> execute(TransactionOptions options, TransactionProviderCallback<T> callback) {
+    public <T> T execute(
+            TransactionOptions options,
+            TransactionProviderCallback<T> callback) {
 
-        // 1. Provider 层再次守住边界参数，避免直接使用 SPI 时得到难以定位的空指针。
+        // 1. Provider 作为可独立调用的 SPI，再次检查必要参数，避免出现无法定位的空指针。
         Objects.requireNonNull(options, "options");
         Objects.requireNonNull(callback, "callback");
 
         final DefaultTransactionDefinition springDefinition;
         try {
-            // 2. 将稳定的组件配置翻译为 Spring TransactionDefinition。
+            // 2. 将组件自己的 TransactionOptions 映射为 Spring TransactionDefinition。
             springDefinition = SpringTransactionDefinitionMapper.map(options);
         } catch (RuntimeException mappingFailure) {
             throw new ProviderTransactionException(
@@ -52,10 +52,10 @@ public final class SpringTransactionProvider implements TransactionProvider {
 
         final TransactionStatus status;
         try {
-            // 3. 真正向 Spring 请求事务：
-            // REQUIRED 可能创建新事务或加入已有事务；
-            // REQUIRES_NEW 的挂起/恢复由 PlatformTransactionManager 自己负责；
-            // MANDATORY 在没有外层事务时会在这里失败。
+            // 3. 真正交给 Spring 处理事务传播：
+            // REQUIRED：当前有事务就继续使用，没有就创建；
+            // REQUIRES_NEW：挂起当前事务并创建独立新事务；
+            // MANDATORY：必须已有事务，否则这里直接失败。
             status = transactionManager.getTransaction(springDefinition);
         } catch (org.springframework.transaction.TransactionException beginFailure) {
             throw new ProviderTransactionException(
@@ -65,40 +65,36 @@ public final class SpringTransactionProvider implements TransactionProvider {
                     beginFailure);
         }
 
-        // 4. Spring 已经告诉我们本次逻辑事务是否真正新建物理事务，据此确定 OWNER/PARTICIPANT。
-        TransactionParticipation participation = status.isNewTransaction()
-                ? TransactionParticipation.OWNER
-                : TransactionParticipation.PARTICIPANT;
-
-        SpringProviderTransactionContext providerContext =
-                new SpringProviderTransactionContext(status, participation);
-
         final T value;
         try {
-            // 5. 只有事务边界建立完成后才执行真正业务代码，MyBatis/JPA 会参与当前 Spring 事务。
-            value = callback.execute(providerContext);
+            // 4. 事务环境已经准备好后，才真正执行用户业务代码。
+            // MyBatis/JPA 在这一段执行的数据库操作会参与当前 Spring 管理的事务。
+            value = callback.execute(new SpringProviderTransactionContext(status));
         } catch (RuntimeException | Error businessFailure) {
-            // 6. 业务异常先回滚（或把外层事务标记 rollback-only），再保持原业务异常向上抛出。
+            // 5. 用户业务异常时，把当前 TransactionStatus 交回 Spring 进行 rollback。
+            // 如果它是复用已有 REQUIRED 事务，Spring 自己负责相应的 rollback-only 传播语义。
             rollbackAfterBusinessFailure(status, businessFailure, options.name());
+
+            // 6. 保持用户原始业务异常类型，不用 Provider 异常把它覆盖掉。
             throw businessFailure;
         }
 
-        // 7. callback 正常结束也可能主动 setRollbackOnly，因此提交前先记录状态用于确定 outcome。
-        boolean rollbackOnlyBeforeCompletion = status.isRollbackOnly();
-
         try {
-            // 8. OWNER 时 commit 会完成物理提交；PARTICIPANT 时 commit 只完成当前逻辑事务，不能声称外层已提交。
+            // 7. callback 正常完成后统一调用 commit(status)。
+            // 这里“调用 commit”不等于我们自己声称一定发生了新的物理 COMMIT：
+            // Spring 会根据 TransactionStatus 判断是提交新事务、处理 rollback-only，
+            // 还是只完成一个参与已有事务的逻辑范围。
             transactionManager.commit(status);
         } catch (UnexpectedRollbackException unexpectedRollback) {
-            // 9. Spring 明确告诉我们最终发生 rollback，因此是 ROLLED_BACK，而不是 COMMIT_UNKNOWN。
+            // 8. Spring 明确告诉调用方事务最终回滚，因此这个异常结果可以确定为 ROLLED_BACK。
             throw new ProviderTransactionException(
                     "Transaction rolled back unexpectedly during commit: " + options.name(),
                     TransactionStage.COMMIT,
                     TransactionOutcome.ROLLED_BACK,
                     unexpectedRollback);
         } catch (org.springframework.transaction.TransactionException commitFailure) {
-            // 10. 一般 commit 基础设施异常可能存在“数据库已提交但客户端没收到确认”的不确定窗口。
-            // 上层幂等/重试逻辑不能把这个状态直接当成“肯定没提交”。
+            // 9. 一般 commit 基础设施异常可能处在“数据库已提交，但客户端没有收到确认”的窗口。
+            // 对可靠性组件来说，这种情况不能直接当成“肯定未提交”，必须保留 COMMIT_UNKNOWN。
             throw new ProviderTransactionException(
                     "Transaction commit result is unknown: " + options.name(),
                     TransactionStage.COMMIT,
@@ -106,26 +102,8 @@ public final class SpringTransactionProvider implements TransactionProvider {
                     commitFailure);
         }
 
-        // 11. 当前逻辑事务正常完成，根据 participation 和 rollback-only 状态产生稳定结果。
-        TransactionOutcome outcome = determineOutcome(participation, rollbackOnlyBeforeCompletion);
-        return new TransactionProviderResult<>(value, participation, outcome);
-    }
-
-    private TransactionOutcome determineOutcome(
-            TransactionParticipation participation,
-            boolean rollbackOnlyBeforeCompletion) {
-
-        // PARTICIPANT 永远不能返回 COMMITTED，因为真正的物理提交仍由外层事务控制。
-        if (participation == TransactionParticipation.PARTICIPANT) {
-            return rollbackOnlyBeforeCompletion
-                    ? TransactionOutcome.ROLLBACK_ONLY
-                    : TransactionOutcome.PARTICIPATED;
-        }
-
-        // OWNER 才能确认本次新建事务最终提交或因为 rollback-only 被回滚。
-        return rollbackOnlyBeforeCompletion
-                ? TransactionOutcome.ROLLED_BACK
-                : TransactionOutcome.COMMITTED;
+        // 10. 正常完成只返回业务值，不再暴露 CREATED/JOINED、OWNER/PARTICIPANT 等内部传播事实。
+        return value;
     }
 
     private void rollbackAfterBusinessFailure(
@@ -133,10 +111,11 @@ public final class SpringTransactionProvider implements TransactionProvider {
             Throwable businessFailure,
             String transactionName) {
         try {
-            // OWNER 通常执行物理 rollback；PARTICIPANT 则由 Spring 将外层事务标记为 rollback-only。
+            // 把 TransactionStatus 原样交给 Spring。
+            // 新事务会被实际回滚；参与已有事务时，具体标记/传播规则由 TransactionManager 负责。
             transactionManager.rollback(status);
         } catch (org.springframework.transaction.TransactionException rollbackFailure) {
-            // rollback 失败是第二故障，不能覆盖最初导致事务失败的业务异常。
+            // rollback 失败是“第二故障”，不能把最初的业务异常覆盖掉。
             ProviderTransactionException rollbackInfrastructureFailure =
                     new ProviderTransactionException(
                             "Rollback failed after business failure: " + transactionName,
@@ -144,7 +123,7 @@ public final class SpringTransactionProvider implements TransactionProvider {
                             TransactionOutcome.FAILED,
                             rollbackFailure);
 
-            // 用 suppressed 保留 rollback 基础设施故障，最终调用方仍首先看到原始业务异常。
+            // 通过 suppressed exception 同时保留业务根因和 rollback 基础设施故障。
             businessFailure.addSuppressed(rollbackInfrastructureFailure);
         }
     }

@@ -1,7 +1,6 @@
 package com.xjtu.iron.transaction.core.context;
 
 import com.xjtu.iron.transaction.api.context.TransactionContext;
-import com.xjtu.iron.transaction.api.context.TransactionParticipation;
 import com.xjtu.iron.transaction.spi.provider.ProviderTransactionContext;
 
 import java.util.Objects;
@@ -31,20 +30,14 @@ public final class DefaultTransactionContext implements TransactionContext {
     public String transactionName() { return transactionName; }
 
     @Override
-    public TransactionParticipation participation() {
-        // participation 的真实来源是底层事务管理器，core 不自行猜测当前是否创建新事务。
-        return providerContext.participation();
-    }
-
-    @Override
     public boolean isRollbackOnly() {
-        // 实时读取 Provider 状态，确保外层事务已被标记 rollback-only 时调用方能够感知。
+        // 每次都读取 Provider 的实时状态，避免在 Context 创建时缓存一个已经过期的 rollback-only 值。
         return providerContext.isRollbackOnly();
     }
 
     @Override
     public void setRollbackOnly() {
-        // 只通过 SPI 标记 rollback-only，不把 Spring TransactionStatus 泄漏给业务层。
+        // 业务只表达“当前事务最终必须回滚”，具体是本事务回滚还是影响外层事务由 Provider/Spring 决定。
         providerContext.setRollbackOnly();
     }
 }

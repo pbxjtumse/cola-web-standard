@@ -1,54 +1,23 @@
 @startuml
 skinparam componentStyle rectangle
 
-title Transaction Component L1 - Architecture
+[Business Service] --> [TransactionExecutor]
+[TransactionExecutor] --> [DefaultTransactionExecutor]
+[DefaultTransactionExecutor] --> [TransactionProvider]
+[TransactionProvider] --> [SpringTransactionProvider]
+[SpringTransactionProvider] --> [PlatformTransactionManager]
+[PlatformTransactionManager] --> [MyBatis/JDBC]
+[PlatformTransactionManager] --> [JPA/Hibernate]
+[MyBatis/JDBC] --> [Database]
+[JPA/Hibernate] --> [Database]
 
-package "transaction-api" {
-  [TransactionExecutor]
-  [TransactionOptions]
-  [TransactionContext]
-}
-
-package "transaction-core" {
-  [DefaultTransactionExecutor]
-}
-
-package "transaction-spi" {
-  [TransactionProvider]
-}
-
-package "transaction-provider-spring" {
-  [SpringTransactionProvider]
-}
-
-component "PlatformTransactionManager" as PTM
-component "DataSourceTransactionManager" as JDBC_TM
-component "JpaTransactionManager" as JPA_TM
-component "MyBatis Mapper Interface" as MYBATIS_IF
-component "DemoRecordMapper.xml" as MYBATIS_XML
-component "JPA Repository / EntityManager" as JPA
-component "MySQL / PostgreSQL" as DB
-
-TransactionExecutor --> DefaultTransactionExecutor
-DefaultTransactionExecutor --> TransactionProvider
-SpringTransactionProvider ..|> TransactionProvider
-SpringTransactionProvider --> PTM
-PTM <|-- JDBC_TM
-PTM <|-- JPA_TM
-JDBC_TM --> MYBATIS_IF
-MYBATIS_IF --> MYBATIS_XML : SQL mapping
-MYBATIS_XML --> DB
-JPA_TM --> JPA
-JPA --> DB
-
-note right of TransactionProvider
-SPI 适配事务基础设施，
-不是 ORM Adapter。
+note right of [TransactionExecutor]
+  Explicit local transaction API
+  REQUIRED / REQUIRES_NEW / MANDATORY
 end note
 
-note bottom of MYBATIS_XML
-XML 只定义 SQL。
-BEGIN/COMMIT/ROLLBACK
-由 Spring TransactionManager 管理。
+note right of [SpringTransactionProvider]
+  Spring owns propagation,
+  suspend/resume, commit/rollback
 end note
 @enduml

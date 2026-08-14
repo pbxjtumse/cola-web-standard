@@ -1,45 +1,25 @@
 @startuml
-title Transaction Component L1 - Main Flow
-
-autonumber
-actor Caller
+actor Business
 participant TransactionExecutor
-participant TransactionProvider
-participant PlatformTransactionManager as PTM
-participant Business
+participant SpringTransactionProvider
+participant PlatformTransactionManager
+participant Mapper
+participant Database
 
-Caller -> TransactionExecutor: execute(options, callback)
-TransactionExecutor -> TransactionExecutor: validate + executionId
-TransactionExecutor -> TransactionProvider: execute(options, providerCallback)
-TransactionProvider -> PTM: getTransaction(definition)
-PTM --> TransactionProvider: TransactionStatus
-TransactionProvider -> TransactionProvider: OWNER or PARTICIPANT
-TransactionProvider -> Business: callback(TransactionContext)
-
-alt business success
-    Business --> TransactionProvider: value
-    TransactionProvider -> PTM: commit(status)
-    note right
-      PARTICIPANT 时该调用完成逻辑事务，
-      不代表物理外层事务已提交。
-    end note
-    alt commit success
-        PTM --> TransactionProvider: success
-        TransactionProvider --> TransactionExecutor: value + participation + outcome
-        TransactionExecutor --> Caller: value
-    else commit infrastructure failure
-        PTM --> TransactionProvider: exception
-        TransactionProvider --> TransactionExecutor: ProviderTransactionException(COMMIT)
-        TransactionExecutor --> Caller: TransactionExecutionException
-    end
-else business RuntimeException / Error
-    Business --> TransactionProvider: failure
-    TransactionProvider -> PTM: rollback(status)
-    note right
-      OWNER: 通常物理 rollback
-      PARTICIPANT: 通常标记外层 rollback-only
-    end note
-    TransactionProvider --> TransactionExecutor: rethrow original failure
-    TransactionExecutor --> Caller: rethrow original failure
-end
+Business -> TransactionExecutor: execute(options, callback)
+TransactionExecutor -> SpringTransactionProvider: execute(options, providerCallback)
+SpringTransactionProvider -> PlatformTransactionManager: getTransaction(definition)
+PlatformTransactionManager --> SpringTransactionProvider: TransactionStatus
+SpringTransactionProvider -> TransactionExecutor: providerCallback.execute(context)
+TransactionExecutor -> Business: TransactionCallback.execute(ctx)
+Business -> Mapper: insert/update
+Mapper -> Database: SQL
+Database --> Mapper: result
+Mapper --> Business: result
+Business --> TransactionExecutor: business result
+TransactionExecutor --> SpringTransactionProvider: business result
+SpringTransactionProvider -> PlatformTransactionManager: commit(status)
+PlatformTransactionManager --> SpringTransactionProvider: completed
+SpringTransactionProvider --> TransactionExecutor: business result
+TransactionExecutor --> Business: business result
 @enduml

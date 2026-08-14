@@ -1,9 +1,13 @@
 package com.xjtu.iron.transaction.api.context;
 
 /**
- * 一次 {@code TransactionExecutor.execute(...)} 调用中的事务上下文。
+ * 一次 {@code TransactionExecutor.execute(...)} 调用中的稳定事务上下文。
  *
- * <p>{@link #executionId()} 是组件生成的逻辑执行标识，不是 MySQL trx_id 或 PostgreSQL xid。</p>
+ * <p>{@link #executionId()} 是事务组件生成的逻辑执行标识，
+ * 只用于日志、事件和链路关联，不是 MySQL trx_id、PostgreSQL xid 或其他数据库事务编号。</p>
+ *
+ * <p>一期刻意不暴露“是否新建物理事务”等 Spring 内部传播细节。
+ * 业务只需要知道自己处在事务边界中，并可以主动将当前事务标记为 rollback-only。</p>
  */
 public interface TransactionContext {
 
@@ -11,24 +15,13 @@ public interface TransactionContext {
 
     String transactionName();
 
-    TransactionParticipation participation();
-
-    default boolean isNewTransaction() {
-        // OWNER 表示当前 execute 真正创建了一个新的物理事务。
-        return participation() == TransactionParticipation.OWNER;
-    }
-
-    default boolean isParticipating() {
-        // PARTICIPANT 表示当前 execute 只是加入外层事务，返回时不能宣称数据库已经提交。
-        return participation() == TransactionParticipation.PARTICIPANT;
-    }
-
     boolean isRollbackOnly();
 
     /**
-     * 标记当前事务最终必须回滚。
+     * 将当前 Spring 事务状态标记为 rollback-only。
      *
-     * <p>如果当前执行只是 REQUIRED 加入外层事务，这个标记会传播到外层物理事务。</p>
+     * <p>如果 REQUIRED 正在复用外部事务，该标记会影响同一个底层事务；
+     * 具体如何完成回滚继续交给底层 TransactionManager 处理。</p>
      */
     void setRollbackOnly();
 }

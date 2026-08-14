@@ -1,30 +1,28 @@
 @startuml
-title Transaction Component L1 - REQUIRED + REQUIRES_NEW
+actor Business
+participant TransactionExecutor
+participant SpringTM as PlatformTransactionManager
+participant DB as Database
 
-autonumber
-actor Caller
-participant TransactionExecutor as Tx
-participant PlatformTransactionManager as PTM
-participant DB
+Business -> TransactionExecutor: REQUIRED
+TransactionExecutor -> SpringTM: getTransaction(REQUIRED)
+SpringTM --> TransactionExecutor: Tx-A
+TransactionExecutor -> DB: INSERT outer (Tx-A)
 
-Caller -> Tx: outer REQUIRED
-Tx -> PTM: getTransaction(REQUIRED)
-PTM --> Tx: Tx-A (OWNER)
-Tx -> DB: write A
-
-Tx -> PTM: getTransaction(REQUIRES_NEW)
-PTM -> PTM: suspend Tx-A
-PTM --> Tx: Tx-B (OWNER)
-Tx -> DB: write B
-Tx -> PTM: commit Tx-B
-PTM -> PTM: resume Tx-A
-
-Tx -> Tx: outer business throws
-Tx -> PTM: rollback Tx-A
-
-note right of DB
-最终：
-B 保留
-A 回滚
+Business -> TransactionExecutor: REQUIRES_NEW
+TransactionExecutor -> SpringTM: getTransaction(REQUIRES_NEW)
+note right of SpringTM
+  suspend Tx-A
+  create Tx-B
 end note
+SpringTM --> TransactionExecutor: Tx-B
+TransactionExecutor -> DB: INSERT inner (Tx-B)
+TransactionExecutor -> SpringTM: commit(Tx-B)
+note right of SpringTM
+  commit Tx-B
+  resume Tx-A
+end note
+
+Business --> TransactionExecutor: throw exception in outer
+TransactionExecutor -> SpringTM: rollback(Tx-A)
 @enduml
