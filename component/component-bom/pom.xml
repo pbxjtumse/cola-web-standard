@@ -50,6 +50,12 @@
                 <artifactId>idempotent-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <!-- transaction-component -->
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>transaction-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <!-- message-component -->
             <dependency>
                 <groupId>com.xjtu.iron</groupId>

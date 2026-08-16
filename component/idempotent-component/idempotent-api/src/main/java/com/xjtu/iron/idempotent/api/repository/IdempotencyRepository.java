@@ -31,6 +31,19 @@ public interface IdempotencyRepository {
     boolean supports(IdempotencyMode mode);
 
     /**
+     * 当前 Repository 是否能够把 {@link #markSuccess(IdempotencySuccessRequest)} 与业务写入
+     * 放进同一个本地事务。
+     *
+     * <p>默认返回 false。JDBC Provider 只有在拿到 transaction-aware JdbcExecutionManager 时
+     * 才会返回 true；Redis 等独立存储不能因为外层存在数据库事务就声称具备该能力。</p>
+     *
+     * <p>该能力只描述“SUCCESS 能否参与业务事务”，不改变 tryAcquire/tryRecover 的独立短事务语义。</p>
+     */
+    default boolean supportsBusinessTransactionParticipation() {
+        return false;
+    }
+
+    /**
      * 普通 execute() 的原子状态判定/抢占入口。
      *
      * <p>必须满足：</p>

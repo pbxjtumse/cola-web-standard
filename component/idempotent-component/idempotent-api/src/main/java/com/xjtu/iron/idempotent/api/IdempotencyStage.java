@@ -23,6 +23,9 @@ public enum IdempotencyStage {
     /** 真正业务 callback 执行阶段。 */
     EXECUTE,
 
+    /** Tx-B 业务事务建立、完成或提交结果判定阶段。 */
+    TRANSACTION,
+
     /** markSuccess / markFailed 等最终状态写入阶段。 */
     COMPLETE_STATE,
 

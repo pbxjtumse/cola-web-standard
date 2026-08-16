@@ -30,9 +30,7 @@ public final class SpringTransactionProvider implements TransactionProvider {
     }
 
     @Override
-    public <T> T execute(
-            TransactionOptions options,
-            TransactionProviderCallback<T> callback) {
+    public <T> T execute(TransactionOptions options, TransactionProviderCallback<T> callback) {
 
         // 1. Provider 作为可独立调用的 SPI，再次检查必要参数，避免出现无法定位的空指针。
         Objects.requireNonNull(options, "options");

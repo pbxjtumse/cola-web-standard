@@ -7,9 +7,9 @@ import java.util.Objects;
 /**
  * 不依赖 Spring Transaction 的默认 JDBC 执行管理器。
  *
- * <p>这只是 V1.1 默认实现：每次从 DataSource 直接获取 Connection。
- * 因此它<strong>不会</strong>自动参与未来外层 transaction-component 的事务。
- * 事务组件接入时应替换为 transaction-aware JdbcExecutionManager。</p>
+ * <p>这是无 transaction-component 时的兼容实现：每次从 DataSource 直接获取 Connection。
+ * 因此它<strong>不会</strong>声称能够把 markSuccess 与业务 SQL 放进同一个物理事务。
+ * 接入 transaction-component 后，Starter 会优先替换为 transaction-aware 实现。</p>
  */
 public final class DataSourceJdbcExecutionManager implements JdbcExecutionManager {
 

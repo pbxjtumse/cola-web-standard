@@ -10,10 +10,14 @@ import com.xjtu.iron.idempotent.api.spi.IdempotencyResultCodec;
 import com.xjtu.iron.idempotent.core.*;
 import com.xjtu.iron.idempotent.core.observation.IdempotencyEventPublisher;
 import com.xjtu.iron.idempotent.core.observation.IdempotencyMetrics;
+import com.xjtu.iron.idempotent.core.transaction.IdempotencyTransactionCoordinator;
+import com.xjtu.iron.idempotent.integration.transaction.SpringTransactionJdbcExecutionManager;
+import com.xjtu.iron.idempotent.integration.transaction.TransactionTemplateIdempotencyTransactionCoordinator;
 import com.xjtu.iron.idempotent.provider.jdbc.DataSourceJdbcExecutionManager;
 import com.xjtu.iron.idempotent.provider.jdbc.JdbcExecutionManager;
 import com.xjtu.iron.idempotent.provider.jdbc.JdbcIdempotencyRepository;
 import com.xjtu.iron.idempotent.provider.redis.RedisIdempotencyRepository;
+import com.xjtu.iron.transaction.api.execution.TransactionExecutor;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -36,7 +40,7 @@ import java.util.List;
  * <p>覆盖规则遵循 Spring Boot Starter 常规约定：用户显式提供的 Bean 优先，
  * 组件默认实现通过 {@code @ConditionalOnMissingBean} 补齐。</p>
  */
-@AutoConfiguration
+@AutoConfiguration(afterName = "com.xjtu.iron.transaction.starter.autoconfigure.TransactionAutoConfiguration")
 @EnableConfigurationProperties(IdempotencyProperties.class)
 @ConditionalOnProperty(
         prefix = "xjtu.iron.idempotent",
@@ -106,16 +110,52 @@ public class IdempotencyAutoConfiguration {
     }
 
     /**
-     * V1.1 默认 JDBC Connection 管理方式。
+     * JDBC Connection / 事务参与桥梁。
      *
-     * <p>未来 transaction-component 接入时，可以提供自己的 JdbcExecutionManager Bean 覆盖此实现，
-     * 让 markSuccess() 复用当前业务事务绑定的 Connection。</p>
+     * <p>当 transaction-component 的 TransactionExecutor 已存在，并且 transaction.enabled=true 时，
+     * 自动切换为 SpringTransactionJdbcExecutionManager：</p>
+     * <ul>
+     *     <li>tryAcquire / tryRecover / markFailed -> REQUIRES_NEW；</li>
+     *     <li>markSuccess -> 复用 Tx-B 当前 transaction-bound Connection。</li>
+     * </ul>
+     *
+     * <p>没有 transaction-component 时继续使用 DataSourceJdbcExecutionManager，保持 V1.1 兼容行为。</p>
      */
     @Bean
     @ConditionalOnBean(DataSource.class)
     @ConditionalOnMissingBean(JdbcExecutionManager.class)
-    public JdbcExecutionManager idempotencyJdbcExecutionManager(DataSource dataSource) {
+    public JdbcExecutionManager idempotencyJdbcExecutionManager(
+            DataSource dataSource,
+            ObjectProvider<TransactionExecutor> transactionExecutor,
+            IdempotencyProperties properties) {
+        TransactionExecutor executor = transactionExecutor.getIfAvailable();
+        if (properties.getTransaction().isEnabled() && executor != null) {
+            return new SpringTransactionJdbcExecutionManager(dataSource, executor);
+        }
+        if (properties.getTransaction().isEnabled()
+                && properties.getTransaction().isRequireTemplate()
+                && executor == null) {
+            throw new IllegalStateException(
+                    "xjtu.iron.idempotent.transaction.require-template=true, "
+                            + "but no transaction-component TransactionExecutor bean is available");
+        }
         return new DataSourceJdbcExecutionManager(dataSource);
+    }
+
+    /**
+     * Tx-B 事务协调器。只有 transaction-component 真正提供 TransactionExecutor Bean 时才创建。
+     */
+    @Bean
+    @ConditionalOnBean(TransactionExecutor.class)
+    @ConditionalOnProperty(
+            prefix = "xjtu.iron.idempotent.transaction",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    @ConditionalOnMissingBean(IdempotencyTransactionCoordinator.class)
+    public IdempotencyTransactionCoordinator idempotencyTransactionCoordinator(
+            TransactionExecutor transactionExecutor) {
+        return new TransactionTemplateIdempotencyTransactionCoordinator(transactionExecutor);
     }
 
     /** DURABLE 默认 JDBC Repository。业务只注入 IdempotencyExecutor，不直接依赖该 Bean。 */
@@ -197,6 +237,7 @@ public class IdempotencyAutoConfiguration {
             IdempotencyFailureClassifier failureClassifier,
             ObjectProvider<IdempotencyResultCodec> codec,
             ObjectProvider<DistributedLockClient> lockClient,
+            ObjectProvider<IdempotencyTransactionCoordinator> transactionCoordinator,
             ObjectProvider<IdempotencyEventPublisher> eventPublisher,
             ObjectProvider<IdempotencyMetrics> metrics,
             Clock clock) {
@@ -207,6 +248,7 @@ public class IdempotencyAutoConfiguration {
                 failureClassifier,
                 codec.getIfAvailable(),
                 lockClient.getIfAvailable(),
+                transactionCoordinator.getIfAvailable(),
                 eventPublisher.getIfAvailable(IdempotencyEventPublisher::noop),
                 metrics.getIfAvailable(IdempotencyMetrics::noop),
                 clock);

@@ -1,46 +1,76 @@
 @startuml
-title Future - Transaction Template 与 Idempotency DURABLE
+title V1.2 - Transaction Template 与 DURABLE JDBC 幂等闭环
 
 autonumber
 skinparam shadowing false
 
 participant "IdempotencyExecutor" as EXEC
-participant "TransactionTemplate" as TX
-database "Idempotency DB\n同业务分片" as IDEM
+participant "DistributedLock\n(optional short lock)" as LOCK
+participant "TransactionCoordinator" as TXC
+participant "TransactionExecutor" as TX
+database "Idempotency DB\nJDBC Repository" as IDEM
 participant "BusinessService" as BIZ
-database "Business DB\n同一 DataSource" as DB
+database "Business DB\nsame local transaction resource" as DB
 
 == Tx-A：短事务抢占 ==
-EXEC -> TX : requiresNew
-TX -> IDEM : INSERT/claim PROCESSING
-IDEM --> TX : ACQUIRED
-TX --> EXEC : COMMIT
+EXEC -> LOCK : optional short coordination
+LOCK -> TX : REQUIRES_NEW\nidempotency-state
+TX -> IDEM : tryAcquire / tryRecover\nPROCESSING
+IDEM --> TX : ACQUIRED(owner,version)
+TX --> LOCK : COMMIT
+LOCK --> EXEC : release short lock
 
 == Tx-B：业务 + SUCCESS 同事务 ==
-EXEC -> TX : required(routeKey)
-TX -> DB : BEGIN
-TX -> BIZ : callback
+EXEC -> TXC : executeRequired(routeKey)
+TXC -> TX : REQUIRED\nidempotency-business:{namespace}
+TX -> DB : BEGIN / JOIN
+TX -> BIZ : callback(IdempotencyContext)
 BIZ -> DB : business writes
 BIZ --> TX : result
-TX -> IDEM : markSuccess(owner,version)\n复用同一 transaction-bound Connection
-IDEM --> TX : UPDATED
-TX -> DB : COMMIT
-TX --> EXEC : success
+TX -> IDEM : markSuccess(owner,version)\ntransaction-bound Connection
 
-== 失败路径 ==
-EXEC -> TX : required(routeKey)
-TX -> DB : BEGIN
+alt markSuccess == UPDATED
+    IDEM --> TX : UPDATED
+    TX -> DB : COMMIT / participate outer tx
+    TX --> TXC : result
+    TXC --> EXEC : EXECUTED / RECOVERED
+else STALE_OWNER / ALREADY_FINAL / PROVIDER_ERROR
+    IDEM --> TX : completion rejected
+    TX -> DB : ROLLBACK
+    TX --> TXC : CompletionRejectedException
+    TXC --> EXEC : OWNERSHIP_LOST / REPOSITORY_ERROR
+end
+
+== 业务失败：Tx-B rollback + Tx-C ==
+EXEC -> TXC : executeRequired
+TXC -> TX : REQUIRED
 TX -> BIZ : callback
-BIZ --> TX : exception
+BIZ --> TX : business exception
 TX -> DB : ROLLBACK
-TX --> EXEC : exception
-EXEC -> TX : requiresNew
+TX --> EXEC : original business exception
+EXEC -> TX : REQUIRES_NEW\nidempotency-state
 TX -> IDEM : markFailed(owner,version)
+IDEM --> TX : UPDATED
 TX --> EXEC : COMMIT
+EXEC --> EXEC : EXECUTION_FAILED
 
-note bottom
-V1.1 只提供 JdbcExecutionManager 扩展点；
-真正 transaction-aware 实现留给 transaction-component。
+== Commit unknown ==
+EXEC -> TXC : Tx-B commit
+TXC -> TX : commit
+TX --> TXC : COMMIT_UNKNOWN
+TXC --> EXEC : TRANSACTION_COMMIT_UNKNOWN
+note right of EXEC
+Do NOT mark FAILED immediately.
+Keep PROCESSING until next query
+or timeout recovery.
 end note
 
+note bottom
+V1.2 已实现：
+Tx-A = REQUIRES_NEW
+Tx-B = REQUIRED business + SUCCESS
+Tx-C = REQUIRES_NEW FAILED
+
+前提：业务表与幂等表必须属于同一个本地事务资源。
+end note
 @enduml

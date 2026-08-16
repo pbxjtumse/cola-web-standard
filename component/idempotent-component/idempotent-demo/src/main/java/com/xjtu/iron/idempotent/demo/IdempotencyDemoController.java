@@ -2,9 +2,12 @@ package com.xjtu.iron.idempotent.demo;
 
 import com.xjtu.iron.idempotent.api.*;
 import com.xjtu.iron.idempotent.api.spi.IdempotencyRequestHasher;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.Map;
 
 /** V1.1 普通执行 + 恢复执行示例。 */
@@ -14,12 +17,15 @@ public class IdempotencyDemoController {
 
     private final IdempotencyExecutor executor;
     private final IdempotencyRequestHasher hasher;
+    private final JdbcTemplate jdbcTemplate;
 
     public IdempotencyDemoController(
             IdempotencyExecutor executor,
-            IdempotencyRequestHasher hasher) {
+            IdempotencyRequestHasher hasher,
+            JdbcTemplate jdbcTemplate) {
         this.executor = executor;
         this.hasher = hasher;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @PostMapping("/short-term/{key}")
@@ -55,7 +61,8 @@ public class IdempotencyDemoController {
     public IdempotencyResult<String> durable(
             @PathVariable String key,
             @RequestParam(defaultValue = "payload") String payload,
-            @RequestParam(defaultValue = "merchant-10001") String routeKey) {
+            @RequestParam(defaultValue = "merchant-10001") String routeKey,
+            @RequestParam(defaultValue = "false") boolean failAfterBusinessWrite) {
 
         IdempotencyOptions options = IdempotencyOptions.builder()
                 .mode(IdempotencyMode.DURABLE)
@@ -75,8 +82,33 @@ public class IdempotencyDemoController {
         return executor.execute(
                 request,
                 String.class,
-                context -> "durable executed, fencingVersion=" + context.fencingVersion()
-                        + ", routeKey=" + context.getRouteKey()
-                        + ", payload=" + payload);
+                context -> {
+                    // 这条 INSERT 是 Tx-B 的真实业务写。
+                    // transaction-component 接入以后，它与 markSuccess 必须使用同一事务。
+                    jdbcTemplate.update(
+                            "INSERT INTO demo_business_record(idempotency_key,payload,created_at) VALUES (?,?,?)",
+                            key,
+                            payload,
+                            Timestamp.from(Instant.now()));
+
+                    if (failAfterBusinessWrite) {
+                        // 用于验证：业务 SQL 已执行后抛异常，Tx-B 会回滚 INSERT，
+                        // 随后 Tx-C 独立把幂等记录写成 FAILED。
+                        throw new IllegalStateException("demo business failure after INSERT");
+                    }
+
+                    return "durable executed, fencingVersion=" + context.fencingVersion()
+                            + ", routeKey=" + context.getRouteKey()
+                            + ", payload=" + payload;
+                });
+    }
+
+    @GetMapping("/durable/{key}/business-count")
+    public Map<String, Object> durableBusinessCount(@PathVariable String key) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM demo_business_record WHERE idempotency_key=?",
+                Integer.class,
+                key);
+        return Map.of("key", key, "businessCount", count == null ? 0 : count);
     }
 }

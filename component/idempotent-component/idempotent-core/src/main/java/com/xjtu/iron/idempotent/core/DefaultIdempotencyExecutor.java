@@ -10,6 +10,9 @@ import com.xjtu.iron.idempotent.api.repository.*;
 import com.xjtu.iron.idempotent.api.spi.IdempotencyFailureClassifier;
 import com.xjtu.iron.idempotent.api.spi.IdempotencyResultCodec;
 import com.xjtu.iron.idempotent.core.observation.*;
+import com.xjtu.iron.idempotent.core.transaction.IdempotencyTransactionCoordinator;
+import com.xjtu.iron.idempotent.core.transaction.IdempotencyTransactionException;
+import com.xjtu.iron.idempotent.core.transaction.IdempotencyTransactionOutcome;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -19,7 +22,7 @@ import java.util.Objects;
 /**
  * 默认幂等执行器。
  *
- * <p>V1.1 把“普通执行”和“可靠恢复”拆成两个显式入口：</p>
+ * <p>V1.2 在 V1.1 状态机基础上正式接入 transaction-component：</p>
  * <ul>
  *     <li>execute()：普通 API / 消息消费路径，只判断 PROCESSING 是否已超时，不自动接管；</li>
  *     <li>recover()：由外部 Reliable Task 调用，原子接管超时 PROCESSING 或可恢复 FAILED。</li>
@@ -27,6 +30,13 @@ import java.util.Objects;
  *
  * <p><strong>重要边界：</strong>DistributedLockClient 只包住 Repository 的极短状态抢占，
  * callback 永远在分布式锁外执行。Repository 的 UNIQUE / Lua / CAS 才是幂等正确性的根基。</p>
+ *
+ * <p>当 Repository 能参与业务事务，且存在 IdempotencyTransactionCoordinator 时，执行被拆成：</p>
+ * <pre>
+ * Tx-A REQUIRES_NEW : tryAcquire / tryRecover -> PROCESSING -> COMMIT
+ * Tx-B REQUIRED     : business callback + markSuccess -> 一起 COMMIT / ROLLBACK
+ * Tx-C REQUIRES_NEW : Tx-B 失败以后 markFailed -> 独立 COMMIT
+ * </pre>
  */
 public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
 
@@ -48,6 +58,9 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
     /** 可选并发协调层；它只保护状态抢占短临界区，不保护整个 callback。 */
     private final DistributedLockClient lockClient;
 
+    /** 可选事务集成层；只有 Repository 同时声明可参与业务事务时才会启用 Tx-B。 */
+    private final IdempotencyTransactionCoordinator transactionCoordinator;
+
     /** 旁路事件发布器；默认 no-op。 */
     private final IdempotencyEventPublisher events;
 
@@ -57,6 +70,9 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
     /** 统一时间源，方便测试 processing/window/retention 语义。 */
     private final Clock clock;
 
+    /**
+     * V1.1 兼容构造：未提供事务协调器时保持原先“业务与 SUCCESS 不保证同事务”的行为。
+     */
     public DefaultIdempotencyExecutor(
             IdempotencyRepositoryRegistry registry,
             IdempotencyDefaults defaults,
@@ -67,6 +83,25 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
             IdempotencyEventPublisher events,
             IdempotencyMetrics metrics,
             Clock clock) {
+        this(
+                registry, defaults, ownerGenerator, failureClassifier, codec, lockClient,
+                null, events, metrics, clock);
+    }
+
+    /**
+     * V1.2 完整构造：transactionCoordinator 非空时，支持 Tx-B 业务事务闭环。
+     */
+    public DefaultIdempotencyExecutor(
+            IdempotencyRepositoryRegistry registry,
+            IdempotencyDefaults defaults,
+            IdempotencyOwnerTokenGenerator ownerGenerator,
+            IdempotencyFailureClassifier failureClassifier,
+            IdempotencyResultCodec codec,
+            DistributedLockClient lockClient,
+            IdempotencyTransactionCoordinator transactionCoordinator,
+            IdempotencyEventPublisher events,
+            IdempotencyMetrics metrics,
+            Clock clock) {
         this.registry = Objects.requireNonNull(registry, "registry must not be null");
         this.defaults = Objects.requireNonNull(defaults, "defaults must not be null");
         this.ownerGenerator = Objects.requireNonNull(ownerGenerator, "ownerGenerator must not be null");
@@ -74,6 +109,7 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                 failureClassifier, "failureClassifier must not be null");
         this.codec = codec;
         this.lockClient = lockClient;
+        this.transactionCoordinator = transactionCoordinator;
         this.events = events == null ? IdempotencyEventPublisher.noop() : events;
         this.metrics = metrics == null ? IdempotencyMetrics.noop() : metrics;
         this.clock = clock == null ? Clock.systemUTC() : clock;
@@ -332,9 +368,8 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
      * <p>进入本方法时，外层短分布式锁已经释放。此后是否仍有执行权，
      * 最终由 markSuccess/markFailed 的 ownerToken + version CAS 再次确认。</p>
      *
-     * <p>未来 Transaction Template 接入后，这里最关键的改造点是：
-     * callback 的业务写 + markSuccess 应进入同一个业务事务；
-     * tryAcquire 仍保持独立短事务。</p>
+     * <p>V1.2 如果 Repository 与 transaction-component 都具备事务参与能力，会自动进入 Tx-B：
+     * callback 与 markSuccess 在同一个 REQUIRED 本地事务中完成。否则保持 V1.1 非事务闭环。</p>
      */
     private <T> IdempotencyResult<T> executeOwned(
             String key,
@@ -351,7 +386,7 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                 options, repository, null);
 
         // 把当前 generation 的 owner/version 暴露给业务。
-        // 高风险业务可以使用 context.fencingVersion() 做业务表条件更新。
+        // 高风险业务可以继续使用 context.fencingVersion() 做业务资源条件更新。
         IdempotencyContext context = new IdempotencyContext(
                 options.getNamespace(),
                 key,
@@ -363,26 +398,176 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                 record.getUpdatedAt() == null ? Instant.now(clock) : record.getUpdatedAt(),
                 record.getProcessingExpireAt());
 
+        boolean transactionApplied = transactionCoordinator != null
+                && repository.supportsBusinessTransactionParticipation();
+
+        if (transactionApplied) {
+            return executeOwnedTransactionally(
+                    key, routeKey, options, repository, record, callback, context,
+                    startedAt, lockFallback, recoveryExecution);
+        }
+
+        return executeOwnedWithoutBusinessTransaction(
+                key, options, repository, record, callback, context,
+                startedAt, lockFallback, recoveryExecution);
+    }
+
+    /**
+     * V1.2 Tx-B：业务 callback 与 markSuccess 必须处于同一 REQUIRED 本地事务。
+     *
+     * <p>这里有一个非常关键的规则：markSuccess 只要不是 UPDATED，就必须抛出内部异常让 Tx-B 回滚。
+     * 不能“业务 SQL 已提交，但幂等 SUCCESS 写失败后只返回一个错误结果”，否则会重新出现业务已成功、
+     * 幂等状态仍 PROCESSING 的不一致窗口。</p>
+     */
+    private <T> IdempotencyResult<T> executeOwnedTransactionally(
+            String key,
+            String routeKey,
+            IdempotencyOptions options,
+            IdempotencyRepository repository,
+            IdempotencyRecord record,
+            IdempotencyCallback<T> callback,
+            IdempotencyContext context,
+            Instant startedAt,
+            boolean lockFallback,
+            boolean recoveryExecution) {
+
         try {
-            // 真正业务执行。注意：此时 DistributedLock 已经释放。
+            TransactionalCompletion<T> completion = transactionCoordinator.executeRequired(
+                    transactionName(options),
+                    normalize(routeKey),
+                    () -> {
+                        // DistributedLock 已经释放；这里开始真正 Tx-B。
+                        T value = callback.doWithIdempotency(context);
+                        String resultPayload = encodeResultIfNeeded(value, options);
+                        IdempotencyWriteResult write = repository.markSuccess(
+                                successRequest(key, options, record, resultPayload, Instant.now(clock)));
+
+                        if (write.getStatus() != IdempotencyWriteStatus.UPDATED) {
+                            // 通过异常把 markSuccess 失败转换成整个 Tx-B rollback。
+                            throw new CompletionRejectedException(write);
+                        }
+                        return new TransactionalCompletion<>(value, write.getRecord());
+                    });
+
+            publish(IdempotencyEventType.EXECUTION_SUCCESS, IdempotencyStage.COMPLETE_STATE,
+                    options, repository, null);
+            return finish(
+                    recoveryExecution ? IdempotencyResultStatus.RECOVERED
+                            : IdempotencyResultStatus.EXECUTED,
+                    IdempotencyStage.COMPLETE_STATE,
+                    completion.value,
+                    completion.record,
+                    null,
+                    options,
+                    repository,
+                    startedAt,
+                    lockFallback,
+                    true);
+
+        } catch (CompletionRejectedException rejected) {
+            IdempotencyWriteResult write = rejected.write;
+            if (write.getStatus() == IdempotencyWriteStatus.STALE_OWNER
+                    || write.getStatus() == IdempotencyWriteStatus.ALREADY_FINAL) {
+                publish(IdempotencyEventType.OWNERSHIP_LOST, IdempotencyStage.COMPLETE_STATE,
+                        options, repository, null);
+                return finish(
+                        IdempotencyResultStatus.OWNERSHIP_LOST,
+                        IdempotencyStage.COMPLETE_STATE,
+                        null,
+                        write.getRecord(),
+                        write.getError(),
+                        options,
+                        repository,
+                        startedAt,
+                        lockFallback,
+                        true);
+            }
+
+            publish(IdempotencyEventType.REPOSITORY_ERROR, IdempotencyStage.COMPLETE_STATE,
+                    options, repository, write.getError());
+            return finish(
+                    IdempotencyResultStatus.REPOSITORY_ERROR,
+                    IdempotencyStage.COMPLETE_STATE,
+                    null,
+                    write.getRecord(),
+                    write.getError(),
+                    options,
+                    repository,
+                    startedAt,
+                    lockFallback,
+                    true);
+
+        } catch (ResultEncodeException codecError) {
+            // Tx-B 已因异常回滚，可以安全地在 Tx-C 记录一个不可重试技术失败。
+            IdempotencyWriteResult failureWrite = persistFailure(
+                    key,
+                    options,
+                    repository,
+                    record,
+                    new IdempotencyFailureInfo(
+                            "RESULT_CODEC_ERROR",
+                            safeMessage(codecError.getCause()),
+                            false,
+                            Instant.now(clock)));
+            attachProviderFailure(codecError, failureWrite);
+
+            return finish(
+                    IdempotencyResultStatus.RESULT_CODEC_ERROR,
+                    IdempotencyStage.COMPLETE_STATE,
+                    null,
+                    failureWrite.getRecord() == null ? record : failureWrite.getRecord(),
+                    codecError.getCause(),
+                    options,
+                    repository,
+                    startedAt,
+                    lockFallback,
+                    true);
+
+        } catch (IdempotencyTransactionException transactionError) {
+            return handleTransactionFailure(
+                    key,
+                    options,
+                    repository,
+                    record,
+                    transactionError,
+                    startedAt,
+                    lockFallback);
+
+        } catch (Throwable businessError) {
+            // TransactionCoordinator 已经先让 Tx-B 回滚；这里再进入 Tx-C 记录 FAILED。
+            return handleBusinessFailure(
+                    key,
+                    options,
+                    repository,
+                    record,
+                    businessError,
+                    startedAt,
+                    lockFallback,
+                    true);
+        }
+    }
+
+    /**
+     * 未接入 transaction-component 时保留的 V1.1 执行路径。
+     *
+     * <p>该路径仍然依靠 ownerToken + version CAS 保证旧 owner 不能覆盖新 generation，
+     * 但不能承诺“业务写 + SUCCESS”是同一个本地事务。</p>
+     */
+    private <T> IdempotencyResult<T> executeOwnedWithoutBusinessTransaction(
+            String key,
+            IdempotencyOptions options,
+            IdempotencyRepository repository,
+            IdempotencyRecord record,
+            IdempotencyCallback<T> callback,
+            IdempotencyContext context,
+            Instant startedAt,
+            boolean lockFallback,
+            boolean recoveryExecution) {
+        try {
             T value = callback.doWithIdempotency(context);
             String resultPayload = encodeResultIfNeeded(value, options);
-            Instant now = Instant.now(clock);
-
-            // 业务成功后尝试 PROCESSING -> SUCCESS。
-            // Repository 必须用 ownerToken + version 做条件更新，拒绝已经过期的旧执行者。
             IdempotencyWriteResult write = repository.markSuccess(
-                    new IdempotencySuccessRequest(
-                            options.getNamespace(),
-                            key,
-                            record.getOwnerToken(),
-                            record.getVersion(),
-                            resultPayload,
-                            options.getMode(),
-                            options.getIdempotencyWindow(),
-                            options.getWindowPolicy(),
-                            options.getRecordRetentionTtl(),
-                            now));
+                    successRequest(key, options, record, resultPayload, Instant.now(clock)));
 
             if (write.getStatus() == IdempotencyWriteStatus.UPDATED) {
                 publish(IdempotencyEventType.EXECUTION_SUCCESS, IdempotencyStage.COMPLETE_STATE,
@@ -397,7 +582,8 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                         options,
                         repository,
                         startedAt,
-                        lockFallback);
+                        lockFallback,
+                        false);
             }
 
             if (write.getStatus() == IdempotencyWriteStatus.STALE_OWNER
@@ -413,7 +599,8 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                         options,
                         repository,
                         startedAt,
-                        lockFallback);
+                        lockFallback,
+                        false);
             }
 
             return finish(
@@ -425,19 +612,21 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                     options,
                     repository,
                     startedAt,
-                    lockFallback);
+                    lockFallback,
+                    false);
 
         } catch (ResultEncodeException error) {
             return finish(
                     IdempotencyResultStatus.RESULT_CODEC_ERROR,
                     IdempotencyStage.COMPLETE_STATE,
                     null,
-                    error.record,
+                    record,
                     error.getCause(),
                     options,
                     repository,
                     startedAt,
-                    lockFallback);
+                    lockFallback,
+                    false);
         } catch (Throwable businessError) {
             return handleBusinessFailure(
                     key,
@@ -446,14 +635,32 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                     record,
                     businessError,
                     startedAt,
-                    lockFallback);
+                    lockFallback,
+                    false);
         }
+    }
+
+    private IdempotencySuccessRequest successRequest(
+            String key,
+            IdempotencyOptions options,
+            IdempotencyRecord record,
+            String resultPayload,
+            Instant now) {
+        return new IdempotencySuccessRequest(
+                options.getNamespace(),
+                key,
+                record.getOwnerToken(),
+                record.getVersion(),
+                resultPayload,
+                options.getMode(),
+                options.getIdempotencyWindow(),
+                options.getWindowPolicy(),
+                options.getRecordRetentionTtl(),
+                now);
     }
 
     /**
      * 根据 storeResult 配置生成可持久化结果快照。
-     *
-     * <p>结果编码失败不能被误判为业务 callback 失败，因此单独包装 ResultEncodeException。</p>
      */
     private String encodeResultIfNeeded(Object value, IdempotencyOptions options)
             throws ResultEncodeException {
@@ -463,18 +670,15 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
         try {
             return codec.encode(value);
         } catch (Exception error) {
-            throw new ResultEncodeException(error, null);
+            throw new ResultEncodeException(error);
         }
     }
 
     /**
      * callback 抛异常后的失败收敛逻辑。
      *
-     * <p>先通过 FailureClassifier 判断 failureRetryable，再尝试把当前 generation 写成 FAILED。
-     * 这里不会立即重试。未来 Reliable Task 是否恢复，由 recoveryMode + recover() 决定。</p>
-     *
-     * <p>未来事务集成要特别注意：如果 callback 所在业务事务已回滚，markFailed 需要在
-     * 独立新事务中提交，否则 FAILED 也会跟着业务事务回滚。</p>
+     * <p>事务集成启用时，进入这里之前 Tx-B 已经回滚；JdbcIdempotencyRepository.markFailed()
+     * 再通过 Tx-C = REQUIRES_NEW 独立提交 FAILED。</p>
      */
     private <T> IdempotencyResult<T> handleBusinessFailure(
             String key,
@@ -483,7 +687,8 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
             IdempotencyRecord record,
             Throwable businessError,
             Instant startedAt,
-            boolean lockFallback) {
+            boolean lockFallback,
+            boolean transactionApplied) {
 
         if (businessError instanceof InterruptedException) {
             Thread.currentThread().interrupt();
@@ -491,24 +696,9 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
 
         Instant failedAt = Instant.now(clock);
         IdempotencyFailureInfo failure = failureClassifier.classify(businessError, failedAt);
-        // PROCESSING -> FAILED 仍然必须校验 owner/version，避免旧执行者污染新 generation。
-        IdempotencyWriteResult write = repository.markFailed(
-                new IdempotencyFailureRequest(
-                        options.getNamespace(),
-                        key,
-                        record.getOwnerToken(),
-                        record.getVersion(),
-                        failure,
-                        options.getMode(),
-                        options.getIdempotencyWindow(),
-                        options.getWindowPolicy(),
-                        options.getRecordRetentionTtl(),
-                        failedAt));
-
-        if (write.getStatus() == IdempotencyWriteStatus.PROVIDER_ERROR
-                && write.getError() != null) {
-            businessError.addSuppressed(write.getError());
-        }
+        IdempotencyWriteResult write = persistFailure(
+                key, options, repository, record, failure);
+        attachProviderFailure(businessError, write);
 
         publish(IdempotencyEventType.EXECUTION_FAILED, IdempotencyStage.EXECUTE,
                 options, repository, businessError);
@@ -522,7 +712,113 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                 options,
                 repository,
                 startedAt,
-                lockFallback);
+                lockFallback,
+                transactionApplied);
+    }
+
+    /**
+     * Tx-B 自身的基础设施失败处理。
+     *
+     * <p>COMMIT_UNKNOWN 是最危险的情况：业务与 SUCCESS 可能已经一起提交，也可能一起回滚。
+     * 因此这里绝不能抢先把记录改成 FAILED，而是保留 PROCESSING，等待下一次查询或超时恢复来定夺。</p>
+     */
+    private <T> IdempotencyResult<T> handleTransactionFailure(
+            String key,
+            IdempotencyOptions options,
+            IdempotencyRepository repository,
+            IdempotencyRecord record,
+            IdempotencyTransactionException transactionError,
+            Instant startedAt,
+            boolean lockFallback) {
+
+        if (transactionError.outcome() == IdempotencyTransactionOutcome.COMMIT_UNKNOWN) {
+            publish(IdempotencyEventType.TRANSACTION_COMMIT_UNKNOWN, IdempotencyStage.TRANSACTION,
+                    options, repository, transactionError);
+            return finish(
+                    IdempotencyResultStatus.TRANSACTION_COMMIT_UNKNOWN,
+                    IdempotencyStage.TRANSACTION,
+                    null,
+                    record,
+                    transactionError,
+                    options,
+                    repository,
+                    startedAt,
+                    lockFallback,
+                    true);
+        }
+
+        // BEGIN 失败或明确 rollback 时，Tx-B 没有成功提交，可以进入 Tx-C 记录可恢复失败。
+        IdempotencyWriteResult write = persistFailure(
+                key,
+                options,
+                repository,
+                record,
+                new IdempotencyFailureInfo(
+                        "TRANSACTION_" + transactionError.outcome().name(),
+                        safeMessage(transactionError),
+                        true,
+                        Instant.now(clock)));
+        attachProviderFailure(transactionError, write);
+
+        publish(IdempotencyEventType.TRANSACTION_FAILED, IdempotencyStage.TRANSACTION,
+                options, repository, transactionError);
+        return finish(
+                IdempotencyResultStatus.TRANSACTION_FAILED,
+                IdempotencyStage.TRANSACTION,
+                null,
+                write.getRecord() == null ? record : write.getRecord(),
+                transactionError,
+                options,
+                repository,
+                startedAt,
+                lockFallback,
+                true);
+    }
+
+    /**
+     * 统一构造 PROCESSING -> FAILED 请求。
+     * Jdbc Provider V1.2 会把这一步放进独立 Tx-C；Redis Provider 继续使用自己的原子写语义。
+     */
+    private IdempotencyWriteResult persistFailure(
+            String key,
+            IdempotencyOptions options,
+            IdempotencyRepository repository,
+            IdempotencyRecord record,
+            IdempotencyFailureInfo failure) {
+        return repository.markFailed(
+                new IdempotencyFailureRequest(
+                        options.getNamespace(),
+                        key,
+                        record.getOwnerToken(),
+                        record.getVersion(),
+                        failure,
+                        options.getMode(),
+                        options.getIdempotencyWindow(),
+                        options.getWindowPolicy(),
+                        options.getRecordRetentionTtl(),
+                        failure.getOccurredAt()));
+    }
+
+    private void attachProviderFailure(Throwable primary, IdempotencyWriteResult write) {
+        if (write != null
+                && write.getStatus() == IdempotencyWriteStatus.PROVIDER_ERROR
+                && write.getError() != null
+                && write.getError() != primary) {
+            primary.addSuppressed(write.getError());
+        }
+    }
+
+    private String transactionName(IdempotencyOptions options) {
+        // TransactionEvent 可能被打日志/指标，因此不要把 key / routeKey 这类高基数值放进事务名。
+        return "idempotency-business:" + options.getNamespace();
+    }
+
+    private String safeMessage(Throwable error) {
+        if (error == null) {
+            return null;
+        }
+        String message = error.getMessage();
+        return message == null || message.isBlank() ? error.getClass().getSimpleName() : message;
     }
 
     /**
@@ -680,7 +976,8 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
             IdempotencyOptions options,
             IdempotencyRepository repository,
             Instant startedAt,
-            boolean lockFallback) {
+            boolean lockFallback,
+            boolean transactionApplied) {
 
         metrics.recordExecution(
                 options.getMode(), repository.providerName(), status,
@@ -693,6 +990,7 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                 .record(record)
                 .error(error)
                 .lockFallback(lockFallback)
+                .transactionApplied(transactionApplied)
                 .build();
     }
 
@@ -760,12 +1058,31 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
         }
     }
 
-    private static final class ResultEncodeException extends Exception {
+    /** Tx-B 已完成 callback，但最终幂等状态不能提交时，用异常强制事务整体回滚。 */
+    private static final class CompletionRejectedException extends RuntimeException {
+        private final IdempotencyWriteResult write;
+
+        private CompletionRejectedException(IdempotencyWriteResult write) {
+            super("idempotency completion rejected: "
+                    + (write == null ? "null" : write.getStatus()));
+            this.write = Objects.requireNonNull(write, "write must not be null");
+        }
+    }
+
+    /** Tx-B 正常提交前暂存业务值和 SUCCESS 状态快照。 */
+    private static final class TransactionalCompletion<T> {
+        private final T value;
         private final IdempotencyRecord record;
 
-        private ResultEncodeException(Throwable cause, IdempotencyRecord record) {
-            super(cause);
+        private TransactionalCompletion(T value, IdempotencyRecord record) {
+            this.value = value;
             this.record = record;
+        }
+    }
+
+    private static final class ResultEncodeException extends Exception {
+        private ResultEncodeException(Throwable cause) {
+            super(cause);
         }
     }
 }

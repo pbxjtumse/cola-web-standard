@@ -66,6 +66,12 @@ xjtu:
         enabled: true
         key-prefix: iron:idempotency
 
+      # transaction-component 存在时，DURABLE JDBC 自动启用 Tx-A / Tx-B / Tx-C。
+      transaction:
+        enabled: true
+        # Demo 明确要求事务模板必须存在，防止误以为已经原子集成但实际退化到普通 Connection。
+        require-template: true
+
       jdbc:
         enabled: true
         table-name: iron_idempotency_record

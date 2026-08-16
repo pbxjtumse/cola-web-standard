@@ -26,6 +26,8 @@ public final class IdempotencyResult<T> {
     private final IdempotencyRecord record;
     private final Throwable error;
     private final boolean lockFallback;
+    /** true 表示本次 ACQUIRED/RECOVERY_ACQUIRED 执行启用了 Tx-B 事务闭环。 */
+    private final boolean transactionApplied;
 
     private IdempotencyResult(Builder<T> builder) {
         this.status = Objects.requireNonNull(builder.status, "status must not be null");
@@ -34,6 +36,7 @@ public final class IdempotencyResult<T> {
         this.record = builder.record;
         this.error = builder.error;
         this.lockFallback = builder.lockFallback;
+        this.transactionApplied = builder.transactionApplied;
     }
 
     public static <T> Builder<T> builder() {
@@ -97,6 +100,20 @@ public final class IdempotencyResult<T> {
         return lockFallback;
     }
 
+    /**
+     * 是否真正启用了“Business + markSuccess”同一个本地事务的 Tx-B 闭环。
+     *
+     * <p>注意：如果 REQUIRED 加入了调用方更外层事务，本次 execute 返回时外层事务仍可能尚未最终提交。
+     * 该字段只表示本次工作参与了事务边界，不表示一定已经发生独立物理 COMMIT。</p>
+     */
+    public boolean isTransactionApplied() {
+        return transactionApplied;
+    }
+
+    public boolean transactionApplied() {
+        return transactionApplied;
+    }
+
     public static final class Builder<T> {
         private IdempotencyResultStatus status;
         private IdempotencyStage stage;
@@ -104,6 +121,7 @@ public final class IdempotencyResult<T> {
         private IdempotencyRecord record;
         private Throwable error;
         private boolean lockFallback;
+        private boolean transactionApplied;
 
         public Builder<T> status(IdempotencyResultStatus value) {
             this.status = value;
@@ -132,6 +150,11 @@ public final class IdempotencyResult<T> {
 
         public Builder<T> lockFallback(boolean value) {
             this.lockFallback = value;
+            return this;
+        }
+
+        public Builder<T> transactionApplied(boolean value) {
+            this.transactionApplied = value;
             return this;
         }
 

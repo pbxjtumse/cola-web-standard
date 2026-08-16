@@ -38,8 +38,8 @@ public final class JdbcIdempotencyRepository
     /**
      * 使用默认 {@link DataSourceJdbcExecutionManager} 的便捷构造。
      *
-     * <p>该默认实现当前不会自动加入外层 Spring 事务。未来接入 transaction-component 时，
-     * 应优先使用接收 {@link JdbcExecutionManager} 的构造方式注入 transaction-aware 实现。</p>
+     * <p>该默认实现不会自动加入外层 Spring 事务。V1.2 Starter 在 transaction-component 可用时，
+     * 会改为使用接收 {@link JdbcExecutionManager} 的构造方式注入 transaction-aware 实现。</p>
      */
     public JdbcIdempotencyRepository(DataSource dataSource, String table) {
         this(new DataSourceJdbcExecutionManager(dataSource), table);
@@ -59,6 +59,12 @@ public final class JdbcIdempotencyRepository
     public boolean supports(IdempotencyMode mode) {
         // JDBC 既可以做 DURABLE，也可以显式用于 SHORT_TERM；默认 Registry 仍把 DURABLE 指向 JDBC。
         return true;
+    }
+
+    @Override
+    public boolean supportsBusinessTransactionParticipation() {
+        // 只有 transaction-aware JdbcExecutionManager 才能保证 markSuccess 使用业务当前事务 Connection。
+        return jdbc.supportsCurrentTransactionParticipation();
     }
 
     /**
@@ -202,14 +208,14 @@ public final class JdbcIdempotencyRepository
      * <p>WHERE 条件必须同时包含 status=PROCESSING、ownerToken、version。
      * 这使得 A 已过期、B 已接管以后，A 即使恢复也无法把 B 的新状态覆盖掉。</p>
      *
-     * <p><strong>事务边界：</strong>当前默认 JdbcExecutionManager 可能使用独立 Connection。
-     * 未来 transaction-component 接入后，应让本方法复用业务事务 Connection，
-     * 从而实现“业务写 + SUCCESS”同事务提交。</p>
+     * <p><strong>事务边界：</strong>V1.2 固定调用 inCurrentTransaction(...)。
+     * transaction-aware JdbcExecutionManager 会复用 Tx-B 当前 Connection，从而实现
+     * “业务写 + SUCCESS”同事务提交；未接入事务组件时默认实现仍退化为普通 Connection。</p>
      */
     @Override
     public IdempotencyWriteResult markSuccess(IdempotencySuccessRequest request) {
         try {
-            return jdbc.withConnection(connection -> {
+            return jdbc.inCurrentTransaction(connection -> {
                 WindowTimes times = completionWindowTimes(
                         connection, request.getNamespace(), request.getKey(),
                         request.getMode(), request.getWindowPolicy(),
@@ -249,13 +255,15 @@ public final class JdbcIdempotencyRepository
     /**
      * 当前 generation 失败后的 PROCESSING -> FAILED 条件写。
      *
-     * <p>业务事务如果已经回滚，FAILED 通常需要独立新事务提交，否则失败状态也会跟着回滚。
-     * 这也是后续 Transaction Template 需要明确支持的 Tx-C 场景。</p>
+     * <p>业务事务如果已经回滚，FAILED 必须使用独立新事务提交，否则失败状态也会跟着回滚。
+     * V1.2 已把该语义固化为 Tx-C = inNewTransaction(...）。</p>
      */
     @Override
     public IdempotencyWriteResult markFailed(IdempotencyFailureRequest request) {
         try {
-            return jdbc.withConnection(connection -> {
+            // Tx-C：业务事务失败/回滚以后，FAILED 必须在独立事务中持久化；
+            // 如果继续复用已经回滚的 Tx-B，FAILED 自己也会被一起回滚。
+            return jdbc.inNewTransaction(connection -> {
                 WindowTimes times = completionWindowTimes(
                         connection, request.getNamespace(), request.getKey(),
                         request.getMode(), request.getWindowPolicy(),

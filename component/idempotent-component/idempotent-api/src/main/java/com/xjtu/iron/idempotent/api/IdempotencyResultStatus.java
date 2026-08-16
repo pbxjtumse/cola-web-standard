@@ -43,6 +43,12 @@ public enum IdempotencyResultStatus {
     /** callback 执行失败。 */
     EXECUTION_FAILED,
 
+    /** Tx-B 本地事务明确没有成功完成，例如 BEGIN 失败或最终明确回滚。 */
+    TRANSACTION_FAILED,
+
+    /** Tx-B 在 COMMIT 阶段出现结果不确定；调用方不能假设业务一定提交或一定回滚。 */
+    TRANSACTION_COMMIT_UNKNOWN,
+
     /** callback 执行完后发现 owner/version 已失效，不能提交最终状态。 */
     OWNERSHIP_LOST,
 

@@ -29,6 +29,7 @@ public class IdempotencyProperties {
     private final ShortTerm shortTerm = new ShortTerm();
     private final Durable durable = new Durable();
     private final Lock lock = new Lock();
+    private final Transaction transaction = new Transaction();
     private final Redis redis = new Redis();
     private final Jdbc jdbc = new Jdbc();
 
@@ -47,6 +48,7 @@ public class IdempotencyProperties {
     public ShortTerm getShortTerm() { return shortTerm; }
     public Durable getDurable() { return durable; }
     public Lock getLock() { return lock; }
+    public Transaction getTransaction() { return transaction; }
     public Redis getRedis() { return redis; }
     public Jdbc getJdbc() { return jdbc; }
 
@@ -96,6 +98,26 @@ public class IdempotencyProperties {
         public void setLeaseTime(Duration leaseTime) { this.leaseTime = leaseTime; }
         public boolean isFallbackToStateOnFailure() { return fallbackToStateOnFailure; }
         public void setFallbackToStateOnFailure(boolean value) { this.fallbackToStateOnFailure = value; }
+    }
+
+    /** transaction-component 集成开关。 */
+    public static class Transaction {
+        /**
+         * transaction-component 存在时是否自动启用 Tx-A / Tx-B / Tx-C 事务闭环。
+         * 不存在 TransactionExecutor Bean 时，仅 enabled=true 不会阻止应用启动。
+         */
+        private boolean enabled = true;
+
+        /**
+         * 是否强制要求 TransactionExecutor 必须存在。
+         * 对支付/结算等必须保证“业务写 + SUCCESS”同事务的应用建议生产环境设为 true。
+         */
+        private boolean requireTemplate = false;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public boolean isRequireTemplate() { return requireTemplate; }
+        public void setRequireTemplate(boolean requireTemplate) { this.requireTemplate = requireTemplate; }
     }
 
     public static class Redis {

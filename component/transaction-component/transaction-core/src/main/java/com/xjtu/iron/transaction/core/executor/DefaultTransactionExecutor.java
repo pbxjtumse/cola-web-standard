@@ -80,10 +80,7 @@ public final class DefaultTransactionExecutor implements TransactionExecutor {
             // core 不再为这两个情况发明 OWNER/PARTICIPANT 等公共术语。
             T value = provider.execute(options, providerContext -> {
                 // 4.1 将 Provider 的最小运行时能力包装为稳定 TransactionContext。
-                DefaultTransactionContext context = new DefaultTransactionContext(
-                        executionId,
-                        options.name(),
-                        providerContext);
+                DefaultTransactionContext context = new DefaultTransactionContext(executionId, options.name(), providerContext);
 
                 // 4.2 这是用户 TransactionCallback 真正执行的位置。
                 // MyBatis/JPA 的数据库操作此时已经处在 Provider 准备好的 Spring 事务环境中。

@@ -275,12 +275,43 @@
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
+                <artifactId>idempotent-integration-transaction</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
                 <artifactId>idempotent-provider-redis</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
                 <artifactId>idempotent-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <!-- transaction-component -->
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>transaction-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>transaction-spi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>transaction-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>transaction-provider-spring</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>transaction-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <!-- message-component -->
