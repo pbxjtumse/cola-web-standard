@@ -1,33 +1,46 @@
 @startuml
-skinparam shadowing false
-title SHORT_TERM - Redis + Lua
+title WINDOWED Redis (legacy filename: short-term)
 
 actor Caller
-participant IdempotencyExecutor as Executor
-participant RedisIdempotencyRepository as Repo
-database Redis
+participant Executor
+participant "DistributedLock\n(optional)" as Lock
+participant "Redis Repository" as Redis
+participant StateMachine
+participant Business
+participant ResultPolicy
 
-Caller -> Executor : execute(SHORT_TERM)
-Executor -> Repo : tryAcquire
-Repo -> Redis : EVAL try-acquire.lua\nread + decide + transition atomically
-Redis --> Repo : ACQUIRED / SUCCESS / PROCESSING / FAILED
+Caller -> Executor : execute(key, policy=WINDOWED)
+opt short lock
+  Executor -> Lock : acquire
+end
+Executor -> Redis : tryAcquire.lua\natomic state transition
+Redis --> Executor : ACQUIRED / SUCCESS / PROCESSING / ...
+opt short lock
+  Executor -> Lock : release
+end
+Executor -> StateMachine : interpret
 
 alt ACQUIRED
-  Repo --> Executor : ACQUIRED
-  Executor -> Executor : callback
-  Executor -> Repo : markSuccess(owner, version)
-  Repo -> Redis : EVAL mark-success.lua\ncompare owner/version + HSET + PEXPIRE
+  StateMachine --> Executor : EXECUTE
+  Executor -> Business : callback()
+  Business --> Executor : value
+  Executor -> ResultPolicy : capture
+  Executor -> Redis : markSuccess.lua(owner,version,payload)
+  Redis --> Executor : UPDATED
   Executor --> Caller : EXECUTED
 else SUCCESS
-  Repo --> Executor : SUCCESS + resultPayload
+  StateMachine --> Executor : REPLAY
+  Executor -> ResultPolicy : replay
   Executor --> Caller : REPLAYED
+else other
+  StateMachine --> Executor : RETURN
+  Executor --> Caller : state result
 end
 
-... recordTtl expires ...
-Redis -> Redis : key deleted automatically
-
-note right of Redis
-TTL 到期后同一个 Key 可以再次执行，
-所以这是有限窗口去重，不是永久业务事实。
+note over Redis
+idempotencyWindow = semantic duplicate window
+recordRetentionTtl = physical extra retention
+When semantic window expires, a new generation may start
+even if the Hash still physically exists.
 end note
 @enduml

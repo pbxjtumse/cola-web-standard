@@ -1,6 +1,5 @@
 spring:
   datasource:
-    # Demo 使用 H2 模拟 MySQL。生产环境仍使用应用自己的 spring.datasource.*。
     url: jdbc:h2:mem:idempotency;MODE=MySQL;DB_CLOSE_DELAY=-1
     username: sa
     password:
@@ -10,8 +9,6 @@ spring:
       mode: always
   data:
     redis:
-      # SHORT_TERM Redis Repository 与 Distributed Lock 可以共享同一 Redis 基础设施配置，
-      # 但二者在代码层仍是不同技术组件。
       host: 127.0.0.1
       port: 6379
 
@@ -20,56 +17,62 @@ xjtu:
     idempotent:
       enabled: true
 
-      # 没有在单次请求 Options 中指定 mode 时，默认走 DURABLE。
-      default-mode: DURABLE
+      # 请求未指定 policyName / inline policy 时使用。
+      default-policy: durable-default
 
-      # SHORT_TERM / DURABLE 分别可以拥有不同 Repository。
-      default-short-term-repository: redis
+      # Provider 只是默认映射；Core 最终仍通过 Repository capabilities 校验。
+      default-windowed-repository: redis
       default-durable-repository: jdbc
 
-      # PROCESSING owner 的执行权租约，不是 Redis Key TTL，也不是幂等窗口。
       processing-timeout: 30s
 
-      # 是否保存 SUCCESS 结果用于后续 REPLAYED 返回历史结果。
-      store-result: true
-
-      short-term:
-        # 真正的短期幂等语义窗口。
+      windowed:
         idempotency-window: 10m
-
-        # FIXED：第一次抢占确定窗口终点；SLIDING：有效访问后继续顺延。
         window-policy: FIXED_FROM_FIRST_ACQUIRE
-
-        # 窗口结束后，物理记录额外保留多久，仅用于排障/观测。
         record-retention-ttl: 1m
-
-        # 默认短期去重不进入 Reliable Task 恢复体系。
         recovery-mode: NONE
+        recover-processing-timeout: false
+        recover-failed: false
 
       durable:
-        # DURABLE 默认允许未来 Reliable Task 扫描候选并显式调用 recover()。
         recovery-mode: EXTERNAL_TASK
+        recover-processing-timeout: true
         recover-failed: true
 
+      # 业务项目推荐通过命名 Policy 避免每个方法重复 new 一整套 Options。
+      policies:
+        demo-windowed:
+          mode: WINDOWED
+          namespace: demo-windowed
+          repository-name: redis
+          processing-timeout: 10s
+          idempotency-window: 5m
+          window-policy: FIXED_FROM_FIRST_ACQUIRE
+          record-retention-ttl: 1m
+          recovery-mode: NONE
+
+        demo-durable:
+          mode: DURABLE
+          namespace: demo-durable
+          repository-name: jdbc
+          processing-timeout: 30s
+          recovery-mode: EXTERNAL_TASK
+          recover-processing-timeout: true
+          recover-failed: true
+
       lock:
-        # 分布式锁只是“状态抢占短临界区”的可选并发优化层。
-        # false 时 Repository 仍必须依靠 UNIQUE / FOR UPDATE / Lua / CAS 保证正确性。
         enabled: false
         provider-name: redisson
         wait-time: 0s
         lease-time: 5s
-
-        # 锁不可用时是否继续直接执行 Repository 原子状态机。
         fallback-to-state-on-failure: true
 
       redis:
         enabled: true
         key-prefix: iron:idempotency
 
-      # transaction-component 存在时，DURABLE JDBC 自动启用 Tx-A / Tx-B / Tx-C。
       transaction:
         enabled: true
-        # Demo 明确要求事务模板必须存在，防止误以为已经原子集成但实际退化到普通 Connection。
         require-template: true
 
       jdbc:

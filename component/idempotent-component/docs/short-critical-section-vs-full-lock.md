@@ -1,6 +1,6 @@
-# 为什么 DistributedLock 只保护 tryAcquire，而不包住整个业务
+# 为什么 DistributedLock 只保护 tryAcquire / tryRecover，而不包住整个业务
 
-## 1. V1.1 推荐模型
+## 1. V1.3 推荐模型
 
 ```text
 DistributedLockClient（可选）
@@ -83,7 +83,10 @@ unlock
 
 - 首次请求：`INSERT PROCESSING` + UNIQUE 唯一键抢占；
 - 已存在请求：短事务 `SELECT ... FOR UPDATE` 后判断 SUCCESS / PROCESSING / FAILED；
-- SHORT_TERM 窗口结束：可原子开启新 generation；
+- WINDOWED 窗口结束：可原子开启新 generation；
 - 普通请求发现 PROCESSING 超时：只返回 `PROCESSING_EXPIRED`，不自动接管。
 
 所以业务 callback 开始前，数据库已经有一个其他节点可见的幂等执行事实。
+
+
+> V1.3 补充：Lock 发生在 Repository 原子状态抢占外围；StateMachine 在 CAS/Lua 之后解释结果；Transaction Integration 发生在获得 EXECUTE generation 之后。三者不在同一层。

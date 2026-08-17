@@ -1,9 +1,26 @@
 package com.xjtu.iron.idempotent.integration.transaction;
 
-import com.xjtu.iron.idempotent.api.*;
+import com.xjtu.iron.idempotent.core.execution.DefaultIdempotencyExecutor;
+import com.xjtu.iron.idempotent.core.policy.DefaultIdempotencyPolicyRegistry;
+import com.xjtu.iron.idempotent.core.policy.IdempotencyPolicyRegistry;
+import com.xjtu.iron.idempotent.core.repository.DefaultIdempotencyRepositoryRegistry;
+import com.xjtu.iron.idempotent.core.repository.IdempotencyRepositoryRegistry;
+import com.xjtu.iron.idempotent.integration.transaction.coordinator.TransactionTemplateIdempotencyTransactionCoordinator;
+import com.xjtu.iron.idempotent.integration.transaction.jdbc.SpringTransactionJdbcExecutionManager;
+
+import com.xjtu.iron.idempotent.api.context.*;
+import com.xjtu.iron.idempotent.api.execution.*;
+import com.xjtu.iron.idempotent.api.policy.*;
+import com.xjtu.iron.idempotent.api.recovery.*;
+import com.xjtu.iron.idempotent.api.request.*;
+import com.xjtu.iron.idempotent.api.result.*;
+import com.xjtu.iron.idempotent.api.state.*;
 import com.xjtu.iron.idempotent.api.repository.*;
-import com.xjtu.iron.idempotent.core.*;
-import com.xjtu.iron.idempotent.provider.jdbc.JdbcIdempotencyRepository;
+import com.xjtu.iron.idempotent.api.repository.acquire.*;
+import com.xjtu.iron.idempotent.api.repository.recovery.*;
+import com.xjtu.iron.idempotent.api.repository.write.*;
+import com.xjtu.iron.idempotent.core.state.DefaultIdempotencyStateMachine;
+import com.xjtu.iron.idempotent.provider.jdbc.repository.JdbcIdempotencyRepository;
 import com.xjtu.iron.transaction.api.execution.TransactionExecutor;
 import com.xjtu.iron.transaction.core.executor.DefaultTransactionExecutor;
 import com.xjtu.iron.transaction.provider.spring.transaction.SpringTransactionProvider;
@@ -15,7 +32,6 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 import javax.sql.DataSource;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,7 +39,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * V1.2 Tx-A / Tx-B / Tx-C 的端到端验证。
+ * V1.3 在新 API 下继续验证 Tx-A / Tx-B / Tx-C。
  */
 class IdempotencyTransactionIntegrationTest {
 
@@ -74,7 +90,8 @@ class IdempotencyTransactionIntegrationTest {
                 )
                 """);
 
-        DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(ds);
+        DataSourceTransactionManager transactionManager =
+                new DataSourceTransactionManager(ds);
         this.transactionExecutor = new DefaultTransactionExecutor(
                 new SpringTransactionProvider(transactionManager));
     }
@@ -86,7 +103,6 @@ class IdempotencyTransactionIntegrationTest {
 
         IdempotencyResult<String> result = executor.execute(
                 request("success-1"),
-                String.class,
                 context -> {
                     jdbcTemplate.update(
                             "INSERT INTO business_record(idempotency_key,payload) VALUES (?,?)",
@@ -111,7 +127,6 @@ class IdempotencyTransactionIntegrationTest {
 
         IdempotencyResult<String> result = executor.execute(
                 request("failure-1"),
-                String.class,
                 context -> {
                     jdbcTemplate.update(
                             "INSERT INTO business_record(idempotency_key,payload) VALUES (?,?)",
@@ -139,7 +154,6 @@ class IdempotencyTransactionIntegrationTest {
 
         IdempotencyResult<String> result = executor.execute(
                 request("stale-1"),
-                String.class,
                 context -> {
                     jdbcTemplate.update(
                             "INSERT INTO business_record(idempotency_key,payload) VALUES (?,?)",
@@ -159,18 +173,26 @@ class IdempotencyTransactionIntegrationTest {
 
     private JdbcIdempotencyRepository jdbcRepository() {
         return new JdbcIdempotencyRepository(
-                new SpringTransactionJdbcExecutionManager(dataSource, transactionExecutor),
+                new SpringTransactionJdbcExecutionManager(
+                        dataSource, transactionExecutor),
                 "iron_idempotency_record");
     }
 
     private DefaultIdempotencyExecutor executor(IdempotencyRepository repository) {
-        IdempotencyRepositoryRegistry registry = new DefaultIdempotencyRepositoryRegistry(
-                List.of(repository), repository.providerName(), repository.providerName());
-        IdempotencyOptions defaults = options();
+        IdempotencyRepositoryRegistry repositoryRegistry =
+                new DefaultIdempotencyRepositoryRegistry(
+                        List.of(repository),
+                        repository.providerName(),
+                        repository.providerName());
+
+        IdempotencyPolicy policy = policy();
+        IdempotencyPolicyRegistry policyRegistry =
+                new DefaultIdempotencyPolicyRegistry(
+                        List.of(policy), policy.getName());
 
         return new DefaultIdempotencyExecutor(
-                registry,
-                new IdempotencyDefaults(IdempotencyMode.DURABLE, defaults, defaults),
+                repositoryRegistry,
+                policyRegistry,
                 (namespace, key) -> UUID.randomUUID().toString(),
                 (error, at) -> new IdempotencyFailureInfo(
                         "BUSINESS_ERROR",
@@ -178,8 +200,9 @@ class IdempotencyTransactionIntegrationTest {
                         true,
                         at),
                 null,
-                null,
-                new TransactionTemplateIdempotencyTransactionCoordinator(transactionExecutor),
+                new TransactionTemplateIdempotencyTransactionCoordinator(
+                        transactionExecutor),
+                new DefaultIdempotencyStateMachine(),
                 null,
                 null,
                 Clock.systemUTC());
@@ -190,16 +213,16 @@ class IdempotencyTransactionIntegrationTest {
                 .key(key)
                 .routeKey("merchant-1")
                 .requestHash("hash-" + key)
-                .options(options())
+                .policyName("tx-durable")
                 .build();
     }
 
-    private IdempotencyOptions options() {
-        return IdempotencyOptions.builder()
+    private IdempotencyPolicy policy() {
+        return IdempotencyPolicy.builder()
+                .name("tx-durable")
                 .mode(IdempotencyMode.DURABLE)
-                .recoveryMode(IdempotencyRecoveryMode.EXTERNAL_TASK)
-                .recoverFailed(true)
-                .storeResult(false)
+                .namespace("tx-test")
+                .recoveryPolicy(IdempotencyRecoveryPolicy.externalTask())
                 .build();
     }
 
@@ -211,14 +234,13 @@ class IdempotencyTransactionIntegrationTest {
         return count == null ? 0 : count;
     }
 
-    /**
-     * 模拟 owner/version 已在 callback 期间失效：markSuccess 不能 UPDATED。
-     * Core 必须把该状态转成异常，让 Tx-B 中已经执行的业务 SQL 回滚。
-     */
-    private static final class RejectingCompletionRepository implements IdempotencyRepository {
+    private static final class RejectingCompletionRepository
+            implements IdempotencyRepository {
+
         private final JdbcIdempotencyRepository delegate;
 
-        private RejectingCompletionRepository(JdbcIdempotencyRepository delegate) {
+        private RejectingCompletionRepository(
+                JdbcIdempotencyRepository delegate) {
             this.delegate = delegate;
         }
 
@@ -228,40 +250,47 @@ class IdempotencyTransactionIntegrationTest {
         }
 
         @Override
-        public boolean supports(IdempotencyMode mode) {
-            return delegate.supports(mode);
+        public IdempotencyRepositoryCapabilities capabilities() {
+            return IdempotencyRepositoryCapabilities.builder()
+                    .windowedSupported(true)
+                    .durableSupported(true)
+                    .resultPayloadSupported(true)
+                    .businessTransactionParticipationSupported(true)
+                    .recoveryQuerySupported(true)
+                    .build();
         }
 
         @Override
-        public boolean supportsBusinessTransactionParticipation() {
-            return true;
-        }
-
-        @Override
-        public IdempotencyAcquireResult tryAcquire(IdempotencyAcquireRequest request) {
+        public IdempotencyAcquireResult tryAcquire(
+                IdempotencyAcquireRequest request) {
             return delegate.tryAcquire(request);
         }
 
         @Override
-        public IdempotencyRecoveryResult tryRecover(IdempotencyRecoveryAcquireRequest request) {
+        public IdempotencyRecoveryResult tryRecover(
+                IdempotencyRecoveryAcquireRequest request) {
             return delegate.tryRecover(request);
         }
 
         @Override
-        public IdempotencyWriteResult markSuccess(IdempotencySuccessRequest request) {
-            Optional<IdempotencyRecord> current = delegate.find(request.getNamespace(), request.getKey());
+        public IdempotencyWriteResult markSuccess(
+                IdempotencySuccessRequest request) {
+            Optional<IdempotencyRecord> current =
+                    delegate.find(request.getNamespace(), request.getKey());
             return IdempotencyWriteResult.of(
                     IdempotencyWriteStatus.STALE_OWNER,
                     current.orElse(null));
         }
 
         @Override
-        public IdempotencyWriteResult markFailed(IdempotencyFailureRequest request) {
+        public IdempotencyWriteResult markFailed(
+                IdempotencyFailureRequest request) {
             return delegate.markFailed(request);
         }
 
         @Override
-        public Optional<IdempotencyRecord> find(String namespace, String key) {
+        public Optional<IdempotencyRecord> find(
+                String namespace, String key) {
             return delegate.find(namespace, key);
         }
     }

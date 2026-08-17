@@ -1,45 +1,20 @@
 @startuml
-title Idempotency V1.1 - L1 普通 execute() 判定状态
+title V1.3 StateMachine Decision (derived, not persisted)
 
-hide empty description
-skinparam shadowing false
-skinparam linetype ortho
-left to right direction
+[*] --> AtomicRepositoryResult
 
-state "Repository\nAtomic Decision" as DECISION <<choice>>
-state "ACQUIRED\n创建/滚动为 PROCESSING" as ACQUIRED
-state "SUCCESS\n→ REPLAYED" as SUCCESS
-state "PROCESSING_ACTIVE\n未超时" as ACTIVE
-state "PROCESSING_EXPIRED\n已超时" as EXPIRED
-state "FAILED_RETRYABLE\n可恢复失败" as RETRYABLE
-state "FAILED_FINAL\n最终失败" as FINAL
-state "KEY_CONFLICT\nkey 被不同 route/hash 复用" as CONFLICT
+AtomicRepositoryResult --> EXECUTE : ACQUIRED / RECOVERY_ACQUIRED
+AtomicRepositoryResult --> REPLAY : SUCCESS
+AtomicRepositoryResult --> RETURN_PROCESSING : PROCESSING_ACTIVE
+AtomicRepositoryResult --> RETURN_EXPIRED : PROCESSING_EXPIRED
+AtomicRepositoryResult --> RETURN_FAILED : FAILED_RETRYABLE / FAILED_FINAL
+AtomicRepositoryResult --> RETURN_CONFLICT : KEY_CONFLICT
+AtomicRepositoryResult --> RETURN_ERROR : PROVIDER_ERROR
+AtomicRepositoryResult --> RETURN_STALE : STALE_CANDIDATE
 
-[*] --> DECISION : tryAcquire()
-DECISION --> ACQUIRED : ABSENT\n或 SHORT_TERM window 已结束
-DECISION --> SUCCESS : persisted=SUCCESS
-DECISION --> ACTIVE : PROCESSING\nnow < processingExpireAt
-DECISION --> EXPIRED : PROCESSING\nnow >= processingExpireAt
-DECISION --> RETRYABLE : FAILED\nfailureRetryable=true
-DECISION --> FINAL : FAILED\nfailureRetryable=false
-DECISION --> CONFLICT : routeKey/requestHash mismatch
-
-ACQUIRED --> [*] : callback 执行
-SUCCESS --> [*] : 返回历史结果
-ACTIVE --> [*] : 返回 PROCESSING
-EXPIRED --> [*] : 返回 PROCESSING_EXPIRED
-RETRYABLE --> [*] : 返回 PREVIOUS_FAILED_RETRYABLE
-FINAL --> [*] : 返回 PREVIOUS_FAILED_FINAL
-CONFLICT --> [*] : 返回 KEY_CONFLICT
-
-note bottom of EXPIRED
-NORMAL execute() 只做判断：
-不 mark FAILED，不自动接管。
+note right of AtomicRepositoryResult
+Repository CAS/Lua happens BEFORE this state machine.
+The state machine interprets atomic results;
+it does not provide mutual exclusion.
 end note
-
-note bottom of RETRYABLE
-“可恢复”不等于“普通请求立即重试”。
-真正接管由 recover() 完成。
-end note
-
 @enduml

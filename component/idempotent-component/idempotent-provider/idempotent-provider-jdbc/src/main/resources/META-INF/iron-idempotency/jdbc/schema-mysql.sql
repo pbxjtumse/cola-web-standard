@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS iron_idempotency_record (
     -- NONE / EXTERNAL_TASK。扫描调度不在本组件，这里只保存恢复契约。
     recovery_mode VARCHAR(32) NOT NULL DEFAULT 'NONE',
 
-    -- SHORT_TERM 窗口策略；DURABLE 下仅作为元数据存在。
+    -- WINDOWED 窗口策略；DURABLE 下仅作为元数据存在。
     window_policy VARCHAR(64) NOT NULL DEFAULT 'FIXED_FROM_FIRST_ACQUIRE',
 
     processing_expire_at TIMESTAMP(3) NULL,

@@ -2,14 +2,24 @@ package com.xjtu.iron.idempotent.starter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xjtu.iron.distributed.lock.api.DistributedLockClient;
-import com.xjtu.iron.idempotent.api.*;
+import com.xjtu.iron.idempotent.api.execution.IdempotencyExecutor;
+import com.xjtu.iron.idempotent.api.policy.IdempotencyLockOptions;
+import com.xjtu.iron.idempotent.api.policy.IdempotencyMode;
+import com.xjtu.iron.idempotent.api.policy.IdempotencyOptions;
+import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryQueryService;
 import com.xjtu.iron.idempotent.api.repository.IdempotencyRepository;
 import com.xjtu.iron.idempotent.api.spi.IdempotencyFailureClassifier;
 import com.xjtu.iron.idempotent.api.spi.IdempotencyRequestHasher;
 import com.xjtu.iron.idempotent.api.spi.IdempotencyResultCodec;
 import com.xjtu.iron.idempotent.core.*;
+import com.xjtu.iron.idempotent.core.execution.DefaultIdempotencyExecutor;
 import com.xjtu.iron.idempotent.core.observation.IdempotencyEventPublisher;
 import com.xjtu.iron.idempotent.core.observation.IdempotencyMetrics;
+import com.xjtu.iron.idempotent.core.owner.IdempotencyOwnerTokenGenerator;
+import com.xjtu.iron.idempotent.core.owner.UuidIdempotencyOwnerTokenGenerator;
+import com.xjtu.iron.idempotent.core.recovery.DefaultIdempotencyRecoveryQueryService;
+import com.xjtu.iron.idempotent.core.repository.IdempotencyRepositoryRegistry;
+import com.xjtu.iron.idempotent.core.support.IdempotencyDefaults;
 import com.xjtu.iron.idempotent.core.transaction.IdempotencyTransactionCoordinator;
 import com.xjtu.iron.idempotent.integration.transaction.SpringTransactionJdbcExecutionManager;
 import com.xjtu.iron.idempotent.integration.transaction.TransactionTemplateIdempotencyTransactionCoordinator;
@@ -207,7 +217,7 @@ public class IdempotencyAutoConfiguration {
                 .recordRetentionTtl(properties.getShortTerm().getRecordRetentionTtl())
                 .recoveryMode(properties.getShortTerm().getRecoveryMode())
                 .recoverFailed(false)
-                .storeResult(properties.isStoreResult())
+                .resultPolicy(properties.resolvedResultPolicy())
                 .lockOptions(lock)
                 .build();
 
@@ -216,7 +226,7 @@ public class IdempotencyAutoConfiguration {
                 .processingTimeout(properties.getProcessingTimeout())
                 .recoveryMode(properties.getDurable().getRecoveryMode())
                 .recoverFailed(properties.getDurable().isRecoverFailed())
-                .storeResult(properties.isStoreResult())
+                .resultPolicy(properties.resolvedResultPolicy())
                 .lockOptions(lock)
                 .build();
 

@@ -1,11 +1,15 @@
 package com.xjtu.iron.idempotent.api.spi;
 
+import com.xjtu.iron.idempotent.api.result.IdempotencyResultPolicy;
+
 /**
- * 成功结果持久化与回放的序列化 SPI。
+ * V1.2 结果编解码 SPI。
  *
- * <p>该 SPI 只在 {@code storeResult=true} 时使用。Core 不关心 JSON、ProtoBuf 或其他编码格式。
- * 结果存储是可选能力，幂等正确性本身不依赖结果回放。</p>
+ * @deprecated V1.3 结果保存已经改为类型安全的
+ * {@code api.result.IdempotencyResultPolicy<T>}。
+ * Executor 主 API 不再接收 Class<T>。
  */
+@Deprecated
 public interface IdempotencyResultCodec {
 
     String encode(Object value) throws Exception;

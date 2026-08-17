@@ -1,300 +1,49 @@
 @startuml
-title Durable Idempotency V1.1 - 完整执行与恢复时序
-
-autonumber
-skinparam shadowing false
+title DURABLE JDBC + Transaction Integration V1.3
 
 actor Caller
+participant "Executor" as E
+participant "JDBC Repository" as R
+participant "TransactionExecutor" as TX
+participant "Business" as B
+participant "ResultPolicy" as RP
 
-participant "API / Message Consumer" as API
+Caller -> E : execute()
 
-participant "IdempotencyExecutor" as IDEM
-
-participant "RequestHasher" as HASH
-
-participant "DistributedLockClient" as LOCK
-
-participant "RedissonLockProvider" as REDISSON
-
-database "JdbcIdempotencyRepository\n同业务分片" as IDEM_DB
-
-participant "TransactionTemplate" as TX
-
-participant "BusinessService" as BIZ
-
-database "Business DB\n同一物理分片" as BIZ_DB
-
-participant "Reliable Task Component" as TASK
-
-
-== 请求准备 ==
-
-Caller -> API : request\nidempotencyKey=REQ-10001\nrouteKey=merchant-10001
-API -> IDEM : execute(request, callback)
-
-IDEM -> HASH : hash(canonical business request)
-HASH --> IDEM : requestHash=H001
-
-
-== 可选 Redisson 并发收敛 ==
-
-opt lock.enabled = true
-
-    IDEM -> LOCK : execute(\n"idempotency:REQ-10001",\nshort lock options\n)
-
-    LOCK -> REDISSON : tryLock()
-    REDISSON --> LOCK : ACQUIRED
-
-    LOCK -> IDEM_DB : tryAcquire(\nkey,\nrequestHash,\nownerToken,\nrouteKey\n)
-
-else lock disabled / fallback
-
-    IDEM -> IDEM_DB : tryAcquire(...)
-
+group Tx-A REQUIRES_NEW
+  E -> R : tryAcquire()
+  R -> R : UNIQUE / SELECT FOR UPDATE\nPROCESSING owner=A version=1
+  R --> E : ACQUIRED
 end
 
-
-== Repository 原子状态判断 ==
-
-alt 首次请求 / ABSENT
-
-    IDEM_DB -> IDEM_DB : INSERT PROCESSING\nowner=A\nversion=1\nprocessingExpireAt=T1
-
-    IDEM_DB --> LOCK : ACQUIRED(record)
-
-    opt lock enabled
-        LOCK -> REDISSON : unlock()
-    end
-
-    LOCK --> IDEM : ACQUIRED(record)
-
-else 已存在 SUCCESS 且 hash 相同
-
-    IDEM_DB --> LOCK : SUCCESS(record,result)
-
-    opt lock enabled
-        LOCK -> REDISSON : unlock()
-    end
-
-    LOCK --> IDEM : SUCCESS
-
-    IDEM --> API : REPLAYED(result)
-    API --> Caller : 返回第一次成功结果
-
-else 已存在 SUCCESS 但 hash 不同
-
-    IDEM_DB --> LOCK : KEY_CONFLICT
-
-    opt lock enabled
-        LOCK -> REDISSON : unlock()
-    end
-
-    LOCK --> IDEM : KEY_CONFLICT
-
-    IDEM --> API : KEY_CONFLICT
-    API --> Caller : 同一幂等键被不同请求复用
-
-else PROCESSING 且未超时
-
-    IDEM_DB --> LOCK : PROCESSING_ACTIVE
-
-    opt lock enabled
-        LOCK -> REDISSON : unlock()
-    end
-
-    LOCK --> IDEM : PROCESSING_ACTIVE
-
-    IDEM --> API : PROCESSING
-    API --> Caller : 正在处理中
-
-else PROCESSING 已超时
-
-    IDEM_DB --> LOCK : PROCESSING_EXPIRED
-
-    opt lock enabled
-        LOCK -> REDISSON : unlock()
-    end
-
-    LOCK --> IDEM : PROCESSING_EXPIRED
-
-    note right of IDEM
-    NORMAL execute() 到这里结束。
-
-    不再像 V1 那样由普通请求
-    自动接管超时 PROCESSING。
-    end note
-
-    IDEM --> API : PROCESSING_EXPIRED
-    API --> Caller : 处理中状态已失效 / 等待恢复
-
-else FAILED 可恢复
-
-    IDEM_DB --> LOCK : FAILED_RETRYABLE
-
-    opt lock enabled
-        LOCK -> REDISSON : unlock()
-    end
-
-    LOCK --> IDEM : FAILED_RETRYABLE
-
-    IDEM --> API : PREVIOUS_FAILED_RETRYABLE
-
-else FAILED 不可恢复
-
-    IDEM_DB --> LOCK : FAILED_FINAL
-
-    opt lock enabled
-        LOCK -> REDISSON : unlock()
-    end
-
-    LOCK --> IDEM : FAILED_FINAL
-
-    IDEM --> API : PREVIOUS_FAILED_FINAL
-
-end
-
-
-== 真正 ACQUIRED 后执行业务 ==
-
-note over IDEM,TX
-Redisson 已经释放。
-
-业务执行不长期持有分布式锁。
+note over E,R
+Tx-A is committed before long business execution.
+PROCESSING becomes visible quickly.
 end note
 
-IDEM -> TX : executeRequired(routeKey)
-
-
-TX -> BIZ_DB : BEGIN
-
-TX -> BIZ : callback(\nIdempotencyContext\nowner=A\nversion=1\n)
-
-BIZ -> BIZ_DB : INSERT / UPDATE business tables
-
-alt 业务成功
-
-    BIZ --> TX : businessResult
-
-    TX -> IDEM_DB : markSuccess(\nowner=A,\nversion=1,\nresult\n)
-
-    note right of IDEM_DB
-    WHERE
-      status='PROCESSING'
-      AND owner_token='A'
-      AND version=1
-
-    只有当前 owner 才允许完成。
-    end note
-
-    IDEM_DB --> TX : UPDATED
-
-    TX -> BIZ_DB : COMMIT
-
-    TX --> IDEM : result
-
-    IDEM --> API : EXECUTED(result)
-    API --> Caller : success
-
-else callback 抛异常
-
-    BIZ --> TX : throw exception
-
-    TX -> BIZ_DB : ROLLBACK
-    TX --> IDEM : business exception
-
-    note over IDEM,IDEM_DB
-    FAILED 不能写在刚才失败的事务里，
-    否则会跟着 rollback。
-    end note
-
-    IDEM -> TX : executeRequiresNew()
-
-    TX -> IDEM_DB : markFailed(\nowner=A,\nversion=1,\nfailureCode,\nretryable\n)
-
-    IDEM_DB --> TX : UPDATED
-
-    TX -> BIZ_DB : COMMIT
-
-    IDEM --> API : EXECUTION_FAILED
-    API --> Caller : failure
-
-else owner 在执行业务期间已失效
-
-    BIZ --> TX : businessResult
-
-    TX -> IDEM_DB : markSuccess(A,1)
-
-    IDEM_DB --> TX : CAS updatedRows=0\ncurrent owner=B/version=2
-
-    TX -> BIZ_DB : ROLLBACK
-
-    TX --> IDEM : OWNERSHIP_LOST
-
-    IDEM --> API : OWNERSHIP_LOST
-    API --> Caller : old execution rejected
-
+group Tx-B REQUIRED
+  E -> TX : executeRequired()
+  TX -> B : callback()
+  B --> TX : value
+  TX -> RP : capture(value)
+  RP --> TX : payload
+  TX -> R : markSuccess(A,1,payload)
+  alt UPDATED
+    R --> TX : UPDATED
+    TX --> E : value
+  else stale owner / already final
+    R --> TX : rejected
+    TX -> TX : throw -> rollback Tx-B
+    TX --> E : ownership lost
+  end
 end
 
+alt business / transaction failure with known rollback
+  group Tx-C REQUIRES_NEW
+    E -> R : markFailed(A,1)
+    R --> E : write result
+  end
+end
 
-== Reliable Task 超时恢复 ==
-
-note over TASK
-扫描、分页、调度、MQ 投递
-属于 Reliable Task，
-不属于 Idempotency Core。
-end note
-
-TASK -> IDEM_DB : queryExpiredProcessing(\nshard / routeKey / page\n)
-
-IDEM_DB --> TASK : candidate\nkey=REQ-10001\nrouteKey=merchant-10001\noldVersion=1
-
-TASK -> TASK : create durable recovery task
-
-TASK -> IDEM : recover(\nREQ-10001,\nrouteKey\n)
-
-
-== Recovery 原子抢占 ==
-
-IDEM -> LOCK : optional short lock
-
-LOCK -> REDISSON : tryLock()
-REDISSON --> LOCK : ACQUIRED
-
-LOCK -> IDEM_DB : tryRecover(...)
-
-IDEM_DB -> IDEM_DB : SELECT FOR UPDATE\nverify PROCESSING expired\nverify old owner/version
-
-IDEM_DB -> IDEM_DB : PROCESSING\n→ FAILED\nfailureCode=PROCESSING_TIMEOUT
-
-IDEM_DB -> IDEM_DB : FAILED\n→ PROCESSING\nowner=B\nversion=2\nnew expireAt
-
-IDEM_DB --> LOCK : RECOVERY_ACQUIRED(record v2)
-
-LOCK -> REDISSON : unlock()
-
-LOCK --> IDEM : RECOVERY_ACQUIRED
-
-
-== Recovery Business Execution ==
-
-IDEM -> TX : executeRequired(routeKey)
-
-TX -> BIZ_DB : BEGIN
-
-TX -> BIZ : callback(context version=2)
-
-BIZ -> BIZ_DB : conditional business write\nlast_version < 2
-
-BIZ --> TX : result
-
-TX -> IDEM_DB : markSuccess(owner=B,version=2)
-
-IDEM_DB --> TX : UPDATED
-
-TX -> BIZ_DB : COMMIT
-
-TX --> IDEM : success
-
-IDEM --> TASK : EXECUTED / RECOVERED
-
+E --> Caller : IdempotencyResult
 @enduml

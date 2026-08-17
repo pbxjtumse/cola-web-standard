@@ -1,139 +1,44 @@
 @startuml
-title Idempotency V1.1 - 完整状态机
+title Idempotency V1.3 - Lifecycle
 
 hide empty description
 skinparam shadowing false
 
-state "ABSENT\n无持久记录" as ABSENT
-
-state "PROCESSING\n持久状态\nownerToken + version\nprocessingExpireAt" as PROCESSING
-
-state "PROCESSING_ACTIVE\n判定视图\nstatus=PROCESSING\nnow < expireAt" as PROCESSING_ACTIVE
-
-state "PROCESSING_EXPIRED\n判定视图\nstatus仍然是PROCESSING\nnow >= expireAt" as PROCESSING_EXPIRED
-
-state "SUCCESS\n持久终态\noptional result" as SUCCESS
-
-state "FAILED\n持久状态\nfailureCode\nfailureRetryable" as FAILED
-
-state "FAILED_RETRYABLE\n判定视图" as FAILED_RETRYABLE
-
-state "FAILED_FINAL\n判定视图" as FAILED_FINAL
+state "ABSENT" as ABSENT
+state "PROCESSING\nowner + version\nprocessingExpireAt" as PROCESSING
+state "SUCCESS\noptional result payload" as SUCCESS
+state "FAILED\nfailureRetryable" as FAILED
 
 [*] --> ABSENT
+ABSENT --> PROCESSING : tryAcquire ACQUIRED\nowner=A version=1
 
+PROCESSING --> SUCCESS : current owner markSuccess\nCAS owner/version
+PROCESSING --> FAILED : current owner markFailed\nCAS owner/version
 
-' ==============================
-' 首次抢占
-' ==============================
+PROCESSING --> PROCESSING : duplicate while active\nRETURN PROCESSING
+PROCESSING --> PROCESSING : normal execute after timeout\nRETURN PROCESSING_EXPIRED\n(no state change)
 
-ABSENT --> PROCESSING : NORMAL tryAcquire\nINSERT / Lua CAS\nowner=A\nversion=1
+PROCESSING --> PROCESSING : recover timeout allowed\nCAS expected A/10\nnew B/11
+FAILED --> PROCESSING : recover retryable allowed\nCAS expected A/10\nnew B/11
 
-PROCESSING --> PROCESSING_ACTIVE : now < processingExpireAt
-PROCESSING --> PROCESSING_EXPIRED : now >= processingExpireAt
+SUCCESS --> SUCCESS : duplicate\nREPLAY
+FAILED --> FAILED : normal execute\nRETURN previous failure
 
-
-' ==============================
-' 正常执行成功
-' ==============================
-
-PROCESSING_ACTIVE --> SUCCESS : callback success\nmarkSuccess(owner=A,version=1)\nCAS success
-
-
-' ==============================
-' 正常执行失败
-' ==============================
-
-PROCESSING_ACTIVE --> FAILED : callback exception\nFailureClassifier\nmarkFailed(owner,version)
-
-
-' ==============================
-' 重复请求
-' ==============================
-
-PROCESSING_ACTIVE --> PROCESSING_ACTIVE : NORMAL duplicate\nreturn PROCESSING\ncallback 不执行
-
-SUCCESS --> SUCCESS : same key + same requestHash\nreturn REPLAYED
-
-SUCCESS --> SUCCESS : same key + different requestHash\nreturn KEY_CONFLICT\nrecord 不变
-
-
-' ==============================
-' PROCESSING 超时
-' ==============================
-
-PROCESSING_EXPIRED --> PROCESSING_EXPIRED : NORMAL execute\nreturn PROCESSING_EXPIRED\n不自动接管
-
-PROCESSING_EXPIRED --> FAILED : RECOVERY tryRecover\nCAS old owner/version\nfailureCode=PROCESSING_TIMEOUT\nfailureRetryable=true
-
-
-' ==============================
-' FAILED 分类
-' ==============================
-
-FAILED --> FAILED_RETRYABLE : failureRetryable=true
-FAILED --> FAILED_FINAL : failureRetryable=false
-
-FAILED_RETRYABLE --> FAILED_RETRYABLE : NORMAL execute\nreturn PREVIOUS_FAILED_RETRYABLE
-
-FAILED_FINAL --> FAILED_FINAL : NORMAL execute\nreturn PREVIOUS_FAILED_FINAL
-
-
-' ==============================
-' 可靠任务恢复
-' ==============================
-
-FAILED_RETRYABLE --> PROCESSING : RECOVERY allowed\nnew owner=B\nversion=old+1\nnew processingExpireAt
-
-FAILED_FINAL --> FAILED_FINAL : RECOVERY rejected\n不可恢复
-
-
-' ==============================
-' 旧执行者恢复
-' ==============================
-
-PROCESSING --> PROCESSING : stale owner markSuccess / markFailed\nowner/version CAS=0\nreturn OWNERSHIP_LOST
-
-
-' ==============================
-' SHORT_TERM Window
-' ==============================
-
-SUCCESS --> ABSENT : SHORT_TERM\nwindowExpireAt reached\nrecord deleted
-
-FAILED --> ABSENT : SHORT_TERM\nwindowExpireAt reached\nrecord deleted
-
+SUCCESS --> PROCESSING : WINDOWED semantic window expired\nnext execute starts version+1
+FAILED --> PROCESSING : WINDOWED semantic window expired\nnext execute starts version+1
 
 note right of PROCESSING
-PROCESSING 是唯一真正的“执行中”持久状态。
-
 PROCESSING_ACTIVE / PROCESSING_EXPIRED
-只是根据 processingExpireAt 得出的判定视图，
-不要写成数据库 status。
-end note
+are derived decisions, not persisted statuses.
 
-note right of FAILED
-FAILED 是否能重新执行，
-由 failureRetryable / failureCode /
-RecoveryPolicy 决定。
-
-不要增加 FAILED_TIMEOUT、
-FAILED_FINAL 等大量数据库枚举。
-end note
-
-note bottom of PROCESSING_EXPIRED
-普通 execute() 不负责恢复。
-
-可靠任务组件调用 recover()
-才允许状态接管。
+Any stale markSuccess/markFailed with an old
+owner/version must update 0 rows / be rejected.
 end note
 
 note bottom of SUCCESS
-SHORT_TERM:
-window 到期后删除，可重新执行。
-
-DURABLE:
-默认长期保存，不因 TTL 自动消失。
+DURABLE: long-lived business fact.
+WINDOWED: when windowExpireAt is reached,
+a new generation may start even if physical
+record is still retained.
 end note
-
 @enduml

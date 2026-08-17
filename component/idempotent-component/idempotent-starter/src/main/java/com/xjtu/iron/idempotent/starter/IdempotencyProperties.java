@@ -1,8 +1,9 @@
 package com.xjtu.iron.idempotent.starter;
 
-import com.xjtu.iron.idempotent.api.IdempotencyMode;
-import com.xjtu.iron.idempotent.api.IdempotencyRecoveryMode;
-import com.xjtu.iron.idempotent.api.IdempotencyWindowPolicy;
+import com.xjtu.iron.idempotent.api.policy.IdempotencyMode;
+import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryMode;
+import com.xjtu.iron.idempotent.api.policy.IdempotencyResultPolicy;
+import com.xjtu.iron.idempotent.api.policy.IdempotencyWindowPolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
@@ -24,7 +25,17 @@ public class IdempotencyProperties {
     private String defaultShortTermRepository = "redis";
     private String defaultDurableRepository = "jdbc";
     private Duration processingTimeout = Duration.ofSeconds(30);
-    private boolean storeResult = false;
+
+    /**
+     * SUCCESS 后的结果保存/回放策略。默认只保存成功状态，不保存业务返回值。
+     */
+    private IdempotencyResultPolicy resultPolicy = IdempotencyResultPolicy.STATUS_ONLY;
+
+    /**
+     * V1.x 兼容配置：true 等价于 STORE_AND_REPLAY，false 等价于 STATUS_ONLY。
+     * 使用 Boolean 是为了区分“没有配置 store-result”和“显式配置了 store-result”。
+     */
+    private Boolean storeResult;
 
     private final ShortTerm shortTerm = new ShortTerm();
     private final Durable durable = new Durable();
@@ -43,8 +54,29 @@ public class IdempotencyProperties {
     public void setDefaultDurableRepository(String value) { this.defaultDurableRepository = value; }
     public Duration getProcessingTimeout() { return processingTimeout; }
     public void setProcessingTimeout(Duration processingTimeout) { this.processingTimeout = processingTimeout; }
-    public boolean isStoreResult() { return storeResult; }
+    public IdempotencyResultPolicy getResultPolicy() { return resultPolicy; }
+    public void setResultPolicy(IdempotencyResultPolicy resultPolicy) { this.resultPolicy = resultPolicy; }
+
+    /**
+     * @deprecated 新配置使用 result-policy。
+     */
+    @Deprecated
+    public boolean isStoreResult() { return resolvedResultPolicy().storesResult(); }
+
+    /**
+     * @deprecated 新配置使用 result-policy。
+     */
+    @Deprecated
     public void setStoreResult(boolean storeResult) { this.storeResult = storeResult; }
+
+    public IdempotencyResultPolicy resolvedResultPolicy() {
+        if (storeResult != null) {
+            return storeResult
+                    ? IdempotencyResultPolicy.STORE_AND_REPLAY
+                    : IdempotencyResultPolicy.STATUS_ONLY;
+        }
+        return resultPolicy == null ? IdempotencyResultPolicy.STATUS_ONLY : resultPolicy;
+    }
     public ShortTerm getShortTerm() { return shortTerm; }
     public Durable getDurable() { return durable; }
     public Lock getLock() { return lock; }

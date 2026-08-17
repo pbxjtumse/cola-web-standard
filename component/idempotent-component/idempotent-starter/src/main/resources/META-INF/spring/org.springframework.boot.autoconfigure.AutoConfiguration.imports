@@ -1,1 +1,1 @@
-com.xjtu.iron.idempotent.starter.IdempotencyAutoConfiguration
+com.xjtu.iron.idempotent.starter.autoconfigure.IdempotencyAutoConfiguration

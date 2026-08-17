@@ -3,7 +3,7 @@ package com.xjtu.iron.idempotent.provider.jdbc;
 /**
  * JDBC Connection 与事务参与方式的扩展点。
  *
- * <p>V1.2 把三类执行语义明确拆开：</p>
+ * <p>V2 把三类执行语义明确拆开：</p>
  * <ul>
  *     <li>{@link #withConnection(JdbcWork)}：普通查询/诊断，不要求当前必须存在事务；</li>
  *     <li>{@link #inCurrentTransaction(JdbcWork)}：Tx-B 中复用当前业务事务 Connection；</li>

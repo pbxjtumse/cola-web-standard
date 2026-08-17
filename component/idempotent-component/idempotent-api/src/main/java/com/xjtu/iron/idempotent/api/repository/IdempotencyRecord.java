@@ -1,8 +1,8 @@
 package com.xjtu.iron.idempotent.api.repository;
 
-import com.xjtu.iron.idempotent.api.IdempotencyRecoveryMode;
-import com.xjtu.iron.idempotent.api.IdempotencyStatus;
-import com.xjtu.iron.idempotent.api.IdempotencyWindowPolicy;
+import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryMode;
+import com.xjtu.iron.idempotent.api.state.IdempotencyStatus;
+import com.xjtu.iron.idempotent.api.policy.IdempotencyWindowPolicy;
 
 import java.time.Instant;
 
@@ -53,13 +53,13 @@ public final class IdempotencyRecord {
     /** NONE / EXTERNAL_TASK。 */
     private final IdempotencyRecoveryMode recoveryMode;
 
-    /** SHORT_TERM 窗口推进策略。 */
+    /** WINDOWED 窗口推进策略。 */
     private final IdempotencyWindowPolicy windowPolicy;
 
     /** 当前 PROCESSING generation 的执行权过期时间。 */
     private final Instant processingExpireAt;
 
-    /** SHORT_TERM 语义窗口结束时间。 */
+    /** WINDOWED 语义窗口结束时间。 */
     private final Instant windowExpireAt;
 
     /** Redis/DB 记录可物理清理的时间；不继续承担幂等语义。 */

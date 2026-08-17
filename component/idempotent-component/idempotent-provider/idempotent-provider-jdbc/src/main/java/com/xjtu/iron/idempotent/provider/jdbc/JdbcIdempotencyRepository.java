@@ -1,9 +1,17 @@
 package com.xjtu.iron.idempotent.provider.jdbc;
 
-import com.xjtu.iron.idempotent.api.IdempotencyMode;
-import com.xjtu.iron.idempotent.api.IdempotencyRecoveryMode;
-import com.xjtu.iron.idempotent.api.IdempotencyStatus;
-import com.xjtu.iron.idempotent.api.IdempotencyWindowPolicy;
+import com.xjtu.iron.idempotent.api.policy.IdempotencyMode;
+import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryMode;
+import com.xjtu.iron.idempotent.api.repository.acquire.IdempotencyAcquireRequest;
+import com.xjtu.iron.idempotent.api.repository.acquire.IdempotencyAcquireResult;
+import com.xjtu.iron.idempotent.api.repository.acquire.IdempotencyAcquireStatus;
+import com.xjtu.iron.idempotent.api.repository.recovery.*;
+import com.xjtu.iron.idempotent.api.repository.write.IdempotencyFailureRequest;
+import com.xjtu.iron.idempotent.api.repository.write.IdempotencySuccessRequest;
+import com.xjtu.iron.idempotent.api.repository.write.IdempotencyWriteResult;
+import com.xjtu.iron.idempotent.api.repository.write.IdempotencyWriteStatus;
+import com.xjtu.iron.idempotent.api.state.IdempotencyStatus;
+import com.xjtu.iron.idempotent.api.policy.IdempotencyWindowPolicy;
 import com.xjtu.iron.idempotent.api.repository.*;
 
 import javax.sql.DataSource;
@@ -38,7 +46,7 @@ public final class JdbcIdempotencyRepository
     /**
      * 使用默认 {@link DataSourceJdbcExecutionManager} 的便捷构造。
      *
-     * <p>该默认实现不会自动加入外层 Spring 事务。V1.2 Starter 在 transaction-component 可用时，
+     * <p>该默认实现不会自动加入外层 Spring 事务。V2 Starter 在 transaction-component 可用时，
      * 会改为使用接收 {@link JdbcExecutionManager} 的构造方式注入 transaction-aware 实现。</p>
      */
     public JdbcIdempotencyRepository(DataSource dataSource, String table) {
@@ -208,7 +216,7 @@ public final class JdbcIdempotencyRepository
      * <p>WHERE 条件必须同时包含 status=PROCESSING、ownerToken、version。
      * 这使得 A 已过期、B 已接管以后，A 即使恢复也无法把 B 的新状态覆盖掉。</p>
      *
-     * <p><strong>事务边界：</strong>V1.2 固定调用 inCurrentTransaction(...)。
+     * <p><strong>事务边界：</strong>V2 固定调用 inCurrentTransaction(...)。
      * transaction-aware JdbcExecutionManager 会复用 Tx-B 当前 Connection，从而实现
      * “业务写 + SUCCESS”同事务提交；未接入事务组件时默认实现仍退化为普通 Connection。</p>
      */
@@ -256,7 +264,7 @@ public final class JdbcIdempotencyRepository
      * 当前 generation 失败后的 PROCESSING -> FAILED 条件写。
      *
      * <p>业务事务如果已经回滚，FAILED 必须使用独立新事务提交，否则失败状态也会跟着回滚。
-     * V1.2 已把该语义固化为 Tx-C = inNewTransaction(...）。</p>
+     * V2 已把该语义固化为 Tx-C = inNewTransaction(...）。</p>
      */
     @Override
     public IdempotencyWriteResult markFailed(IdempotencyFailureRequest request) {

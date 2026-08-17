@@ -1,5 +1,5 @@
 @startuml
-title V1.2 - Transaction Template 与 DURABLE JDBC 幂等闭环
+title V1.3 - Transaction Template 与 DURABLE JDBC 幂等闭环（兼容文件名）
 
 autonumber
 skinparam shadowing false
@@ -27,7 +27,7 @@ TX -> DB : BEGIN / JOIN
 TX -> BIZ : callback(IdempotencyContext)
 BIZ -> DB : business writes
 BIZ --> TX : result
-TX -> IDEM : markSuccess(owner,version)\ntransaction-bound Connection
+TX -> IDEM : ResultPolicy.capture\n+ markSuccess(owner,version)\ntransaction-bound Connection
 
 alt markSuccess == UPDATED
     IDEM --> TX : UPDATED
@@ -66,7 +66,7 @@ or timeout recovery.
 end note
 
 note bottom
-V1.2 已实现：
+V1.3 延续并增强：
 Tx-A = REQUIRES_NEW
 Tx-B = REQUIRED business + SUCCESS
 Tx-C = REQUIRES_NEW FAILED

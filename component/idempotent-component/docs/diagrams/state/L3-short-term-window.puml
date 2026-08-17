@@ -1,32 +1,14 @@
 @startuml
-title Idempotency V1.1 - L3 SHORT_TERM 窗口与物理保留
+title WINDOWED semantic window (legacy filename: short-term)
 
-hide empty description
-skinparam shadowing false
+[*] --> WindowActive : first acquire
+WindowActive --> WindowActive : duplicate access\nFIXED: unchanged\nSLIDING: extend window
+WindowActive --> WindowExpired : now >= windowExpireAt
+WindowExpired --> NewGeneration : next execute()
+NewGeneration --> WindowActive : version + 1
 
-state "Generation N\nwindow active" as ACTIVE
-state "Semantic Window Expired\n不再阻止新执行" as WINDOW_EXPIRED
-state "Retention Only\n旧物理记录可能仍存在" as RETENTION
-state "Generation N+1\n新 PROCESSING" as NEXT
-state "Redis Key Removed" as REMOVED
-
-[*] --> ACTIVE : first acquire\nwindowExpireAt = now + window
-ACTIVE --> WINDOW_EXPIRED : now >= windowExpireAt
-WINDOW_EXPIRED --> RETENTION : recordRetentionTtl > 0
-WINDOW_EXPIRED --> REMOVED : retention=0
-RETENTION --> NEXT : 新请求到达\n原子 rollover\nversion + 1
-RETENTION --> REMOVED : now >= retentionExpireAt
-WINDOW_EXPIRED --> NEXT : 新请求先于物理清理
-
-note right of ACTIVE
-FIXED：windowExpireAt 不动。
-SLIDING：有效访问把 windowExpireAt
-推进到 now + idempotencyWindow。
+note right of WindowExpired
+Physical record may still exist during recordRetentionTtl.
+Semantic idempotency protection has ended.
 end note
-
-note right of RETENTION
-Retention 只为排障/观测。
-不继续提供幂等阻断语义。
-end note
-
 @enduml

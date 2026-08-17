@@ -1,54 +1,58 @@
 @startuml
-skinparam shadowing false
-title Idempotency V1 - 主执行流程
+title Idempotency V1.3 - Main execute()
 
 actor Caller
-participant IdempotencyExecutor as Executor
-participant DistributedLockClient as Lock
-participant IdempotencyRepository as Repo
-participant BusinessCallback as Biz
+participant "IdempotencyExecutor" as E
+participant "PolicyRegistry" as P
+participant "DistributedLock\n(optional)" as L
+participant "Repository" as R
+participant "StateMachine" as S
+participant "TransactionCoordinator\n(optional)" as T
+participant "Business" as B
+participant "ResultPolicy<T>" as RP
 
-Caller -> Executor : execute(request, callback)
-Executor -> Executor : validate / resolve repository / ownerToken
+Caller -> E : execute(request, resultPolicy, callback)
+E -> P : resolve(policyName / inline policy)
+P --> E : policy
 
-alt lock.enabled
-  Executor -> Lock : execute(state:key)\n仅保护 tryAcquire 短临界区
-  Lock -> Repo : tryAcquire
-  Repo --> Lock : AcquireResult
-  Lock --> Executor : LockResult<AcquireResult>
-  alt lock failed && fallback=true
-    Executor -> Repo : tryAcquire directly
-    Repo --> Executor : AcquireResult
-  end
-else lock.disabled
-  Executor -> Repo : tryAcquire
-  Repo --> Executor : AcquireResult
+opt short lock enabled
+  E -> L : acquire(state key)
 end
 
-alt SUCCESS
-  Executor --> Caller : REPLAYED
-else PROCESSING
-  Executor --> Caller : PROCESSING
-else FAILED
-  Executor --> Caller : PREVIOUS_FAILED
-else KEY_CONFLICT
-  Executor --> Caller : KEY_CONFLICT
-else ACQUIRED
-  Executor -> Biz : callback(IdempotencyContext)\nversion 可作为 fencing version
-  alt callback success
-    Biz --> Executor : value
-    Executor -> Repo : markSuccess(ownerToken, version)
-    alt UPDATED
-      Repo --> Executor : SUCCESS snapshot
-      Executor --> Caller : EXECUTED(value)
-    else STALE_OWNER / ALREADY_FINAL
-      Repo --> Executor : stale/final snapshot
-      Executor --> Caller : OWNERSHIP_LOST
-    end
-  else callback exception
-    Biz --> Executor : exception
-    Executor -> Repo : markFailed(ownerToken, version, failure)
-    Executor --> Caller : EXECUTION_FAILED
+E -> R : tryAcquire(request)\natomic CAS/Lua/short Tx-A
+R --> E : AcquireResult
+
+opt short lock acquired
+  E -> L : release()
+end
+
+E -> S : onAcquire(status)
+S --> E : EXECUTE / REPLAY / RETURN
+
+alt EXECUTE
+  alt Repository participates in business transaction
+    E -> T : executeRequired(Tx-B)
+    T -> B : callback()
+    B --> T : T
+    T -> RP : capture(T)
+    RP --> T : stored payload
+    T -> R : markSuccess(owner,version,payload)
+    R --> T : UPDATED
+    T --> E : transaction result
+  else no local business transaction
+    E -> B : callback()
+    B --> E : T
+    E -> RP : capture(T)
+    RP --> E : stored payload
+    E -> R : markSuccess(owner,version,payload)
+    R --> E : WriteResult
   end
+  E --> Caller : EXECUTED
+else REPLAY
+  E -> RP : replay(stored payload)
+  RP --> E : T / null
+  E --> Caller : REPLAYED
+else RETURN
+  E --> Caller : PROCESSING / conflict / failure state
 end
 @enduml

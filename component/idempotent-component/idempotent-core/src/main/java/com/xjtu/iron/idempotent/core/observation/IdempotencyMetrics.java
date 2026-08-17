@@ -1,7 +1,7 @@
 package com.xjtu.iron.idempotent.core.observation;
 
-import com.xjtu.iron.idempotent.api.IdempotencyMode;
-import com.xjtu.iron.idempotent.api.IdempotencyResultStatus;
+import com.xjtu.iron.idempotent.api.policy.IdempotencyMode;
+import com.xjtu.iron.idempotent.api.result.IdempotencyResultStatus;
 
 import java.time.Duration;
 

@@ -88,7 +88,7 @@ local retentionMs = tonumber(ARGV[8])
 
 -- SLIDING_ON_ACCESS 明确要求“本次有效访问后重新计算窗口”。
 -- FIXED_FROM_FIRST_ACQUIRE 不进入这里，因此首次 windowExpireAt 保持不变。
-if mode == 'SHORT_TERM' and policy == 'SLIDING_ON_ACCESS' then
+if (mode == 'WINDOWED' or mode == 'SHORT_TERM') and policy == 'SLIDING_ON_ACCESS' then
     local windowExpireAt = now + windowMs
     local retentionExpireAt = windowExpireAt + retentionMs
 

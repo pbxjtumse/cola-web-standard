@@ -1,16 +1,17 @@
 -- Reliable Task 调用 recover() 时的原子恢复抢占。
 -- ARGV:
 -- 1 nowMs, 2 newOwner, 3 requestHash, 4 routeKey,
--- 5 processingTimeoutMs, 6 recoverFailed, 7 expectedOwner, 8 expectedVersion
+-- 5 processingTimeoutMs, 6 recoverProcessingTimeout, 7 recoverFailed, 8 expectedOwner, 9 expectedVersion
 local key = KEYS[1]
 local now = tonumber(ARGV[1])
 local newOwner = ARGV[2]
 local requestHash = ARGV[3]
 local routeKey = ARGV[4]
 local processingTimeout = tonumber(ARGV[5])
-local recoverFailed = ARGV[6] == '1'
-local expectedOwner = ARGV[7]
-local expectedVersion = ARGV[8]
+local recoverProcessingTimeout = ARGV[6] == '1'
+local recoverFailed = ARGV[7] == '1'
+local expectedOwner = ARGV[8]
+local expectedVersion = ARGV[9]
 
 local function h(name)
     local value = redis.call('HGET', key, name)
@@ -38,7 +39,7 @@ if h('recovery_mode') ~= 'EXTERNAL_TASK' then
     return snapshot(4, '')
 end
 
--- SHORT_TERM 窗口已经结束时不再恢复旧 generation。
+-- WINDOWED 窗口已经结束时不再恢复旧 generation。
 local windowExpireAt = tonumber(h('window_expire_at')) or 0
 if windowExpireAt > 0 and windowExpireAt <= now then
     return snapshot(4, '')
@@ -68,6 +69,9 @@ if status == 'PROCESSING' then
     local processingExpireAt = tonumber(h('processing_expire_at')) or 0
     if processingExpireAt > now then
         return snapshot(3, '')
+    end
+    if not recoverProcessingTimeout then
+        return snapshot(4, '')
     end
     reason = 'PROCESSING_TIMEOUT'
 elseif status == 'FAILED' then

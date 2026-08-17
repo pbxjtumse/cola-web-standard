@@ -1,53 +1,38 @@
 @startuml
-title Idempotency V1.1 - Reliable Task 扫描与 recover()
+title Idempotency V1.3 - Reliable Recovery
 
-autonumber
-skinparam shadowing false
+participant "Reliable Task" as Task
+participant "RecoveryQueryService" as Q
+participant "PolicyRegistry" as P
+participant "Repository" as R
+participant "IdempotencyExecutor" as E
+participant "StateMachine" as S
+participant "Business / Tx-B" as B
 
-participant "Reliable Task\nScheduler/Scanner" as TASK
-participant "IdempotencyRecoveryQueryService" as QUERY
-database "JdbcIdempotencyRepository" as DB
-participant "IdempotencyExecutor" as EXEC
-participant "DistributedLockClient\n(optional)" as LOCK
-participant "Business Callback" as BIZ
+Task -> Q : findCandidates(policyName, query)
+Q -> P : resolve(policyName)
+P --> Q : policy
+Q -> R : findRecoveryCandidates(query)
+R --> Q : candidate(owner=A, version=10)
+Q --> Task : candidate
 
-TASK -> QUERY : findCandidates(namespace, routeKey, now, limit)
-QUERY -> DB : query recovery_mode=EXTERNAL_TASK\nexpired PROCESSING / retryable FAILED
-DB --> QUERY : candidate(key, routeKey, owner, version)
-QUERY --> TASK : candidates
+... queue/schedule delay ...
 
-TASK -> TASK : 持久化/投递 recovery task
-TASK -> EXEC : recover(key, expectedOwner, expectedVersion)
+Task -> E : recover(expectedOwner=A,\nexpectedVersion=10)
+E -> R : tryRecover(...)\natomic re-check
 
-opt short lock
-  EXEC -> LOCK : lock state:route:key
-  LOCK -> DB : tryRecover()
-else no lock
-  EXEC -> DB : tryRecover()
+alt candidate still current and policy allows
+  R -> R : owner=B\nversion=11\nstatus=PROCESSING
+  R --> E : RECOVERY_ACQUIRED
+  E -> S : onRecovery(RECOVERY_ACQUIRED)
+  S --> E : EXECUTE
+  E -> B : execute generation B/11
+  B --> E : success/failure
+  E --> Task : RECOVERED / failure
+else candidate stale
+  R --> E : STALE_CANDIDATE
+  E -> S : onRecovery(STALE_CANDIDATE)
+  S --> E : RETURN
+  E --> Task : STALE_RECOVERY_CANDIDATE
 end
-
-alt candidate still valid
-  DB -> DB : atomic takeover\nnewOwner + version+1
-  DB --> EXEC : RECOVERY_ACQUIRED
-  EXEC -> BIZ : callback(recoveryExecution=true)
-  BIZ --> EXEC : result
-  EXEC -> DB : markSuccess(newOwner,newVersion)
-  DB --> EXEC : UPDATED
-  EXEC --> TASK : RECOVERED
-else record changed after scan
-  DB --> EXEC : STALE_CANDIDATE
-  EXEC --> TASK : STALE_RECOVERY_CANDIDATE\n安全放弃旧任务
-else PROCESSING still active
-  DB --> EXEC : PROCESSING_ACTIVE
-  EXEC --> TASK : PROCESSING
-else recovery disabled/final
-  DB --> EXEC : NOT_RECOVERABLE / FAILED_FINAL
-  EXEC --> TASK : RECOVERY_NOT_ALLOWED
-end
-
-note bottom of TASK
-定时器、分页、分片、MQ、Claim 属于 Reliable Task。
-幂等组件只提供候选查询协议与原子 recover 原语。
-end note
-
 @enduml

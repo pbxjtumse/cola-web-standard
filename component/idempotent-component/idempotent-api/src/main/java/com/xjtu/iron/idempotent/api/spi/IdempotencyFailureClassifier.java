@@ -1,6 +1,6 @@
 package com.xjtu.iron.idempotent.api.spi;
 
-import com.xjtu.iron.idempotent.api.repository.IdempotencyFailureInfo;
+import com.xjtu.iron.idempotent.api.repository.write.IdempotencyFailureInfo;
 
 import java.time.Instant;
 

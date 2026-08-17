@@ -1,9 +1,19 @@
 package com.xjtu.iron.idempotent.provider.redis;
 
-import com.xjtu.iron.idempotent.api.IdempotencyMode;
-import com.xjtu.iron.idempotent.api.IdempotencyRecoveryMode;
-import com.xjtu.iron.idempotent.api.IdempotencyStatus;
-import com.xjtu.iron.idempotent.api.IdempotencyWindowPolicy;
+import com.xjtu.iron.idempotent.api.policy.IdempotencyMode;
+import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryMode;
+import com.xjtu.iron.idempotent.api.repository.recovery.IdempotencyRecoveryAcquireRequest;
+import com.xjtu.iron.idempotent.api.repository.recovery.IdempotencyRecoveryResult;
+import com.xjtu.iron.idempotent.api.repository.recovery.IdempotencyRecoveryStatus;
+import com.xjtu.iron.idempotent.api.repository.acquire.IdempotencyAcquireRequest;
+import com.xjtu.iron.idempotent.api.repository.acquire.IdempotencyAcquireResult;
+import com.xjtu.iron.idempotent.api.repository.acquire.IdempotencyAcquireStatus;
+import com.xjtu.iron.idempotent.api.repository.write.IdempotencyFailureRequest;
+import com.xjtu.iron.idempotent.api.repository.write.IdempotencySuccessRequest;
+import com.xjtu.iron.idempotent.api.repository.write.IdempotencyWriteResult;
+import com.xjtu.iron.idempotent.api.repository.write.IdempotencyWriteStatus;
+import com.xjtu.iron.idempotent.api.state.IdempotencyStatus;
+import com.xjtu.iron.idempotent.api.policy.IdempotencyWindowPolicy;
 import com.xjtu.iron.idempotent.api.repository.*;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;

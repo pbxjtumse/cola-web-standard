@@ -1,48 +1,47 @@
 @startuml
-title Idempotency V1.1 - Component Overview
+title Idempotent Component V1.3 - L0
 
-skinparam shadowing false
 skinparam componentStyle rectangle
 
-component "Idempotency API" as API {
+actor Caller
+
+rectangle "idempotent-api" {
   [IdempotencyExecutor]
-  [IdempotencyRecoveryQueryService]
-  [IdempotencyRequestHasher]
+  [IdempotencyRequest]
+  [IdempotencyPolicy]
+  [ResultPolicy<T>]
+  [RecoveryPolicy]
 }
 
-component "Idempotency Core" as CORE {
-  [DefaultIdempotencyExecutor]
+rectangle "idempotent-core" {
+  [PolicyRegistry]
   [RepositoryRegistry]
-  [RecoveryQueryService]
+  [StateMachine]
+  [DefaultIdempotencyExecutor]
 }
 
-component "Optional Coordination" as COORD {
-  [DistributedLockClient]
+rectangle "providers" {
+  [Redis Repository\nWINDOWED]
+  [JDBC Repository\nWINDOWED / DURABLE]
 }
 
-component "State Providers" as PROVIDERS {
-  [RedisIdempotencyRepository\nSHORT_TERM]
-  [JdbcIdempotencyRepository\nDURABLE]
+rectangle "optional integrations" {
+  [DistributedLockClient\ncontention reduction]
+  [transaction-component\nBusiness + SUCCESS]
 }
 
-component "Future External Components" as FUTURE {
-  [Reliable Task]
-  [Transaction Template]
-  [Data Routing]
+rectangle "external reliable task" {
+  [Recovery Scanner / Scheduler]
 }
 
-API --> CORE
-CORE --> COORD : optional short lock
-CORE --> PROVIDERS : required state correctness
-[RecoveryQueryService] --> [JdbcIdempotencyRepository\nDURABLE]
-[Reliable Task] --> [IdempotencyRecoveryQueryService] : scan candidates
-[Reliable Task] --> [IdempotencyExecutor] : recover()
-[Transaction Template] ..> [JdbcIdempotencyRepository\nDURABLE] : transaction-aware JdbcExecutionManager
-[Data Routing] ..> [JdbcIdempotencyRepository\nDURABLE] : routeKey -> shard
-
-note bottom of PROVIDERS
-Repository 是正确性核心：
-Redis 使用 Lua；JDBC 使用 UNIQUE / row lock / CAS。
-end note
-
+Caller --> [IdempotencyExecutor]
+[IdempotencyExecutor] --> [DefaultIdempotencyExecutor]
+[DefaultIdempotencyExecutor] --> [PolicyRegistry]
+[DefaultIdempotencyExecutor] --> [RepositoryRegistry]
+[DefaultIdempotencyExecutor] --> [StateMachine]
+[RepositoryRegistry] --> [Redis Repository\nWINDOWED]
+[RepositoryRegistry] --> [JDBC Repository\nWINDOWED / DURABLE]
+[DefaultIdempotencyExecutor] ..> [DistributedLockClient\ncontention reduction] : optional short lock
+[DefaultIdempotencyExecutor] ..> [transaction-component\nBusiness + SUCCESS] : optional local tx
+[Recovery Scanner / Scheduler] --> [IdempotencyExecutor] : recover()
 @enduml

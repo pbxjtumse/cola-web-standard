@@ -1,7 +1,6 @@
 package com.xjtu.iron.idempotent.starter;
 
-import com.xjtu.iron.idempotent.api.IdempotencyMode;
-import com.xjtu.iron.idempotent.api.IdempotencyResultStatus;
+import com.xjtu.iron.idempotent.api.policy.IdempotencyMode;
 import com.xjtu.iron.idempotent.core.observation.IdempotencyMetrics;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;

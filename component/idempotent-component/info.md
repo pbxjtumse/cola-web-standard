@@ -1,3 +1,5 @@
+> **历史设计讨论存档**：本文保留早期推导过程，部分命名/API 已被 V1.3 替代。当前实现请以 `README.md`、`docs/v1.3-architecture.md`、`docs/result-replay-and-result-policy.md` 为准。
+
 对，你这里的理解其实更接近我最终会推荐给你的设计：
 
 > **只要幂等状态承担“业务事实”的职责，我更倾向把它持久化在关系型数据库，而不是只放 Redis。**
