@@ -1,4 +1,2 @@
-/**
- * 基于 UNIQUE、短事务、行锁和 owner/version CAS 的 JDBC 幂等 Repository。
- */
+/** JDBC Repository 实现。 */
 package com.xjtu.iron.idempotent.provider.jdbc.repository;

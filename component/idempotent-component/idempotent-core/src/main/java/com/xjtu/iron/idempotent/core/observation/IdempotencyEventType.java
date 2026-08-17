@@ -1,7 +1,5 @@
 package com.xjtu.iron.idempotent.core.observation;
 
-import com.xjtu.iron.idempotent.api.context.IdempotencyStage;
-
 /**
  * 幂等生命周期事件类型。
  *

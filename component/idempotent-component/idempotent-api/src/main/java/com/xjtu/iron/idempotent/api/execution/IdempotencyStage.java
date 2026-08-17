@@ -1,6 +1,4 @@
-package com.xjtu.iron.idempotent.api.context;
-
-import com.xjtu.iron.idempotent.api.result.IdempotencyResultStatus;
+package com.xjtu.iron.idempotent.api.execution;
 
 /**
  * 一次幂等调用所处的处理阶段。

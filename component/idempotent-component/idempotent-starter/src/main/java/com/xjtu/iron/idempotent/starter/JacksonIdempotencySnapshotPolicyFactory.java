@@ -1,4 +1,4 @@
-package com.xjtu.iron.idempotent.starter.result;
+package com.xjtu.iron.idempotent.starter;
 
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;

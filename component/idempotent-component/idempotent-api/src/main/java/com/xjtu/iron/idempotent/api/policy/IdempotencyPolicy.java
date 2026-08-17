@@ -1,15 +1,14 @@
 package com.xjtu.iron.idempotent.api.policy;
 
-import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryMode;
+import com.xjtu.iron.idempotent.api.execution.IdempotencyRequest;
 import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryPolicy;
-import com.xjtu.iron.idempotent.api.request.IdempotencyRequest;
 
 import java.time.Duration;
 
 /**
  * 一类幂等业务的稳定策略。
  *
- * <p>V1.3 把“单次请求是谁”和“这类业务平时怎么执行”拆开：
+ * <p>把“单次请求是谁”和“这类业务平时怎么执行”拆开：
  * {@link IdempotencyRequest} 只承载 key/hash/routeKey/policyName，
  * 本类承载生命周期、恢复、Repository、窗口和锁策略。</p>
  *
@@ -67,34 +66,6 @@ public final class IdempotencyPolicy {
 
     public static IdempotencyPolicy windowed() {
         return builder().mode(IdempotencyMode.WINDOWED).build();
-    }
-
-    /**
-     * 兼容 V1.2 Options。
-     */
-    @SuppressWarnings("deprecation")
-    public static IdempotencyPolicy fromOptions(IdempotencyOptions options) {
-        if (options == null) {
-            return null;
-        }
-        return builder()
-                .mode(options.getMode())
-                .namespace(options.getNamespace())
-                .repositoryName(options.getRepositoryName())
-                .processingTimeout(options.getProcessingTimeout())
-                .idempotencyWindow(options.getIdempotencyWindow())
-                .windowPolicy(options.getWindowPolicy())
-                .recordRetentionTtl(options.getRecordRetentionTtl())
-                .recoveryPolicy(IdempotencyRecoveryPolicy.builder()
-                        .mode(options.getRecoveryMode())
-                        .recoverProcessingTimeout(options.getRecoveryMode()
-                                == IdempotencyRecoveryMode.EXTERNAL_TASK)
-                        .recoverRetryableFailure(
-                                options.getRecoveryMode() == IdempotencyRecoveryMode.EXTERNAL_TASK
-                                        && options.isRecoverFailed())
-                        .build())
-                .lockOptions(options.getLockOptions())
-                .build();
     }
 
     public void validate() {

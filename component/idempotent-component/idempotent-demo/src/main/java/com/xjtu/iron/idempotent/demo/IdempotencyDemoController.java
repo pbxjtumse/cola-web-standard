@@ -1,13 +1,10 @@
 package com.xjtu.iron.idempotent.demo;
 
-import com.xjtu.iron.idempotent.api.context.*;
 import com.xjtu.iron.idempotent.api.execution.*;
 import com.xjtu.iron.idempotent.api.policy.*;
 import com.xjtu.iron.idempotent.api.recovery.*;
-import com.xjtu.iron.idempotent.api.request.*;
-import com.xjtu.iron.idempotent.api.result.*;
-import com.xjtu.iron.idempotent.api.result.IdempotencyResultPolicy;
 import com.xjtu.iron.idempotent.api.state.*;
+import com.xjtu.iron.idempotent.api.result.*;
 import com.xjtu.iron.idempotent.api.spi.IdempotencyRequestHasher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;

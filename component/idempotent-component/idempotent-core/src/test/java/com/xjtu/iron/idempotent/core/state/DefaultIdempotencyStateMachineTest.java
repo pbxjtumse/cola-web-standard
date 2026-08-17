@@ -1,6 +1,6 @@
 package com.xjtu.iron.idempotent.core.state;
 
-import com.xjtu.iron.idempotent.api.result.IdempotencyResultStatus;
+import com.xjtu.iron.idempotent.api.execution.IdempotencyResultStatus;
 import com.xjtu.iron.idempotent.api.repository.acquire.IdempotencyAcquireStatus;
 import com.xjtu.iron.idempotent.api.repository.recovery.IdempotencyRecoveryStatus;
 import org.junit.jupiter.api.Test;

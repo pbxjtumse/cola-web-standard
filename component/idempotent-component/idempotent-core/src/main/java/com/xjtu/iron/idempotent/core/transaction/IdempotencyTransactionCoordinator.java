@@ -1,6 +1,5 @@
 package com.xjtu.iron.idempotent.core.transaction;
 
-
 /**
  * 幂等组件对“业务事务边界”的最小依赖。
  *

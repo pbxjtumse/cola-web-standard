@@ -1,7 +1,5 @@
 package com.xjtu.iron.idempotent.api.spi;
 
-import com.xjtu.iron.idempotent.api.result.IdempotencyResultPolicy;
-
 /**
  * V1.2 结果编解码 SPI。
  *

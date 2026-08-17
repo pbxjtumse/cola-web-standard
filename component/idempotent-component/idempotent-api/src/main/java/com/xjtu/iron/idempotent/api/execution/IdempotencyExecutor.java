@@ -1,8 +1,6 @@
 package com.xjtu.iron.idempotent.api.execution;
 
 import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryRequest;
-import com.xjtu.iron.idempotent.api.request.IdempotencyRequest;
-import com.xjtu.iron.idempotent.api.result.IdempotencyResult;
 
 import com.xjtu.iron.idempotent.api.result.IdempotencyResultPolicies;
 import com.xjtu.iron.idempotent.api.result.IdempotencyResultPolicy;

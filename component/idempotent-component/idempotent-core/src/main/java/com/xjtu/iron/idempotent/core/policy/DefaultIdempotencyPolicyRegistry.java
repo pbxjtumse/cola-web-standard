@@ -1,6 +1,5 @@
 package com.xjtu.iron.idempotent.core.policy;
 
-import com.xjtu.iron.idempotent.api.policy.IdempotencyOptions;
 import com.xjtu.iron.idempotent.api.policy.IdempotencyPolicy;
 
 import java.util.LinkedHashMap;
@@ -14,10 +13,12 @@ import java.util.Objects;
  * <p>解析优先级固定为：</p>
  * <pre>
  * inline policy
- *   > legacy options
- *   > policyName
- *   > default policy
+ *   &gt; policyName
+ *   &gt; default policy
  * </pre>
+ *
+ * <p>不再保留旧 Options 兼容分支。Request 只负责选择 Policy，
+ * 所有运行策略统一收敛到 {@link IdempotencyPolicy}。</p>
  */
 public final class DefaultIdempotencyPolicyRegistry implements IdempotencyPolicyRegistry {
 
@@ -50,20 +51,13 @@ public final class DefaultIdempotencyPolicyRegistry implements IdempotencyPolicy
     }
 
     @Override
-    @SuppressWarnings("deprecation")
     public IdempotencyPolicy resolve(
             String policyName,
-            IdempotencyPolicy inlinePolicy,
-            IdempotencyOptions legacyOptions) {
+            IdempotencyPolicy inlinePolicy) {
 
         if (inlinePolicy != null) {
             inlinePolicy.validate();
             return inlinePolicy;
-        }
-        if (legacyOptions != null) {
-            IdempotencyPolicy policy = legacyOptions.toPolicy();
-            policy.validate();
-            return policy;
         }
 
         String resolvedName = normalize(policyName);

@@ -1,6 +1,4 @@
-package com.xjtu.iron.idempotent.api.result;
-
-import com.xjtu.iron.idempotent.api.execution.IdempotencyExecutor;
+package com.xjtu.iron.idempotent.api.execution;
 
 /**
  * 一次 {@link IdempotencyExecutor} 调用返回给上层的最终结果。

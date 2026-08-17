@@ -1,7 +1,5 @@
 package com.xjtu.iron.idempotent.core.transaction;
 
-import com.xjtu.iron.idempotent.api.execution.IdempotencyCallback;
-
 /**
  * 幂等 Core 交给事务集成层执行的一段工作。
  *

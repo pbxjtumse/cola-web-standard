@@ -1,7 +1,4 @@
-package com.xjtu.iron.idempotent.api.result;
-
-import com.xjtu.iron.idempotent.api.context.IdempotencyStage;
-import com.xjtu.iron.idempotent.api.execution.IdempotencyExecutor;
+package com.xjtu.iron.idempotent.api.execution;
 
 import com.xjtu.iron.idempotent.api.repository.IdempotencyRecord;
 

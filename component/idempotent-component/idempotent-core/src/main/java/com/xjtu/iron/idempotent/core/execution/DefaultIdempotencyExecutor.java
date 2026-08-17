@@ -1,20 +1,17 @@
 package com.xjtu.iron.idempotent.core.execution;
 
-import com.xjtu.iron.idempotent.core.owner.IdempotencyOwnerTokenGenerator;
-import com.xjtu.iron.idempotent.core.policy.IdempotencyPolicyRegistry;
 import com.xjtu.iron.idempotent.core.repository.IdempotencyRepositoryRegistry;
+import com.xjtu.iron.idempotent.core.policy.IdempotencyPolicyRegistry;
+import com.xjtu.iron.idempotent.core.owner.IdempotencyOwnerTokenGenerator;
 
 import com.xjtu.iron.distributed.lock.api.DistributedLockClient;
 import com.xjtu.iron.distributed.lock.api.LockCallback;
 import com.xjtu.iron.distributed.lock.api.LockOptions;
 import com.xjtu.iron.distributed.lock.api.LockResult;
 import com.xjtu.iron.distributed.lock.api.LockWaitStrategy;
-import com.xjtu.iron.idempotent.api.context.*;
 import com.xjtu.iron.idempotent.api.execution.*;
 import com.xjtu.iron.idempotent.api.policy.*;
 import com.xjtu.iron.idempotent.api.recovery.*;
-import com.xjtu.iron.idempotent.api.request.*;
-import com.xjtu.iron.idempotent.api.result.*;
 import com.xjtu.iron.idempotent.api.state.*;
 import com.xjtu.iron.idempotent.api.repository.*;
 import com.xjtu.iron.idempotent.api.repository.acquire.*;
@@ -37,7 +34,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * V1.3 默认幂等执行器。
+ * 默认幂等执行器。
  *
  * <p>核心链路：</p>
  * <pre>
@@ -110,7 +107,6 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
             definition = prepare(
                     request.getPolicyName(),
                     request.getPolicy(),
-                    legacyOptions(request),
                     resultPolicy);
         } catch (RuntimeException error) {
             return invalid(error);
@@ -177,7 +173,6 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
             definition = prepare(
                     request.getPolicyName(),
                     request.getPolicy(),
-                    legacyOptions(request),
                     resultPolicy);
         } catch (RuntimeException error) {
             return invalid(error);
@@ -291,24 +286,13 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                 lockFallback);
     }
 
-    @SuppressWarnings("deprecation")
-    private IdempotencyOptions legacyOptions(IdempotencyRequest request) {
-        return request == null ? null : request.getOptions();
-    }
-
-    @SuppressWarnings("deprecation")
-    private IdempotencyOptions legacyOptions(IdempotencyRecoveryRequest request) {
-        return request == null ? null : request.getOptions();
-    }
-
     private <T> IdempotencyExecutionDefinition<T> prepare(
             String policyName,
             IdempotencyPolicy inlinePolicy,
-            IdempotencyOptions legacyOptions,
             IdempotencyResultPolicy<T> resultPolicy) {
 
         IdempotencyPolicy policy = policyRegistry.resolve(
-                policyName, inlinePolicy, legacyOptions);
+                policyName, inlinePolicy);
         policy.validate();
 
         IdempotencyRepository repository = repositoryRegistry.resolve(

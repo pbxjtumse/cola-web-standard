@@ -1,7 +1,5 @@
 package com.xjtu.iron.idempotent.api.execution;
 
-import com.xjtu.iron.idempotent.api.context.IdempotencyContext;
-
 /**
  * 真正业务逻辑的回调接口。
  *

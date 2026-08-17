@@ -1,4 +1,2 @@
-/**
- * 普通执行与恢复执行的核心编排器和不可变执行定义。
- */
+/** 幂等主编排流程与冻结后的 ExecutionDefinition。 */
 package com.xjtu.iron.idempotent.core.execution;

@@ -22,9 +22,9 @@ class DefaultIdempotencyPolicyRegistryTest {
                         List.of(windowed),
                         "api-submit");
 
-        assertThat(registry.resolve("api-submit", null, null).getMode())
+        assertThat(registry.resolve("api-submit", null).getMode())
                 .isEqualTo(IdempotencyMode.WINDOWED);
-        assertThat(registry.resolve(null, null, null).getName())
+        assertThat(registry.resolve(null, null).getName())
                 .isEqualTo("api-submit");
     }
 }

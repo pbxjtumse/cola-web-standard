@@ -1,22 +1,18 @@
 package com.xjtu.iron.idempotent.core.execution;
 
-import com.xjtu.iron.idempotent.core.policy.DefaultIdempotencyPolicyRegistry;
-import com.xjtu.iron.idempotent.core.policy.IdempotencyPolicyRegistry;
-import com.xjtu.iron.idempotent.core.repository.DefaultIdempotencyRepositoryRegistry;
-import com.xjtu.iron.idempotent.core.repository.IdempotencyRepositoryRegistry;
-
-import com.xjtu.iron.idempotent.api.context.*;
 import com.xjtu.iron.idempotent.api.execution.*;
 import com.xjtu.iron.idempotent.api.policy.*;
 import com.xjtu.iron.idempotent.api.recovery.*;
-import com.xjtu.iron.idempotent.api.request.*;
-import com.xjtu.iron.idempotent.api.result.*;
 import com.xjtu.iron.idempotent.api.state.*;
 import com.xjtu.iron.idempotent.api.repository.*;
 import com.xjtu.iron.idempotent.api.repository.acquire.*;
 import com.xjtu.iron.idempotent.api.repository.recovery.*;
 import com.xjtu.iron.idempotent.api.repository.write.*;
 import com.xjtu.iron.idempotent.api.result.IdempotencyResultPolicies;
+import com.xjtu.iron.idempotent.core.policy.DefaultIdempotencyPolicyRegistry;
+import com.xjtu.iron.idempotent.core.policy.IdempotencyPolicyRegistry;
+import com.xjtu.iron.idempotent.core.repository.DefaultIdempotencyRepositoryRegistry;
+import com.xjtu.iron.idempotent.core.repository.IdempotencyRepositoryRegistry;
 import com.xjtu.iron.idempotent.core.state.DefaultIdempotencyStateMachine;
 import org.junit.jupiter.api.Test;
 

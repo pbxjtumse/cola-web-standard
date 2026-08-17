@@ -1,4 +1,2 @@
-/**
- * 把 Repository 原子事实翻译成 EXECUTE / REPLAY / RETURN 的纯状态决策层。
- */
+/** Repository 原子结果到 EXECUTE / REPLAY / RETURN 的纯状态决策。 */
 package com.xjtu.iron.idempotent.core.state;

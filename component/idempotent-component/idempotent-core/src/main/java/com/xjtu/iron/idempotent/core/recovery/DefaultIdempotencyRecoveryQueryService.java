@@ -1,8 +1,7 @@
 package com.xjtu.iron.idempotent.core.recovery;
 
-import com.xjtu.iron.idempotent.api.execution.IdempotencyExecutor;
-import com.xjtu.iron.idempotent.core.policy.IdempotencyPolicyRegistry;
 import com.xjtu.iron.idempotent.core.repository.IdempotencyRepositoryRegistry;
+import com.xjtu.iron.idempotent.core.policy.IdempotencyPolicyRegistry;
 
 import com.xjtu.iron.idempotent.api.policy.IdempotencyMode;
 import com.xjtu.iron.idempotent.api.policy.IdempotencyPolicy;
@@ -44,7 +43,7 @@ public final class DefaultIdempotencyRecoveryQueryService
         Objects.requireNonNull(policyName, "policyName must not be null");
         Objects.requireNonNull(query, "query must not be null");
 
-        IdempotencyPolicy policy = policyRegistry.resolve(policyName, null, null);
+        IdempotencyPolicy policy = policyRegistry.resolve(policyName, null);
         IdempotencyRepository repository = repositoryRegistry.resolve(
                 policy.getMode(), policy.getRepositoryName());
 

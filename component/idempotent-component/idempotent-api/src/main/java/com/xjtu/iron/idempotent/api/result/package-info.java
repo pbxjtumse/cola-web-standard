@@ -1,4 +1,2 @@
-/**
- * 本次执行结果以及 SUCCESS 之后的结果保存/回放策略。
- */
+/** SUCCESS 结果保存与重复请求回放策略。 */
 package com.xjtu.iron.idempotent.api.result;
