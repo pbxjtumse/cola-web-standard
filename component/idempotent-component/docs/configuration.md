@@ -1,4 +1,4 @@
-# V1.3 配置说明
+# 配置说明
 
 ## 1. 推荐配置
 
@@ -8,9 +8,7 @@ xjtu:
     idempotent:
       enabled: true
 
-      # request 未显式指定 policyName / inline policy 时使用
       default-policy: durable-default
-
       default-windowed-repository: redis
       default-durable-repository: jdbc
       processing-timeout: 30s
@@ -49,7 +47,7 @@ xjtu:
       policies:
         api-submit:
           mode: WINDOWED
-          namespace: api
+          namespace: api-submit
           repository-name: redis
           processing-timeout: 10s
           idempotency-window: 5m
@@ -62,7 +60,7 @@ xjtu:
 
         order-create:
           mode: DURABLE
-          namespace: order
+          namespace: order-create
           repository-name: jdbc
           processing-timeout: 30s
           recovery-mode: EXTERNAL_TASK
@@ -71,96 +69,54 @@ xjtu:
           lock-enabled: true
 ```
 
----
+## 2. Policy 解析顺序
 
-## 2. Policy 解析优先级
+当前只保留：
 
 ```text
 inline IdempotencyPolicy
-    >
-legacy IdempotencyOptions
     >
 policyName
     >
 default-policy
 ```
 
-V1.3 新代码优先使用：
+`IdempotencyOptions` 已删除。
+
+推荐业务调用：
 
 ```java
 IdempotencyRequest.builder()
         .key(requestId)
+        .requestHash(requestHash)
+        .routeKey(merchantId)
         .policyName("order-create")
         .build();
 ```
 
-而不是每次在业务代码中拼：
-
-```java
-IdempotencyOptions.builder()...
-```
-
-`IdempotencyOptions` 只作为 V1.2 兼容层保留。
-
----
-
-## 3. WINDOWED 配置
+## 3. WINDOWED
 
 ### processing-timeout
 
 当前 generation 的执行权租约。
 
-它不是幂等窗口。
-
 ### idempotency-window
 
-相同 key 在多长时间内仍然属于同一个逻辑幂等请求。
-
-必须：
-
-```text
-idempotencyWindow > processingTimeout
-```
-
-否则一个 generation 还可能合法 PROCESSING，整个幂等窗口却已经结束，语义冲突。
+相同 key 在多长时间内仍属于同一个逻辑请求。应大于 `processingTimeout`。
 
 ### window-policy
 
-`FIXED_FROM_FIRST_ACQUIRE`
+`FIXED_FROM_FIRST_ACQUIRE`：从第一次 acquire 开始固定窗口。
 
-```text
-T0 首次 acquire
-窗口固定为 [T0, T0 + window]
-重复访问不延长
-```
-
-`SLIDING_ON_ACCESS`
-
-```text
-窗口有效期间每次有效访问/完成都会推进到 now + window
-```
+`SLIDING_ON_ACCESS`：窗口有效期间按有效访问推进，热点场景慎用。
 
 ### record-retention-ttl
 
-语义窗口结束后额外保留旧物理记录的时间。
+语义窗口结束后旧物理记录额外保留多久。Retention 不应继续阻止新 generation。
 
-例如：
+## 4. DURABLE
 
-```text
-window = 5m
-retention = 1h
-```
-
-5 分钟后允许新 generation；
-旧记录可继续存在用于审计/诊断，直到物理 retention 到期。
-
----
-
-## 4. DURABLE 配置
-
-DURABLE 没有有限幂等语义 TTL。
-
-默认：
+DURABLE 没有有限幂等语义 TTL。默认使用 JDBC，并推荐：
 
 ```text
 recovery-mode = EXTERNAL_TASK
@@ -168,35 +124,19 @@ recover-processing-timeout = true
 recover-failed = true
 ```
 
-注意：
+注意 `recover-failed=true` 只允许恢复 `failureRetryable=true` 的 FAILED。
+
+## 5. Lock
+
+Lock 只包：
 
 ```text
-recover-failed=true
+Repository.tryAcquire / tryRecover
 ```
 
-仍然只会接管：
+不包 Business。
 
-```text
-failure_retryable = true
-```
-
-的 FAILED。
-
-失败是否 retryable 由：
-
-```java
-IdempotencyFailureClassifier
-```
-
-决定。
-
----
-
-## 5. Lock 配置
-
-Lock 是可选并发优化。
-
-默认推荐：
+推荐：
 
 ```text
 wait-time = 0
@@ -204,19 +144,7 @@ lease-time = 数秒
 fallback-to-state-on-failure = true
 ```
 
-它只保护：
-
-```text
-Repository.tryAcquire / tryRecover
-```
-
-不会把业务 callback 整段包进分布式锁。
-
-命名 Policy 可以覆盖全局 lock 配置。
-
----
-
-## 6. Transaction 配置
+## 6. Transaction
 
 ```yaml
 transaction:
@@ -224,88 +152,26 @@ transaction:
   require-template: true
 ```
 
-当：
+当 `TransactionExecutor` 存在且 JDBC Repository 使用 transaction-aware `JdbcExecutionManager` 时启用 Tx-A / Tx-B / Tx-C。
 
-```text
-TransactionExecutor bean exists
-+
-JDBC Repository 使用 transaction-aware JdbcExecutionManager
-```
+支付、结算、订单等明确要求“Business + SUCCESS 同本地事务”的应用建议 `require-template=true`，避免 transaction-component 缺失时静默降级。
 
-时启用：
+## 7. ResultPolicy 不放 YAML
 
-```text
-Tx-A REQUIRES_NEW
-Tx-B REQUIRED
-Tx-C REQUIRES_NEW
-```
-
-`require-template=true` 适合支付/结算等明确要求“Business + SUCCESS 同本地事务”的应用：
-TransactionExecutor 缺失时启动直接失败，而不是悄悄降级。
-
----
-
-## 7. ResultPolicy 不放在 YAML
-
-结果策略带 Java 泛型与业务查询逻辑：
-
-```text
-ResultPolicy<OrderResult>
-ResultPolicy<List<OrderResult>>
-ResultPolicy<PaymentResponse>
-```
-
-所以它在调用处显式选择。
-
-默认：
+ResultPolicy 带具体泛型和业务解析逻辑，因此在调用处显式选择：
 
 ```java
-execute(request, callback)
+execute(request, callback) // NONE
 ```
-
-等价于：
-
-```text
-ResultPolicy.NONE
-```
-
-快照：
 
 ```java
-execute(
-    request,
-    snapshotPolicyFactory.snapshot(
-        new IdempotencyTypeRef<OrderResult>() {}),
-    callback
-);
+execute(request,
+        snapshotPolicyFactory.snapshot(new IdempotencyTypeRef<OrderResult>() {}),
+        callback);
 ```
-
-引用：
 
 ```java
-execute(
-    request,
-    IdempotencyResultPolicies.reference(...),
-    callback
-);
+execute(request,
+        IdempotencyResultPolicies.reference(...),
+        callback);
 ```
-
----
-
-## 8. V1.2 兼容项
-
-代码中暂时保留：
-
-```text
-IdempotencyMode.SHORT_TERM
-IdempotencyOptions
-default-short-term-repository Java accessors
-shortTerm Java properties getter
-storeResult legacy setter/getter
-IdempotencyResultCodec
-```
-
-它们均不是 V1.3 新代码推荐入口。
-
-其中全局 `storeResult` 已不再驱动运行时结果保存；
-结果保存必须由 `ResultPolicy<T>` 明确决定。
