@@ -6,7 +6,7 @@ import java.time.Instant;
  * 业务 callback 失败后写入幂等记录的标准失败描述。
  *
  * <p>{@code retryable} 只表达“该失败从业务语义上允许恢复”，
- * 不代表普通 {@code execute()} 会立即重试。V1.1 中真正的再次执行必须由显式
+ * 不代表普通 {@code execute()} 会立即重试。真正的再次执行必须由显式
  * {@code recover()} 路径触发。</p>
  */
 public final class IdempotencyFailureInfo {

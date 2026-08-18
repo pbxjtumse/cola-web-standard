@@ -45,7 +45,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 幂等组件 V1.3 自动装配入口。
+ * 幂等组件自动装配入口。
  */
 @AutoConfiguration(afterName = "com.xjtu.iron.transaction.starter.autoconfigure.TransactionAutoConfiguration")
 @EnableConfigurationProperties(IdempotencyProperties.class)
@@ -299,7 +299,7 @@ public class IdempotencyAutoConfiguration {
 
         IdempotencyMode mode;
         if (source.getMode() != null) {
-            mode = source.getMode().canonical();
+            mode = source.getMode();
         } else if ("windowed-default".equals(name)) {
             mode = IdempotencyMode.WINDOWED;
         } else {

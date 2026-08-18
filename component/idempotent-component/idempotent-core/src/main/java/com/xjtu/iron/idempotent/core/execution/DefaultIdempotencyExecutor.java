@@ -914,7 +914,7 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
 
     private <T> IdempotencyResult<T> invalid(Throwable error) {
         return IdempotencyResult.<T>builder()
-                .status(IdempotencyResultStatus.INVALID_OPTIONS)
+                .status(IdempotencyResultStatus.VALIDATION_FAILED)
                 .stage(IdempotencyStage.VALIDATE)
                 .error(error)
                 .build();

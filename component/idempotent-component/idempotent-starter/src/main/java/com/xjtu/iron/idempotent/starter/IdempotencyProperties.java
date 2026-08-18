@@ -13,7 +13,7 @@ import java.util.Map;
 /**
  * 分布式幂等组件配置。
  *
- * <p>V1.3 新增命名 Policy，同时保留 windowed/durable 两份组件级默认策略。</p>
+ * <p>组件级提供 WINDOWED / DURABLE 默认策略，并支持通过 policies 定义命名 Policy。</p>
  */
 @ConfigurationProperties(prefix = "xjtu.iron.idempotent")
 public class IdempotencyProperties {
@@ -49,33 +49,12 @@ public class IdempotencyProperties {
     public void setProcessingTimeout(Duration processingTimeout) { this.processingTimeout = processingTimeout; }
     public Windowed getWindowed() { return windowed; }
 
-    /**
-     * V1.2 配置兼容：short-term 与 windowed 绑定到同一对象。
-     */
-    public Windowed getShortTerm() { return windowed; }
-
     public Durable getDurable() { return durable; }
     public Lock getLock() { return lock; }
     public Transaction getTransaction() { return transaction; }
     public Redis getRedis() { return redis; }
     public Jdbc getJdbc() { return jdbc; }
     public Map<String, Policy> getPolicies() { return policies; }
-
-    /**
-     * V1.2 属性兼容。
-     */
-    @Deprecated
-    public String getDefaultShortTermRepository() { return defaultWindowedRepository; }
-    @Deprecated
-    public void setDefaultShortTermRepository(String value) { this.defaultWindowedRepository = value; }
-
-    /**
-     * V1.2 属性兼容：ResultPolicy 已经成为调用级类型安全策略，该值不再决定结果保存。
-     */
-    @Deprecated
-    public boolean isStoreResult() { return false; }
-    @Deprecated
-    public void setStoreResult(boolean ignored) { }
 
     public static class Windowed {
         private Duration idempotencyWindow = Duration.ofMinutes(10);

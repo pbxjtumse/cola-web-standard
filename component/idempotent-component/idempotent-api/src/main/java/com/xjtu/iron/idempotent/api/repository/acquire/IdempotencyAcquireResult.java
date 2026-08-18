@@ -51,9 +51,5 @@ public final class IdempotencyAcquireResult {
     /** WINDOWED 语义窗口结束后，是否由旧物理记录滚动开启了新 generation。 */
     public boolean isWindowRollover() { return windowRollover; }
 
-    /** @deprecated V1.1 起请使用 {@link #isWindowRollover()}。 */
-    @Deprecated
-    public boolean isTakeover() { return windowRollover; }
-
     public Throwable getError() { return error; }
 }

@@ -42,16 +42,16 @@ public final class DefaultIdempotencyRepositoryRegistry
 
     @Override
     public IdempotencyRepository resolve(IdempotencyMode mode, String requestedName) {
-        IdempotencyMode canonical = mode == null
+        IdempotencyMode resolvedMode = mode == null
                 ? IdempotencyMode.DURABLE
-                : mode.canonical();
+                : mode;
 
         String name = requestedName == null || requestedName.isBlank()
-                ? defaults.get(canonical)
+                ? defaults.get(resolvedMode)
                 : requestedName;
 
         if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("no default repository for mode: " + canonical);
+            throw new IllegalArgumentException("no default repository for mode: " + resolvedMode);
         }
 
         IdempotencyRepository repository = repositories.get(name);
@@ -59,9 +59,9 @@ public final class DefaultIdempotencyRepositoryRegistry
             throw new IllegalArgumentException("idempotency repository not found: " + name);
         }
 
-        if (!repository.capabilities().supports(canonical)) {
+        if (!repository.capabilities().supports(resolvedMode)) {
             throw new IllegalArgumentException(
-                    "repository " + name + " does not support " + canonical);
+                    "repository " + name + " does not support " + resolvedMode);
         }
         return repository;
     }

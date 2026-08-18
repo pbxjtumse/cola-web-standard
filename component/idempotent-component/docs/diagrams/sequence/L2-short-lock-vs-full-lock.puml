@@ -1,5 +1,5 @@
 @startuml
-title Idempotency V1.1 - 短锁方案与“全业务锁”对比
+title 短锁方案与全业务锁对比
 
 autonumber
 skinparam shadowing false

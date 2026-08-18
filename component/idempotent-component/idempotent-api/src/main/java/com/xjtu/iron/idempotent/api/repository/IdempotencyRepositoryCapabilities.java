@@ -5,7 +5,7 @@ import com.xjtu.iron.idempotent.api.policy.IdempotencyMode;
 /**
  * Repository 显式能力描述。
  *
- * <p>V1.3 不再让 Core 通过“Redis/JDBC 名称”猜语义，而是由 Provider 自己声明：
+ * <p>Core 不通过“Redis/JDBC 名称”猜语义，而由 Provider 自己声明：
  * 支持 WINDOWED/DURABLE、能否保存结果 payload、能否参与业务本地事务、能否提供恢复扫描。</p>
  */
 public final class IdempotencyRepositoryCapabilities {

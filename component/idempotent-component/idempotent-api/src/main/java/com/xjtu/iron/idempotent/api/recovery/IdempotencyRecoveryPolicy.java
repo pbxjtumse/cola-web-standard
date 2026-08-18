@@ -8,7 +8,7 @@ import java.util.Objects;
  * <p>RecoveryPolicy 只回答“什么状态允许被外部可靠任务接管”，
  * 不负责扫描、调度、线程池、MQ 投递等任务基础设施。</p>
  *
- * <p>V1.3 把 V1.2 的 {@code recoveryMode + recoverFailed boolean} 收敛成一个明确策略，
+ * <p>该策略集中表达恢复模式、PROCESSING 超时恢复与 retryable FAILED 恢复，
  * 避免后续继续增加多个互相组合困难的 boolean。</p>
  */
 public final class IdempotencyRecoveryPolicy {

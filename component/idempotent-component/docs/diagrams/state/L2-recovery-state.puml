@@ -1,5 +1,5 @@
 @startuml
-title Idempotency V1.1 - L2 Reliable Task recover() 判定状态
+title Reliable Task recover() 判定状态
 
 hide empty description
 skinparam shadowing false

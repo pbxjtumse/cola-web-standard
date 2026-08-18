@@ -187,6 +187,9 @@ recordRetentionTtl
 11:05      旧记录允许物理清理
 ```
 
-## 9. 当前兼容项
+## 9. 当前 API 边界
 
-代码中仍有少量 deprecated 兼容符号，例如 `IdempotencyMode.SHORT_TERM`、旧 ResultCodec 等；新代码和文档统一使用当前推荐 API，不再围绕历史版本展开。
+当前实现不保留 历史兼容入口。WINDOWED / DURABLE、Policy、ResultPolicy、
+Recovery policyName 查询与 generationVersion 是唯一正式语义。
+
+因为项目尚未上线，result_payload 也只接受当前 envelope 协议，不兼容无 envelope 的旧格式。

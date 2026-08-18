@@ -5,7 +5,7 @@ import com.xjtu.iron.idempotent.api.repository.acquire.IdempotencyAcquireStatus;
 import com.xjtu.iron.idempotent.api.repository.recovery.IdempotencyRecoveryStatus;
 
 /**
- * V1.3 默认状态机。
+ * 默认幂等状态机。
  */
 public final class DefaultIdempotencyStateMachine implements IdempotencyStateMachine {
 

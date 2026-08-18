@@ -43,7 +43,7 @@ com.xjtu.iron.idempotent.api
 - `repository.write`：SUCCESS / FAILED 条件写协议；
 - `spi`：Hasher、FailureClassifier 等扩展点。
 
-`IdempotencyOptions` 已删除，Request 只选择 `policyName` 或 inline `IdempotencyPolicy`。
+Request 只选择 `policyName` 或 inline `IdempotencyPolicy`。
 
 ## 3. Core
 

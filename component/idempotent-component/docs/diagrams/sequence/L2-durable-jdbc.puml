@@ -1,5 +1,5 @@
 @startuml
-title DURABLE JDBC + Transaction Integration V1.3
+title DURABLE JDBC + Transaction Integration
 
 actor Caller
 participant "Executor" as E

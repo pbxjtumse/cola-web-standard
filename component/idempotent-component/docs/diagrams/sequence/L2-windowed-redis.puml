@@ -1,0 +1,46 @@
+@startuml
+title WINDOWED Redis
+
+actor Caller
+participant Executor
+participant "DistributedLock\n(optional)" as Lock
+participant "Redis Repository" as Redis
+participant StateMachine
+participant Business
+participant ResultPolicy
+
+Caller -> Executor : execute(key, policy=WINDOWED)
+opt short lock
+  Executor -> Lock : acquire
+end
+Executor -> Redis : tryAcquire.lua\natomic state transition
+Redis --> Executor : ACQUIRED / SUCCESS / PROCESSING / ...
+opt short lock
+  Executor -> Lock : release
+end
+Executor -> StateMachine : interpret
+
+alt ACQUIRED
+  StateMachine --> Executor : EXECUTE
+  Executor -> Business : callback()
+  Business --> Executor : value
+  Executor -> ResultPolicy : capture
+  Executor -> Redis : markSuccess.lua(owner,version,payload)
+  Redis --> Executor : UPDATED
+  Executor --> Caller : EXECUTED
+else SUCCESS
+  StateMachine --> Executor : REPLAY
+  Executor -> ResultPolicy : replay
+  Executor --> Caller : REPLAYED
+else other
+  StateMachine --> Executor : RETURN
+  Executor --> Caller : state result
+end
+
+note over Redis
+idempotencyWindow = semantic duplicate window
+recordRetentionTtl = physical extra retention
+When semantic window expires, a new generation may start
+even if the Hash still physically exists.
+end note
+@enduml

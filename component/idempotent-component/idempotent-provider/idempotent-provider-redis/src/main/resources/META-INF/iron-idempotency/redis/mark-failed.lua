@@ -79,7 +79,7 @@ local windowMs = tonumber(ARGV[8])
 local policy = ARGV[9]
 local retentionMs = tonumber(ARGV[10])
 
-if (mode == 'WINDOWED' or mode == 'SHORT_TERM') and policy == 'SLIDING_ON_ACCESS' then
+if (mode == 'WINDOWED') and policy == 'SLIDING_ON_ACCESS' then
     local windowExpireAt = now + windowMs
     local retentionExpireAt = windowExpireAt + retentionMs
 

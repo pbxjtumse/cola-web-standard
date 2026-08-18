@@ -28,7 +28,7 @@ public enum IdempotencyResultStatus {
     /** 历史 FAILED，且不允许恢复。 */
     PREVIOUS_FAILED_FINAL,
 
-    /** 当前 Options 或记录不允许 recover()。 */
+    /** 当前 Policy 或记录不允许 recover()。 */
     RECOVERY_NOT_ALLOWED,
 
     /** 扫描任务携带的 expectedOwner/version 已经过时。 */
@@ -61,15 +61,9 @@ public enum IdempotencyResultStatus {
     /** 历史 payload 使用的 ResultPolicy 类型与当前调用不一致。 */
     RESULT_POLICY_MISMATCH,
 
-    /**
-     * @deprecated V1.3 请使用 RESULT_POLICY_ERROR。
-     */
-    @Deprecated
-    RESULT_CODEC_ERROR,
-
     /** Repository/Provider 访问失败。 */
     REPOSITORY_ERROR,
 
-    /** 请求或策略参数非法。 */
-    INVALID_OPTIONS
+    /** 请求、Policy 或组件装配校验失败。 */
+    VALIDATION_FAILED
 }

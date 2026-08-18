@@ -1,6 +1,6 @@
 # idempotent-component
 
-> 当前基线：V1.5。文档只描述**当前推荐设计**，历史 V1.1/V1.2/V1.3/V2/V2.1 文档已合并删除。
+> 当前基线：V1.6。文档只描述当前实现与推荐设计。
 
 ## 1. 组件定位
 
@@ -63,7 +63,7 @@ IdempotencyResult<OrderResult> result = idempotencyExecutor.execute(
 );
 ```
 
-当前 Request 只负责“这次请求是谁”，策略由 `IdempotencyPolicy` / `policyName` 负责。`IdempotencyOptions` 已删除。
+当前 Request 只负责“这次请求是谁”，策略由 `IdempotencyPolicy` / `policyName` 负责。
 
 ## 3. 当前关键模型
 

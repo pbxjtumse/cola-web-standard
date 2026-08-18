@@ -1,5 +1,5 @@
 @startuml
-title Idempotent Component V1.3 - L0
+title Idempotent Component - L0
 
 skinparam componentStyle rectangle
 

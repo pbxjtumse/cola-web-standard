@@ -1,5 +1,5 @@
 @startuml
-title Idempotency V1.1 - L0 持久状态（只保留三态）
+title L0 持久状态（只保留三态）
 
 hide empty description
 skinparam shadowing false

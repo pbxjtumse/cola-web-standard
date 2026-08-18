@@ -76,16 +76,6 @@ public final class IdempotencyContext {
      */
     public long getGenerationVersion() { return version; }
 
-    /**
-     * V1.2 兼容名称。
-     *
-     * @deprecated 该名字容易让业务误以为它等价于分布式锁的全生命周期 fencingToken。
-     *             请使用 {@link #getGenerationVersion()}，若业务资源需要真正 fencing，
-     *             应显式设计单调 token 的权威来源与条件写协议。
-     */
-    @Deprecated
-    public long fencingVersion() { return version; }
-
     public IdempotencyMode getMode() { return mode; }
     public boolean isRecoveryExecution() { return recoveryExecution; }
     public Instant getAcquiredAt() { return acquiredAt; }

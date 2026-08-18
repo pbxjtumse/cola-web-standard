@@ -3,7 +3,7 @@ package com.xjtu.iron.idempotent.api.state;
 /**
  * Repository 中真正持久化的幂等状态。
  *
- * <p>V1.1 刻意只保留三态。PROCESSING_EXPIRED、FAILED_RETRYABLE、REPLAYED 等
+ * <p>持久状态只保留三态。PROCESSING_EXPIRED、FAILED_RETRYABLE、REPLAYED 等
  * 都属于“派生判定”或“一次调用结果”，不应该污染数据库 status 字段。</p>
  */
 public enum IdempotencyStatus {

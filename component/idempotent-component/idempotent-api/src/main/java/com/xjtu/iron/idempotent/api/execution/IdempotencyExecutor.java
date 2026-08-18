@@ -10,7 +10,7 @@ import java.util.Objects;
 /**
  * 幂等业务统一入口。
  *
- * <p>V1.3 主 API 不再要求 {@code Class<T>}。
+ * <p>主 API 不要求 {@code Class<T>}。
  * 默认只保证“历史成功不重复执行”，不保存业务返回值；需要结果回放时显式传入
  * {@link IdempotencyResultPolicy}。</p>
  */

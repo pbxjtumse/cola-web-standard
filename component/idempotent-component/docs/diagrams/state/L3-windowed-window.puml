@@ -1,0 +1,14 @@
+@startuml
+title WINDOWED semantic window
+
+[*] --> WindowActive : first acquire
+WindowActive --> WindowActive : duplicate access\nFIXED: unchanged\nSLIDING: extend window
+WindowActive --> WindowExpired : now >= windowExpireAt
+WindowExpired --> NewGeneration : next execute()
+NewGeneration --> WindowActive : version + 1
+
+note right of WindowExpired
+Physical record may still exist during recordRetentionTtl.
+Semantic idempotency protection has ended.
+end note
+@enduml

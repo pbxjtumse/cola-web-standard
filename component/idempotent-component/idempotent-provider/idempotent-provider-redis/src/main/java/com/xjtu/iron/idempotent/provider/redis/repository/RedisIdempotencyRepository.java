@@ -24,7 +24,7 @@ import java.util.Optional;
 /**
  * WINDOWED Redis 幂等状态仓储。
  *
- * <p>V1.3 明确不把 Redis key TTL 直接等同于“幂等窗口”：</p>
+ * <p>Redis key TTL 不直接等同于“幂等窗口”：</p>
  * <ul>
  *     <li>window_expire_at：语义窗口；</li>
  *     <li>retention_expire_at：物理记录保留截止时间；</li>

@@ -115,9 +115,10 @@ SNAPSHOT
 REFERENCE
 ```
 
-避免历史按 SNAPSHOT 保存，却被新调用按 REFERENCE 错误解释。
+避免 SNAPSHOT 保存的数据被 REFERENCE 调用错误解释。
 
-策略不一致返回 `RESULT_POLICY_MISMATCH`；需要 payload 但历史没有保存时返回 `RESULT_REPLAY_UNAVAILABLE`。
+策略不一致返回 `RESULT_POLICY_MISMATCH`；需要 payload 但记录没有保存时返回 `RESULT_REPLAY_UNAVAILABLE`。
+当前只接受带 envelope 的 payload；格式非法返回 `RESULT_POLICY_ERROR`。
 
 ## 8. capture 失败
 

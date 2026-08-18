@@ -5,11 +5,11 @@ import java.sql.Connection;
 import java.util.Objects;
 
 /**
- * 不依赖 Spring Transaction 的默认 JDBC 执行管理器。
+ * 不依赖 Spring Transaction 的 JDBC 执行管理器。
  *
- * <p>这是无 transaction-component 时的兼容实现：每次从 DataSource 直接获取 Connection。
- * 因此它<strong>不会</strong>声称能够把 markSuccess 与业务 SQL 放进同一个物理事务。
- * 接入 transaction-component 后，Starter 会优先替换为 transaction-aware 实现。</p>
+ * <p>每次从 DataSource 直接获取 Connection，因此不会声称能够把 markSuccess
+ * 与业务 SQL 放进同一个物理事务。启用 transaction integration 时，Starter 会使用
+ * transaction-aware 实现。</p>
  */
 public final class DataSourceJdbcExecutionManager implements JdbcExecutionManager {
 
@@ -27,6 +27,11 @@ public final class DataSourceJdbcExecutionManager implements JdbcExecutionManage
         try (Connection connection = dataSource.getConnection()) {
             return work.execute(connection);
         }
+    }
+
+    @Override
+    public <T> T inCurrentTransaction(JdbcWork<T> work) throws Exception {
+        return withConnection(work);
     }
 
     @Override

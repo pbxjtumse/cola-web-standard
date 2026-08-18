@@ -1,5 +1,5 @@
 @startuml
-title Idempotency V1.3 - Reliable Recovery
+title Idempotency - Reliable Recovery
 
 participant "Reliable Task" as Task
 participant "RecoveryQueryService" as Q

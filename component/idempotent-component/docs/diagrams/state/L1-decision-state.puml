@@ -1,5 +1,5 @@
 @startuml
-title V1.3 StateMachine Decision (derived, not persisted)
+title StateMachine Decision (derived, not persisted)
 
 [*] --> AtomicRepositoryResult
 

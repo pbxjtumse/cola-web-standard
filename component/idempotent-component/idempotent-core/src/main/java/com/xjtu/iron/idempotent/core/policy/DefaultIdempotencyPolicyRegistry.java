@@ -17,7 +17,7 @@ import java.util.Objects;
  *   &gt; default policy
  * </pre>
  *
- * <p>不再保留旧 Options 兼容分支。Request 只负责选择 Policy，
+ * <p>Request 只负责选择 Policy，
  * 所有运行策略统一收敛到 {@link IdempotencyPolicy}。</p>
  */
 public final class DefaultIdempotencyPolicyRegistry implements IdempotencyPolicyRegistry {

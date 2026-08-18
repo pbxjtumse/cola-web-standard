@@ -1,6 +1,5 @@
 package com.xjtu.iron.idempotent.api.policy;
 
-import com.xjtu.iron.idempotent.api.execution.IdempotencyRequest;
 import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryPolicy;
 
 import java.time.Duration;
@@ -35,7 +34,7 @@ public final class IdempotencyPolicy {
 
     private IdempotencyPolicy(Builder builder) {
         this.name = normalize(builder.name);
-        this.mode = (builder.mode == null ? IdempotencyMode.DURABLE : builder.mode).canonical();
+        this.mode = (builder.mode == null ? IdempotencyMode.DURABLE : builder.mode);
         this.namespace = normalize(builder.namespace) == null ? DEFAULT_NAMESPACE : builder.namespace.trim();
         this.repositoryName = normalize(builder.repositoryName);
         this.processingTimeout = builder.processingTimeout == null

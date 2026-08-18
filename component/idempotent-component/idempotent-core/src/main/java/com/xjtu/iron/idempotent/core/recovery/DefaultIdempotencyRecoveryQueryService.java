@@ -3,7 +3,6 @@ package com.xjtu.iron.idempotent.core.recovery;
 import com.xjtu.iron.idempotent.core.repository.IdempotencyRepositoryRegistry;
 import com.xjtu.iron.idempotent.core.policy.IdempotencyPolicyRegistry;
 
-import com.xjtu.iron.idempotent.api.policy.IdempotencyMode;
 import com.xjtu.iron.idempotent.api.policy.IdempotencyPolicy;
 import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryQueryService;
 import com.xjtu.iron.idempotent.api.repository.recovery.IdempotencyRecoveryCandidate;
@@ -54,20 +53,6 @@ public final class DefaultIdempotencyRecoveryQueryService
                 query.getNow(),
                 query.getLimit());
         return query(repository, effectiveQuery);
-    }
-
-    @Override
-    @Deprecated
-    public List<IdempotencyRecoveryCandidate> findCandidates(
-            IdempotencyMode mode,
-            String repositoryName,
-            IdempotencyRecoveryQuery query) {
-        Objects.requireNonNull(mode, "mode must not be null");
-        Objects.requireNonNull(query, "query must not be null");
-
-        IdempotencyRepository repository = repositoryRegistry.resolve(
-                mode.canonical(), repositoryName);
-        return query(repository, query);
     }
 
     private List<IdempotencyRecoveryCandidate> query(

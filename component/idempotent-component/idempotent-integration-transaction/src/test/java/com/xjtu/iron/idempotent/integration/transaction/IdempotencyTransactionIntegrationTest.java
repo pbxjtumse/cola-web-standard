@@ -34,7 +34,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * V1.3 在新 API 下继续验证 Tx-A / Tx-B / Tx-C。
+ * 验证 Tx-A / Tx-B / Tx-C 事务语义。
  */
 class IdempotencyTransactionIntegrationTest {
 

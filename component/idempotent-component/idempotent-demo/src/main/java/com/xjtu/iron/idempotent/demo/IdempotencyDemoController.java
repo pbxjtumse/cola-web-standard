@@ -14,7 +14,7 @@ import java.time.Instant;
 import java.util.Map;
 
 /**
- * V1.3 Demo：
+ * Demo：
  * 1) WINDOWED + SNAPSHOT；
  * 2) DURABLE + Tx-A/Tx-B/Tx-C + SNAPSHOT；
  * 3) DURABLE + REFERENCE。
