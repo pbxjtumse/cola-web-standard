@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.consume;
 
 /**
  * 表示一个已经启动的消费订阅关闭句柄。

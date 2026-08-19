@@ -1,6 +1,6 @@
 package com.xjtu.iron.message.spi;
 
-import com.xjtu.iron.message.api.ConsumeDecision;
+import com.xjtu.iron.message.api.consume.ConsumeDecision;
 
 /**
  * 定义 Provider 调用 core 的入站消息监听器。

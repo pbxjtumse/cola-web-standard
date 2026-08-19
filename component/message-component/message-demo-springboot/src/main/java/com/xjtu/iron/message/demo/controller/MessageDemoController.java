@@ -1,8 +1,8 @@
 package com.xjtu.iron.message.demo.controller;
 
-import com.xjtu.iron.message.api.MessageDestination;
-import com.xjtu.iron.message.api.MessageEnvelope;
-import com.xjtu.iron.message.api.SendResult;
+import com.xjtu.iron.message.api.model.MessageDestination;
+import com.xjtu.iron.message.api.model.MessageEnvelope;
+import com.xjtu.iron.message.api.publish.SendResult;
 import com.xjtu.iron.message.core.MessageTemplate;
 import com.xjtu.iron.message.demo.dto.MultiSendMessageResponse;
 import com.xjtu.iron.message.demo.dto.ReceivedMessageView;

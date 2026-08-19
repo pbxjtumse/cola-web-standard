@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.codec;
 
 /**
  * 定义业务消息体与字节数组之间的序列化契约。

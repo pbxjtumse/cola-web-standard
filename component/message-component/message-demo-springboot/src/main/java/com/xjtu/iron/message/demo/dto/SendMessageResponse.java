@@ -1,7 +1,7 @@
 package com.xjtu.iron.message.demo.dto;
 
-import com.xjtu.iron.message.api.SendReliabilityInfo;
-import com.xjtu.iron.message.api.SendResult;
+import com.xjtu.iron.message.api.publish.SendReliabilityInfo;
+import com.xjtu.iron.message.api.publish.SendResult;
 
 /**
  * Spring Boot Demo 的发送响应对象。

@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.publish;
 
 /**
  * 描述发送生命周期中产生结果或失败的阶段。

@@ -1,4 +1,6 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.publish;
+
+import com.xjtu.iron.message.api.model.MessageDestination;
 
 import java.time.Instant;
 import java.util.Collections;

@@ -1,8 +1,8 @@
 package com.xjtu.iron.message.core.send;
 
 
-import com.xjtu.iron.message.api.MessageDestination;
-import com.xjtu.iron.message.api.MessageEnvelope;
+import com.xjtu.iron.message.api.model.MessageDestination;
+import com.xjtu.iron.message.api.model.MessageEnvelope;
 import com.xjtu.iron.message.spi.MessageProvider;
 import com.xjtu.iron.message.spi.ProviderDestination;
 import com.xjtu.iron.message.spi.ProviderSendRequest;

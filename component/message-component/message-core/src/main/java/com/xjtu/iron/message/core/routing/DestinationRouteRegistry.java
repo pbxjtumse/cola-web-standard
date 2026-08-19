@@ -1,6 +1,6 @@
 package com.xjtu.iron.message.core.routing;
 
-import com.xjtu.iron.message.api.MessageDestination;
+import com.xjtu.iron.message.api.model.MessageDestination;
 
 import java.util.ArrayList;
 import java.util.Collection;

@@ -1,4 +1,6 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.consume;
+
+import com.xjtu.iron.message.api.model.MessageEnvelope;
 
 /**
  * 定义普通消息的业务处理函数。

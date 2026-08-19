@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.publish;
 
 /**
  * 表示发送调用最终能够确认的结果状态。

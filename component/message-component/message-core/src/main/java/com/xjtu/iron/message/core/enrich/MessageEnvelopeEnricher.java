@@ -5,9 +5,9 @@ import com.xjtu.iron.message.core.context.CurrentMessage;
 import com.xjtu.iron.message.core.context.MessageContextAccessor;
 import com.xjtu.iron.message.core.id.MessageIdGenerator;
 
-import com.xjtu.iron.message.api.MessageContext;
-import com.xjtu.iron.message.api.MessageEnvelope;
-import com.xjtu.iron.message.api.MessageMetadata;
+import com.xjtu.iron.message.api.model.MessageContext;
+import com.xjtu.iron.message.api.model.MessageEnvelope;
+import com.xjtu.iron.message.api.model.MessageMetadata;
 
 import java.time.Instant;
 import java.util.Objects;

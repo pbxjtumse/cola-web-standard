@@ -1,12 +1,12 @@
 package com.xjtu.iron.message.spring.boot.autoconfigure;
 
-import com.xjtu.iron.message.api.MessageSerializer;
+import com.xjtu.iron.message.api.codec.MessageSerializer;
+import com.xjtu.iron.message.core.MessageComponentOptions;
 import com.xjtu.iron.message.core.codec.JacksonMessageSerializer;
 import com.xjtu.iron.message.core.send.reliability.DefaultReliableMessageSender;
 import com.xjtu.iron.message.core.routing.DestinationRoute;
 import com.xjtu.iron.message.core.routing.DestinationRouteRegistry;
 import com.xjtu.iron.message.core.send.DirectMessageSender;
-import com.xjtu.iron.message.core.MessageComponentOptions;
 import com.xjtu.iron.message.core.provider.MessageProviderRegistry;
 import com.xjtu.iron.message.core.send.MessageSendExecutor;
 import com.xjtu.iron.message.core.send.MessageSendReliabilityOptions;

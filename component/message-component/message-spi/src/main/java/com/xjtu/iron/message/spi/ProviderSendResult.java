@@ -1,7 +1,7 @@
 package com.xjtu.iron.message.spi;
 
-import com.xjtu.iron.message.api.SendFailureType;
-import com.xjtu.iron.message.api.SendStatus;
+import com.xjtu.iron.message.api.publish.SendFailureType;
+import com.xjtu.iron.message.api.publish.SendStatus;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;

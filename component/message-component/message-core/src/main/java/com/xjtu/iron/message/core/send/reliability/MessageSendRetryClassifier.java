@@ -1,7 +1,7 @@
 package com.xjtu.iron.message.core.send.reliability;
 
-import com.xjtu.iron.message.api.SendFailureType;
-import com.xjtu.iron.message.api.SendStatus;
+import com.xjtu.iron.message.api.publish.SendFailureType;
+import com.xjtu.iron.message.api.publish.SendStatus;
 import com.xjtu.iron.message.spi.ProviderSendResult;
 import com.xjtu.iron.retry.api.execution.RetryAttempt;
 import com.xjtu.iron.retry.api.policy.RetryClassifier;

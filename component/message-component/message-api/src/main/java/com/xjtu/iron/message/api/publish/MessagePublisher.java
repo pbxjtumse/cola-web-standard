@@ -1,4 +1,7 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.publish;
+
+import com.xjtu.iron.message.api.model.MessageDestination;
+import com.xjtu.iron.message.api.model.MessageEnvelope;
 
 import java.util.concurrent.CompletionStage;
 

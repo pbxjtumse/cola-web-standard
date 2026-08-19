@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.consume;
 
 /**
  * 面向业务代码的统一消费者注册接口。

@@ -1,14 +1,14 @@
 package com.xjtu.iron.message.core.codec;
 
-import com.xjtu.iron.message.api.ConsumeContext;
-import com.xjtu.iron.message.api.ConsumerDefinition;
-import com.xjtu.iron.message.api.MessageContext;
-import com.xjtu.iron.message.api.MessageDestination;
-import com.xjtu.iron.message.api.MessageEnvelope;
-import com.xjtu.iron.message.api.MessageHeaderNames;
-import com.xjtu.iron.message.api.MessageHeaders;
-import com.xjtu.iron.message.api.MessageMetadata;
-import com.xjtu.iron.message.api.MessageSerializer;
+import com.xjtu.iron.message.api.consume.ConsumeContext;
+import com.xjtu.iron.message.api.consume.ConsumerDefinition;
+import com.xjtu.iron.message.api.model.MessageContext;
+import com.xjtu.iron.message.api.model.MessageDestination;
+import com.xjtu.iron.message.api.model.MessageEnvelope;
+import com.xjtu.iron.message.api.model.MessageHeaderNames;
+import com.xjtu.iron.message.api.model.MessageHeaders;
+import com.xjtu.iron.message.api.model.MessageMetadata;
+import com.xjtu.iron.message.api.codec.MessageSerializer;
 import com.xjtu.iron.message.spi.ProviderDestination;
 import com.xjtu.iron.message.spi.ProviderInboundMessage;
 import com.xjtu.iron.message.spi.ProviderSendRequest;

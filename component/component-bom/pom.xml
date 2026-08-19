@@ -20,6 +20,11 @@
                 <artifactId>cache-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>cache-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <!-- concurrency-component -->
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
@@ -30,6 +35,11 @@
             <dependency>
                 <groupId>com.xjtu.iron</groupId>
                 <artifactId>distributed-lock-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xjtu.iron</groupId>
+                <artifactId>distributed-lock-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <!-- foundation-component -->

@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.model;
 
 import java.util.Locale;
 import java.util.Objects;

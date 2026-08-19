@@ -1,6 +1,6 @@
 package com.xjtu.iron.message.core.send;
 
-import com.xjtu.iron.message.api.SendResult;
+import com.xjtu.iron.message.api.publish.SendResult;
 
 import java.util.concurrent.CompletionStage;
 

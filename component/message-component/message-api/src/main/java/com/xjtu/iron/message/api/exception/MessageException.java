@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.exception;
 
 /**
  * 消息组件基础运行时异常。

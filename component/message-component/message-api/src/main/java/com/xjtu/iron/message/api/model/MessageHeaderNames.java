@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.model;
 
 /** 定义组件保留的线级系统消息头名称。 */
 public final class MessageHeaderNames {

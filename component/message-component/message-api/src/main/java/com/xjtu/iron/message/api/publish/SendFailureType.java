@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.publish;
 
 /**
  * 描述发送未确认成功时的标准失败原因。

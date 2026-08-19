@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.consume;
 
 /**
  * 表示一期普通消费闭环中的业务处理决策。

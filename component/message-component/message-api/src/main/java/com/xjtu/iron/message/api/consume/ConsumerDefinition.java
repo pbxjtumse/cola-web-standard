@@ -1,4 +1,6 @@
-package com.xjtu.iron.message.api;
+package com.xjtu.iron.message.api.consume;
+import com.xjtu.iron.message.api.model.MessageDestination;
+
 import java.util.Objects;
 
 /**
