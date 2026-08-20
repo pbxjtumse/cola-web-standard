@@ -1,6 +1,6 @@
 # idempotent-component
 
-> 当前基线：V1.6。文档只描述当前实现与推荐设计。
+> 文档只描述当前实现与推荐设计，不维护历史兼容路线。
 
 ## 1. 组件定位
 
@@ -154,14 +154,15 @@ RECOVERY_ACQUIRED
 
 ## 7. 推荐阅读顺序
 
-1. [`docs/architecture.md`](docs/architecture.md)
-2. [`docs/core-flow.md`](docs/core-flow.md)
-3. [`docs/configuration.md`](docs/configuration.md)
-4. [`docs/result-replay.md`](docs/result-replay.md)
-5. [`docs/recovery.md`](docs/recovery.md)
-6. [`docs/transaction.md`](docs/transaction.md)
-7. [`docs/package-architecture.md`](docs/package-architecture.md)
-8. [`docs/status.md`](docs/status.md)
+1. [`docs/code-reading-guide.md`](docs/code-reading-guide.md)
+2. [`docs/architecture.md`](docs/architecture.md)
+3. [`docs/core-flow.md`](docs/core-flow.md)
+4. [`docs/configuration.md`](docs/configuration.md)
+5. [`docs/result-replay.md`](docs/result-replay.md)
+6. [`docs/recovery.md`](docs/recovery.md)
+7. [`docs/transaction.md`](docs/transaction.md)
+8. [`docs/package-architecture.md`](docs/package-architecture.md)
+9. [`docs/status.md`](docs/status.md)
 
 PlantUML 图位于 `docs/diagrams/`。
 

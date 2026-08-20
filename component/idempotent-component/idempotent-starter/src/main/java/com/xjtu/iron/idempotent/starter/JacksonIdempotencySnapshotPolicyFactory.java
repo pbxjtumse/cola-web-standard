@@ -21,8 +21,7 @@ public final class JacksonIdempotencySnapshotPolicyFactory
     private final ObjectMapper objectMapper;
 
     public JacksonIdempotencySnapshotPolicyFactory(ObjectMapper objectMapper) {
-        this.objectMapper = Objects.requireNonNull(
-                objectMapper, "objectMapper must not be null");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
     }
 
     @Override

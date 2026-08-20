@@ -46,15 +46,27 @@ import java.util.Map;
 
 /**
  * 幂等组件自动装配入口。
+ *
+ * <p>Starter 只负责“把现有能力拼起来”，不承载幂等状态机。装配顺序可以理解为：</p>
+ * <pre>
+ * 基础 SPI（owner/failure/hash/result factory）
+ *   -> Repository（Redis/JDBC）
+ *   -> transaction-aware JdbcExecutionManager / TransactionCoordinator
+ *   -> RepositoryRegistry
+ *   -> PolicyRegistry
+ *   -> DefaultIdempotencyExecutor
+ *   -> RecoveryQueryService
+ * </pre>
+ *
+ * <p>尤其注意：是否启用 Tx-B 不是单靠配置 boolean 决定，而是 TransactionExecutor 存在 + JDBC execution manager
+ * 真正支持 current transaction participation 两个条件共同决定。</p>
  */
 @AutoConfiguration(afterName = "com.xjtu.iron.transaction.starter.autoconfigure.TransactionAutoConfiguration")
 @EnableConfigurationProperties(IdempotencyProperties.class)
-@ConditionalOnProperty(
-        prefix = "xjtu.iron.idempotent",
-        name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(prefix = "xjtu.iron.idempotent", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class IdempotencyAutoConfiguration {
+
+    // -------------------- 基础扩展点 --------------------
 
     @Bean
     @ConditionalOnMissingBean
@@ -75,25 +87,20 @@ public class IdempotencyAutoConfiguration {
     @Bean
     @ConditionalOnClass(ObjectMapper.class)
     @ConditionalOnMissingBean(IdempotencySnapshotPolicyFactory.class)
-    public IdempotencySnapshotPolicyFactory idempotencySnapshotPolicyFactory(
-            ObjectProvider<ObjectMapper> provider) {
-        return new JacksonIdempotencySnapshotPolicyFactory(
-                provider.getIfAvailable(ObjectMapper::new));
+    public IdempotencySnapshotPolicyFactory idempotencySnapshotPolicyFactory(ObjectProvider<ObjectMapper> provider) {
+        return new JacksonIdempotencySnapshotPolicyFactory(provider.getIfAvailable(ObjectMapper::new));
     }
 
     @Bean
     @ConditionalOnClass(ObjectMapper.class)
     @ConditionalOnMissingBean(IdempotencyRequestHasher.class)
-    public IdempotencyRequestHasher idempotencyRequestHasher(
-            ObjectProvider<ObjectMapper> provider) {
-        return new JacksonSha256IdempotencyRequestHasher(
-                provider.getIfAvailable(ObjectMapper::new));
+    public IdempotencyRequestHasher idempotencyRequestHasher(ObjectProvider<ObjectMapper> provider) {
+        return new JacksonSha256IdempotencyRequestHasher(provider.getIfAvailable(ObjectMapper::new));
     }
 
     @Bean
     @ConditionalOnMissingBean(IdempotencyEventPublisher.class)
-    public IdempotencyEventPublisher idempotencyEventPublisher(
-            ApplicationEventPublisher publisher) {
+    public IdempotencyEventPublisher idempotencyEventPublisher(ApplicationEventPublisher publisher) {
         return new SpringIdempotencyEventPublisher(publisher);
     }
 
@@ -117,20 +124,21 @@ public class IdempotencyAutoConfiguration {
         return new DefaultIdempotencyStateMachine();
     }
 
+    // -------------------- Repository Provider --------------------
+
     @Bean(name = "redisIdempotencyRepository")
     @ConditionalOnBean(StringRedisTemplate.class)
-    @ConditionalOnProperty(
-            prefix = "xjtu.iron.idempotent.redis",
-            name = "enabled",
-            havingValue = "true",
-            matchIfMissing = true)
-    public IdempotencyRepository redisIdempotencyRepository(
-            StringRedisTemplate redis,
-            IdempotencyProperties properties) {
-        return new RedisIdempotencyRepository(
-                redis, properties.getRedis().getKeyPrefix());
+    @ConditionalOnProperty(prefix = "xjtu.iron.idempotent.redis", name = "enabled", havingValue = "true", matchIfMissing = true)
+    public IdempotencyRepository redisIdempotencyRepository(StringRedisTemplate redis, IdempotencyProperties properties) {
+        return new RedisIdempotencyRepository(redis, properties.getRedis().getKeyPrefix());
     }
 
+    /**
+     * 为 JDBC Repository 选择 Connection/事务执行方式。
+     *
+     * <p>有 transaction-component 时使用 SpringTransactionJdbcExecutionManager，使 Tx-A/Tx-C 走 REQUIRES_NEW，
+     * markSuccess 能复用 Tx-B 当前 Connection；没有事务模板时退化为普通 DataSource 模式，但不会宣称业务与 SUCCESS 原子。</p>
+     */
     @Bean
     @ConditionalOnBean(DataSource.class)
     @ConditionalOnMissingBean(JdbcExecutionManager.class)
@@ -144,9 +152,7 @@ public class IdempotencyAutoConfiguration {
             return new SpringTransactionJdbcExecutionManager(dataSource, executor);
         }
 
-        if (properties.getTransaction().isEnabled()
-                && properties.getTransaction().isRequireTemplate()
-                && executor == null) {
+        if (properties.getTransaction().isEnabled() && properties.getTransaction().isRequireTemplate() && executor == null) {
             throw new IllegalStateException(
                     "xjtu.iron.idempotent.transaction.require-template=true, "
                             + "but no transaction-component TransactionExecutor bean is available");
@@ -155,33 +161,25 @@ public class IdempotencyAutoConfiguration {
         return new DataSourceJdbcExecutionManager(dataSource);
     }
 
+    /**
+     * Tx-B Coordinator：只负责 REQUIRED 业务事务边界，不负责 Tx-A/Tx-C 的 Connection 获取。
+     */
     @Bean
     @ConditionalOnBean(TransactionExecutor.class)
-    @ConditionalOnProperty(
-            prefix = "xjtu.iron.idempotent.transaction",
-            name = "enabled",
-            havingValue = "true",
-            matchIfMissing = true)
+    @ConditionalOnProperty(prefix = "xjtu.iron.idempotent.transaction", name = "enabled", havingValue = "true", matchIfMissing = true)
     @ConditionalOnMissingBean(IdempotencyTransactionCoordinator.class)
-    public IdempotencyTransactionCoordinator idempotencyTransactionCoordinator(
-            TransactionExecutor transactionExecutor) {
-        return new TransactionTemplateIdempotencyTransactionCoordinator(
-                transactionExecutor);
+    public IdempotencyTransactionCoordinator idempotencyTransactionCoordinator(TransactionExecutor transactionExecutor) {
+        return new TransactionTemplateIdempotencyTransactionCoordinator(transactionExecutor);
     }
 
     @Bean(name = "jdbcIdempotencyRepository")
     @ConditionalOnBean(DataSource.class)
-    @ConditionalOnProperty(
-            prefix = "xjtu.iron.idempotent.jdbc",
-            name = "enabled",
-            havingValue = "true",
-            matchIfMissing = true)
-    public IdempotencyRepository jdbcIdempotencyRepository(
-            JdbcExecutionManager jdbc,
-            IdempotencyProperties properties) {
-        return new JdbcIdempotencyRepository(
-                jdbc, properties.getJdbc().getTableName());
+    @ConditionalOnProperty(prefix = "xjtu.iron.idempotent.jdbc", name = "enabled", havingValue = "true", matchIfMissing = true)
+    public IdempotencyRepository jdbcIdempotencyRepository(JdbcExecutionManager jdbc, IdempotencyProperties properties) {
+        return new JdbcIdempotencyRepository(jdbc, properties.getJdbc().getTableName());
     }
+
+    // -------------------- Registry / Policy --------------------
 
     @Bean
     @ConditionalOnMissingBean
@@ -199,8 +197,7 @@ public class IdempotencyAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public IdempotencyPolicyRegistry idempotencyPolicyRegistry(
-            IdempotencyProperties properties) {
+    public IdempotencyPolicyRegistry idempotencyPolicyRegistry(IdempotencyProperties properties) {
 
         List<IdempotencyPolicy> policies = new ArrayList<>();
         IdempotencyLockOptions globalLock = lockOptions(properties.getLock());
@@ -242,20 +239,18 @@ public class IdempotencyAutoConfiguration {
                     .build());
         }
 
-        for (Map.Entry<String, IdempotencyProperties.Policy> entry
-                : properties.getPolicies().entrySet()) {
-            policies.add(buildNamedPolicy(
-                    entry.getKey(),
-                    entry.getValue(),
-                    properties,
-                    globalLock));
+        for (Map.Entry<String, IdempotencyProperties.Policy> entry : properties.getPolicies().entrySet()) {
+            policies.add(buildNamedPolicy(entry.getKey(), entry.getValue(), properties, globalLock));
         }
 
-        return new DefaultIdempotencyPolicyRegistry(
-                policies,
-                properties.getDefaultPolicy());
+        return new DefaultIdempotencyPolicyRegistry(policies, properties.getDefaultPolicy());
     }
 
+    // -------------------- Core runtime --------------------
+
+    /**
+     * 组装唯一的主执行器。业务代码最终只需要依赖 IdempotencyExecutor。
+     */
     @Bean
     @ConditionalOnMissingBean(IdempotencyExecutor.class)
     public IdempotencyExecutor idempotencyExecutor(
@@ -320,24 +315,18 @@ public class IdempotencyAutoConfiguration {
 
         boolean recoverProcessing = source.getRecoverProcessingTimeout() != null
                 ? source.getRecoverProcessingTimeout()
-                : (windowed
-                    ? root.getWindowed().isRecoverProcessingTimeout()
-                    : root.getDurable().isRecoverProcessingTimeout());
+                : (windowed ? root.getWindowed().isRecoverProcessingTimeout() : root.getDurable().isRecoverProcessingTimeout());
 
         boolean recoverFailed = source.getRecoverFailed() != null
                 ? source.getRecoverFailed()
-                : (windowed
-                    ? root.getWindowed().isRecoverFailed()
-                    : root.getDurable().isRecoverFailed());
+                : (windowed ? root.getWindowed().isRecoverFailed() : root.getDurable().isRecoverFailed());
 
         IdempotencyPolicy.Builder builder = IdempotencyPolicy.builder()
                 .name(name)
                 .mode(mode)
                 .namespace(source.getNamespace())
                 .repositoryName(source.getRepositoryName() == null
-                        ? (windowed
-                            ? root.getDefaultWindowedRepository()
-                            : root.getDefaultDurableRepository())
+                        ? (windowed ? root.getDefaultWindowedRepository() : root.getDefaultDurableRepository())
                         : source.getRepositoryName())
                 .processingTimeout(processingTimeout)
                 .recoveryPolicy(IdempotencyRecoveryPolicy.builder()
@@ -352,10 +341,7 @@ public class IdempotencyAutoConfiguration {
                             source.getIdempotencyWindow() == null
                                     ? root.getWindowed().getIdempotencyWindow()
                                     : source.getIdempotencyWindow())
-                    .windowPolicy(
-                            source.getWindowPolicy() == null
-                                    ? root.getWindowed().getWindowPolicy()
-                                    : source.getWindowPolicy())
+                    .windowPolicy(source.getWindowPolicy() == null ? root.getWindowed().getWindowPolicy() : source.getWindowPolicy())
                     .recordRetentionTtl(
                             source.getRecordRetentionTtl() == null
                                     ? root.getWindowed().getRecordRetentionTtl()
@@ -365,24 +351,16 @@ public class IdempotencyAutoConfiguration {
         return builder.build();
     }
 
-    private IdempotencyLockOptions mergeLock(
-            IdempotencyProperties.Policy policy,
-            IdempotencyLockOptions global) {
+    private IdempotencyLockOptions mergeLock(IdempotencyProperties.Policy policy, IdempotencyLockOptions global) {
 
         boolean enabled = policy.getLockEnabled() == null
                 ? global.isEnabled() : policy.getLockEnabled();
 
         return IdempotencyLockOptions.builder()
                 .enabled(enabled)
-                .providerName(policy.getLockProviderName() == null
-                        ? global.getProviderName()
-                        : policy.getLockProviderName())
-                .waitTime(policy.getLockWaitTime() == null
-                        ? global.getWaitTime()
-                        : policy.getLockWaitTime())
-                .leaseTime(policy.getLockLeaseTime() == null
-                        ? global.getLeaseTime()
-                        : policy.getLockLeaseTime())
+                .providerName(policy.getLockProviderName() == null ? global.getProviderName() : policy.getLockProviderName())
+                .waitTime(policy.getLockWaitTime() == null ? global.getWaitTime() : policy.getLockWaitTime())
+                .leaseTime(policy.getLockLeaseTime() == null ? global.getLeaseTime() : policy.getLockLeaseTime())
                 .fallbackToStateOnFailure(
                         policy.getLockFallbackToStateOnFailure() == null
                                 ? global.isFallbackToStateOnFailure()

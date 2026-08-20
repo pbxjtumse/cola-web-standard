@@ -14,7 +14,5 @@ import java.util.List;
  */
 public interface IdempotencyRecoveryQueryService {
 
-    List<IdempotencyRecoveryCandidate> findCandidates(
-            String policyName,
-            IdempotencyRecoveryQuery query);
+    List<IdempotencyRecoveryCandidate> findCandidates(String policyName, IdempotencyRecoveryQuery query);
 }

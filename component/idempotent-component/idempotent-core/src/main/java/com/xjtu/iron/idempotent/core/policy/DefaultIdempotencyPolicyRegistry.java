@@ -8,53 +8,48 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * 默认命名策略注册表。
+ * 默认命名 Policy 注册表。
  *
- * <p>解析优先级固定为：</p>
+ * <p>它只解决“这一次请求最终使用哪一份稳定策略”，解析优先级固定为：</p>
  * <pre>
- * inline policy
- *   &gt; policyName
- *   &gt; default policy
+ * inline policy > policyName > default policy
  * </pre>
  *
- * <p>Request 只负责选择 Policy，
- * 所有运行策略统一收敛到 {@link IdempotencyPolicy}。</p>
+ * <p>Request 负责描述“这一次是谁”，Policy 负责描述“这一类业务平时怎么做幂等”。</p>
  */
 public final class DefaultIdempotencyPolicyRegistry implements IdempotencyPolicyRegistry {
 
     private final Map<String, IdempotencyPolicy> policies = new LinkedHashMap<>();
     private final String defaultPolicyName;
 
-    public DefaultIdempotencyPolicyRegistry(
-            List<IdempotencyPolicy> policyList,
-            String defaultPolicyName) {
+    public DefaultIdempotencyPolicyRegistry(List<IdempotencyPolicy> policyList, String defaultPolicyName) {
         if (policyList != null) {
             for (IdempotencyPolicy policy : policyList) {
                 Objects.requireNonNull(policy, "policy must not be null");
                 String name = policy.getName();
                 if (name == null || name.isBlank()) {
-                    throw new IllegalArgumentException(
-                            "registered IdempotencyPolicy requires a non-blank name");
+                    throw new IllegalArgumentException("registered IdempotencyPolicy requires a non-blank name");
                 }
-                IdempotencyPolicy old = policies.put(name, policy);
-                if (old != null) {
+                if (policies.put(name, policy) != null) {
                     throw new IllegalArgumentException("duplicate idempotency policy: " + name);
                 }
             }
         }
+
         this.defaultPolicyName = normalize(defaultPolicyName);
-        if (this.defaultPolicyName != null
-                && !policies.containsKey(this.defaultPolicyName)) {
-            throw new IllegalArgumentException(
-                    "default idempotency policy not found: " + this.defaultPolicyName);
+        if (this.defaultPolicyName != null && !policies.containsKey(this.defaultPolicyName)) {
+            throw new IllegalArgumentException("default idempotency policy not found: " + this.defaultPolicyName);
         }
     }
 
+    /**
+     * 解析本次请求使用的 Policy。
+     *
+     * <p>inline policy 适合少量调用级覆盖；日常业务更推荐 policyName，这样正常执行、Recovery 扫描、Repository 选择
+     * 都复用同一份配置，不会因为多个地方手工拼参数产生策略漂移。</p>
+     */
     @Override
-    public IdempotencyPolicy resolve(
-            String policyName,
-            IdempotencyPolicy inlinePolicy) {
-
+    public IdempotencyPolicy resolve(String policyName, IdempotencyPolicy inlinePolicy) {
         if (inlinePolicy != null) {
             inlinePolicy.validate();
             return inlinePolicy;
@@ -65,8 +60,7 @@ public final class DefaultIdempotencyPolicyRegistry implements IdempotencyPolicy
             resolvedName = defaultPolicyName;
         }
         if (resolvedName == null) {
-            throw new IllegalArgumentException(
-                    "no idempotency policy selected and no default policy configured");
+            throw new IllegalArgumentException("no idempotency policy selected and no default policy configured");
         }
 
         IdempotencyPolicy policy = policies.get(resolvedName);

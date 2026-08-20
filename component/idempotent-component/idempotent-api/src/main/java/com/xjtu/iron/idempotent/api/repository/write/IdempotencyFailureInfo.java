@@ -23,11 +23,7 @@ public final class IdempotencyFailureInfo {
     /** 失败发生时间。 */
     private final Instant occurredAt;
 
-    public IdempotencyFailureInfo(
-            String code,
-            String message,
-            boolean retryable,
-            Instant occurredAt) {
+    public IdempotencyFailureInfo(String code, String message, boolean retryable, Instant occurredAt) {
         this.code = code;
         this.message = message;
         this.retryable = retryable;

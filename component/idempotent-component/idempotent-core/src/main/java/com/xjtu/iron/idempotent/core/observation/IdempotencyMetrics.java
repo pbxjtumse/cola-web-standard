@@ -18,11 +18,7 @@ public interface IdempotencyMetrics {
     void recordAcquire(IdempotencyMode mode, String repository, String status);
 
     /** 记录一次完整 Executor 调用的最终状态和耗时。 */
-    void recordExecution(
-            IdempotencyMode mode,
-            String repository,
-            IdempotencyResultStatus status,
-            Duration duration);
+    void recordExecution(IdempotencyMode mode, String repository, IdempotencyResultStatus status, Duration duration);
 
     static IdempotencyMetrics noop() {
         return new IdempotencyMetrics() {
@@ -32,11 +28,7 @@ public interface IdempotencyMetrics {
             }
 
             @Override
-            public void recordExecution(
-                    IdempotencyMode mode,
-                    String repository,
-                    IdempotencyResultStatus status,
-                    Duration duration) {
+            public void recordExecution(IdempotencyMode mode, String repository, IdempotencyResultStatus status, Duration duration) {
                 // no-op
             }
         };

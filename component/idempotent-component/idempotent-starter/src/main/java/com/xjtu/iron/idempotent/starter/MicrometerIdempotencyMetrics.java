@@ -25,20 +25,12 @@ public final class MicrometerIdempotencyMetrics implements IdempotencyMetrics {
 
     @Override
     public void recordAcquire(IdempotencyMode mode, String repository, String status) {
-        registry.counter(
-                        "iron.idempotency.acquire",
-                        "mode", mode.name(),
-                        "repository", repository,
-                        "status", status)
+        registry.counter("iron.idempotency.acquire", "mode", mode.name(), "repository", repository, "status", status)
                 .increment();
     }
 
     @Override
-    public void recordExecution(
-            IdempotencyMode mode,
-            String repository,
-            IdempotencyResultStatus status,
-            Duration duration) {
+    public void recordExecution(IdempotencyMode mode, String repository, IdempotencyResultStatus status, Duration duration) {
         Timer.builder("iron.idempotency.execution.duration")
                 .tag("mode", mode.name())
                 .tag("repository", repository)

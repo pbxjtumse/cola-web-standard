@@ -14,7 +14,5 @@ import com.xjtu.iron.idempotent.api.policy.IdempotencyPolicy;
  */
 public interface IdempotencyPolicyRegistry {
 
-    IdempotencyPolicy resolve(
-            String policyName,
-            IdempotencyPolicy inlinePolicy);
+    IdempotencyPolicy resolve(String policyName, IdempotencyPolicy inlinePolicy);
 }

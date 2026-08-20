@@ -20,8 +20,7 @@ public abstract class IdempotencyTypeRef<T> {
     protected IdempotencyTypeRef() {
         Type generic = getClass().getGenericSuperclass();
         if (!(generic instanceof ParameterizedType parameterized)) {
-            throw new IllegalStateException(
-                    "IdempotencyTypeRef must be created with an anonymous generic subclass");
+            throw new IllegalStateException("IdempotencyTypeRef must be created with an anonymous generic subclass");
         }
         this.type = parameterized.getActualTypeArguments()[0];
     }

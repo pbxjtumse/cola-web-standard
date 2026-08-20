@@ -22,19 +22,21 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * JDBC 幂等状态仓储。
+ * JDBC 幂等状态仓储：DURABLE 的默认实现，也支持 WINDOWED。
  *
- * <p>关键约束：</p>
- * <ul>
- *     <li>首次抢占依赖 UNIQUE(namespace,idempotency_key)；</li>
- *     <li>已有记录的判定/接管在独立短事务 + SELECT FOR UPDATE 中完成；</li>
- *     <li>markSuccess / markFailed 通过 ownerToken + version 条件更新拒绝旧执行者；</li>
- *     <li>普通 tryAcquire 只返回 PROCESSING_EXPIRED，不自动恢复；</li>
- *     <li>tryRecover 只允许 recoveryMode=EXTERNAL_TASK 的记录。</li>
- * </ul>
+ * <p>这是幂等正确性的核心实现之一。阅读时建议按下面顺序理解：</p>
+ * <ol>
+ *     <li>首次请求：INSERT PROCESSING + UNIQUE(namespace,idempotency_key)，只能一个并发请求成功；</li>
+ *     <li>记录已存在：短事务内 SELECT ... FOR UPDATE，再判断 SUCCESS / PROCESSING / FAILED / WINDOW EXPIRED；</li>
+ *     <li>普通 tryAcquire 只判断，不会因为 PROCESSING_EXPIRED / FAILED_RETRYABLE 自动接管；</li>
+ *     <li>显式 tryRecover 必须校验 expectedOwner + expectedVersion，成功后生成 newOwner + version+1；</li>
+ *     <li>markSuccess / markFailed 都带 ownerToken + version 条件，旧 generation 无权覆盖新 generation；</li>
+ *     <li>transaction-aware 模式下，tryAcquire/tryRecover 是 Tx-A，markSuccess 参加 Tx-B，markFailed 是 Tx-C。</li>
+ * </ol>
+ *
+ * <p>DistributedLock 只在 Repository 外围减少热点竞争；即使完全关闭 Lock，本类仍必须独立保证并发正确性。</p>
  */
-public final class JdbcIdempotencyRepository
-        implements IdempotencyRepository, IdempotencyRecoveryRepository {
+public final class JdbcIdempotencyRepository implements IdempotencyRepository, IdempotencyRecoveryRepository {
 
     public static final String PROVIDER_NAME = "jdbc";
 
@@ -61,23 +63,25 @@ public final class JdbcIdempotencyRepository
         return PROVIDER_NAME;
     }
 
+    /**
+     * 显式声明 Provider 能力，Core 不通过 providerName 猜语义。
+     */
     @Override
     public IdempotencyRepositoryCapabilities capabilities() {
         return IdempotencyRepositoryCapabilities.builder()
                 .windowedSupported(true)
                 .durableSupported(true)
                 .resultPayloadSupported(true)
-                .businessTransactionParticipationSupported(
-                        jdbc.supportsCurrentTransactionParticipation())
+                .businessTransactionParticipationSupported(jdbc.supportsCurrentTransactionParticipation())
                 .recoveryQuerySupported(true)
                 .build();
     }
 
     /**
-     * 普通 execute() 的原子状态抢占入口。
+     * 普通 execute() 的原子状态抢占入口，也就是 Tx-A 的核心。
      *
-     * <p>整个判断放在独立短事务中，目的就是让 PROCESSING 在真正业务开始前完成 COMMIT，
-     * 这样其他节点可以立即看到“已经有人处理中”，而不是被一个长业务事务遮住。</p>
+     * <p>整个判断放在独立短事务中：PROCESSING 必须在真正业务 callback 开始前 COMMIT，让其他节点尽快看见
+     * “当前 generation 已经有人处理”。这个方法返回 ACQUIRED 才代表当前调用真正获得执行权。</p>
      */
     @Override
     public IdempotencyAcquireResult tryAcquire(IdempotencyAcquireRequest request) {
@@ -88,61 +92,53 @@ public final class JdbcIdempotencyRepository
         }
     }
 
-    private IdempotencyAcquireResult tryAcquireInTransaction(
-            Connection connection,
-            IdempotencyAcquireRequest request) throws Exception {
+    private IdempotencyAcquireResult tryAcquireInTransaction(Connection connection, IdempotencyAcquireRequest request) throws Exception {
 
-        // 快路径：第一次请求直接依赖 UNIQUE(namespace,idempotency_key) 抢占。
-        // INSERT 成功意味着当前调用已经成为 generation owner。
+        // [A1 首次请求] 先走 INSERT 快路径。UNIQUE(namespace,idempotency_key) 是第一道数据库硬约束：
+        // A/B 同时第一次进入时，只可能一个 INSERT 成功；INSERT 成功即本次 owner/version=1 generation 生效。
         if (tryInsertProcessing(connection, request)) {
-            return IdempotencyAcquireResult.acquired(
-                    selectForUpdate(connection, request.getNamespace(), request.getKey()), false);
+            return IdempotencyAcquireResult.acquired(selectForUpdate(connection, request.getNamespace(), request.getKey()), false);
         }
 
-        // 唯一键冲突说明记录已经存在。使用 SELECT ... FOR UPDATE 把“读取状态 + 判定 + 必要更新”
-        // 收敛在同一个短事务里，避免两个线程同时认为自己可以重启窗口。
-        IdempotencyRecord current = selectForUpdate(
-                connection, request.getNamespace(), request.getKey());
+        // [A2 已有记录] Duplicate Key 不是错误，而是进入“历史状态判定”分支。
+        // SELECT ... FOR UPDATE 把读取 + 判断 + 必要更新锁在同一短事务，避免 Check-Then-Act 竞态。
+        IdempotencyRecord current = selectForUpdate(connection, request.getNamespace(), request.getKey());
         if (current == null) {
             // 极端情况下唯一键冲突事务回滚后记录又被删除，交由上层重试。
-            return IdempotencyAcquireResult.providerError(
-                    new IllegalStateException("idempotency record disappeared after duplicate key"));
+            return IdempotencyAcquireResult.providerError(new IllegalStateException("idempotency record disappeared after duplicate key"));
         }
 
-        // WINDOWED 的语义窗口已经结束：旧记录即使因为 retention 仍物理存在，也不再阻止新 generation。
+        // [A3 WINDOWED] 语义窗口结束后，旧物理记录可以因 retention 继续存在，但它已经不能阻止新 generation。
+        // 因此这里不是等待物理 DELETE，而是在同一行上 version+1 并重置为新的 PROCESSING。
         if (isWindowExpired(current, request.getNow())) {
             IdempotencyRecord next = restartWindow(connection, current, request);
             return IdempotencyAcquireResult.acquired(next, true);
         }
 
+        // [A4 身份保护] 同 key 但 requestHash 或 routeKey 改变，说明“同一个幂等身份”被错误复用，必须拒绝。
         if (routeConflict(current.getRouteKey(), request.getRouteKey())
                 || hashConflict(current.getRequestHash(), request.getRequestHash())) {
             return IdempotencyAcquireResult.of(IdempotencyAcquireStatus.KEY_CONFLICT, current);
         }
 
+        // [A5 状态判定] 持久状态只有 PROCESSING / SUCCESS / FAILED；ACTIVE/EXPIRED/RETRYABLE 是此刻计算出来的判定状态。
         return switch (current.getStatus()) {
             case SUCCESS -> {
-                IdempotencyRecord touched =
-                        touchSlidingWindowIfNeeded(connection, current, request);
-                yield IdempotencyAcquireResult.of(
-                        IdempotencyAcquireStatus.SUCCESS, touched);
+                IdempotencyRecord touched = touchSlidingWindowIfNeeded(connection, current, request);
+                yield IdempotencyAcquireResult.of(IdempotencyAcquireStatus.SUCCESS, touched);
             }
             case PROCESSING -> {
                 // 与 Redis Lua 保持一致：已经超时的 PROCESSING 不能因为后来一个普通重复请求
                 // 又把 WINDOWED 语义窗口向后续命。否则持续轮询一个已失效 generation
                 // 可能让窗口永远不结束。
                 if (isProcessingExpired(current, request.getNow())) {
-                    yield IdempotencyAcquireResult.of(
-                            IdempotencyAcquireStatus.PROCESSING_EXPIRED, current);
+                    yield IdempotencyAcquireResult.of(IdempotencyAcquireStatus.PROCESSING_EXPIRED, current);
                 }
-                IdempotencyRecord touched =
-                        touchSlidingWindowIfNeeded(connection, current, request);
-                yield IdempotencyAcquireResult.of(
-                        IdempotencyAcquireStatus.PROCESSING_ACTIVE, touched);
+                IdempotencyRecord touched = touchSlidingWindowIfNeeded(connection, current, request);
+                yield IdempotencyAcquireResult.of(IdempotencyAcquireStatus.PROCESSING_ACTIVE, touched);
             }
             case FAILED -> {
-                IdempotencyRecord touched =
-                        touchSlidingWindowIfNeeded(connection, current, request);
+                IdempotencyRecord touched = touchSlidingWindowIfNeeded(connection, current, request);
                 yield IdempotencyAcquireResult.of(
                         touched.isFailureRetryable()
                                 ? IdempotencyAcquireStatus.FAILED_RETRYABLE
@@ -153,10 +149,10 @@ public final class JdbcIdempotencyRepository
     }
 
     /**
-     * Reliable Task 的原子接管入口。
+     * 显式 Recovery 的二次 CAS 入口。
      *
-     * <p>与 tryAcquire 不同，本方法允许把“已超时 PROCESSING”或“可恢复 FAILED”转换成新的
-     * PROCESSING generation。expectedOwnerToken/expectedVersion 用来拒绝已经过时的扫描任务。</p>
+     * <p>扫描 candidate 只能说明“当时看起来需要恢复”，不能直接授予执行权。本方法会在新的 Tx-A 中重新锁行，
+     * 校验 expectedOwner / expectedVersion / recovery policy / 当前状态；只有全部仍成立才生成 newOwner + version+1。</p>
      */
     @Override
     public IdempotencyRecoveryResult tryRecover(IdempotencyRecoveryAcquireRequest request) {
@@ -167,36 +163,29 @@ public final class JdbcIdempotencyRepository
         }
     }
 
-    private IdempotencyRecoveryResult tryRecoverInTransaction(
-            Connection connection,
-            IdempotencyRecoveryAcquireRequest request) throws Exception {
+    private IdempotencyRecoveryResult tryRecoverInTransaction(Connection connection,
+                                                                 IdempotencyRecoveryAcquireRequest request) throws Exception {
 
-        IdempotencyRecord current = selectForUpdate(
-                connection, request.getNamespace(), request.getKey());
+        // [R1] 重新锁住“当前”记录。扫描时的 candidate 只是快照，不能替代真正执行时的实时状态。
+        IdempotencyRecord current = selectForUpdate(connection, request.getNamespace(), request.getKey());
         if (current == null) {
             return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.NOT_FOUND, null);
         }
 
         if (current.getRecoveryMode() != IdempotencyRecoveryMode.EXTERNAL_TASK) {
-            return IdempotencyRecoveryResult.of(
-                    IdempotencyRecoveryStatus.NOT_RECOVERABLE, current);
+            return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.NOT_RECOVERABLE, current);
         }
 
         if (isWindowExpired(current, request.getNow())) {
-            return IdempotencyRecoveryResult.of(
-                    IdempotencyRecoveryStatus.NOT_RECOVERABLE, current);
+            return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.NOT_RECOVERABLE, current);
         }
 
-        // 扫描和真正任务执行之间存在时间差；version/owner 任一变化都说明候选已经过时。
-        if (request.getExpectedVersion() != null
-                && request.getExpectedVersion().longValue() != current.getVersion()) {
-            return IdempotencyRecoveryResult.of(
-                    IdempotencyRecoveryStatus.STALE_CANDIDATE, current);
+        // [R2] 扫描和真正任务执行之间存在时间差；version/owner 任一变化都说明 candidate 已过时。
+        if (request.getExpectedVersion() != null && request.getExpectedVersion().longValue() != current.getVersion()) {
+            return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.STALE_CANDIDATE, current);
         }
-        if (request.getExpectedOwnerToken() != null
-                && !Objects.equals(request.getExpectedOwnerToken(), current.getOwnerToken())) {
-            return IdempotencyRecoveryResult.of(
-                    IdempotencyRecoveryStatus.STALE_CANDIDATE, current);
+        if (request.getExpectedOwnerToken() != null && !Objects.equals(request.getExpectedOwnerToken(), current.getOwnerToken())) {
+            return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.STALE_CANDIDATE, current);
         }
 
         if (routeConflict(current.getRouteKey(), request.getRouteKey())
@@ -210,24 +199,20 @@ public final class JdbcIdempotencyRepository
 
         if (current.getStatus() == IdempotencyStatus.PROCESSING) {
             if (!isProcessingExpired(current, request.getNow())) {
-                return IdempotencyRecoveryResult.of(
-                        IdempotencyRecoveryStatus.PROCESSING_ACTIVE, current);
+                return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.PROCESSING_ACTIVE, current);
             }
             if (!request.isRecoverProcessingTimeout()) {
-                return IdempotencyRecoveryResult.of(
-                        IdempotencyRecoveryStatus.NOT_RECOVERABLE, current);
+                return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.NOT_RECOVERABLE, current);
             }
-            return IdempotencyRecoveryResult.acquired(
-                    reacquire(connection, current, request),
-                    "PROCESSING_TIMEOUT");
+            // [R3] 真正接管：newOwner + version+1，旧 owner 从这一刻起成为 stale generation。
+            return IdempotencyRecoveryResult.acquired(reacquire(connection, current, request), "PROCESSING_TIMEOUT");
         }
 
         // FAILED
         if (!current.isFailureRetryable() || !request.isRecoverFailed()) {
             return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.FAILED_FINAL, current);
         }
-        return IdempotencyRecoveryResult.acquired(
-                reacquire(connection, current, request),
+        return IdempotencyRecoveryResult.acquired(reacquire(connection, current, request),
                 current.getFailureCode() == null ? "FAILED_RETRY" : current.getFailureCode());
     }
 
@@ -237,9 +222,8 @@ public final class JdbcIdempotencyRepository
      * <p>WHERE 条件必须同时包含 status=PROCESSING、ownerToken、version。
      * 这使得 A 已过期、B 已接管以后，A 即使恢复也无法把 B 的新状态覆盖掉。</p>
      *
-     * <p><strong>事务边界：</strong>固定调用 inCurrentTransaction(...)。
-     * transaction-aware JdbcExecutionManager 会复用 Tx-B 当前 Connection，从而实现
-     * “业务写 + SUCCESS”同事务提交；未接入事务组件时默认实现仍退化为普通 Connection。</p>
+     * <p><strong>事务边界：</strong>固定调用 inCurrentTransaction(...)。transaction-aware JdbcExecutionManager
+     * 会复用 Tx-B 当前 Connection，实现“业务写 + SUCCESS”同事务提交；未接入事务组件时不会声称具备该原子性。</p>
      */
     @Override
     public IdempotencyWriteResult markSuccess(IdempotencySuccessRequest request) {
@@ -269,10 +253,8 @@ public final class JdbcIdempotencyRepository
                     statement.setString(10, request.getOwnerToken());
                     statement.setLong(11, request.getVersion());
 
-                    return classifyWrite(
-                            connection,
-                            statement.executeUpdate(),
-                            request.getNamespace(), request.getKey(),
+                    // affectedRows=1 才表示当前 owner/version 仍有完成资格；0 行要进一步区分 stale owner / 已终态 / 不存在。
+                    return classifyWrite(connection, statement.executeUpdate(), request.getNamespace(), request.getKey(),
                             request.getOwnerToken(), request.getVersion());
                 }
             });
@@ -285,7 +267,7 @@ public final class JdbcIdempotencyRepository
      * 当前 generation 失败后的 PROCESSING -> FAILED 条件写。
      *
      * <p>业务事务如果已经回滚，FAILED 必须使用独立新事务提交，否则失败状态也会跟着回滚。
-     * 该语义固定为 Tx-C = inNewTransaction(...）。</p>
+     * 该语义固定为 Tx-C = inNewTransaction(...)。</p>
      */
     @Override
     public IdempotencyWriteResult markFailed(IdempotencyFailureRequest request) {
@@ -317,10 +299,7 @@ public final class JdbcIdempotencyRepository
                     statement.setString(11, request.getOwnerToken());
                     statement.setLong(12, request.getVersion());
 
-                    return classifyWrite(
-                            connection,
-                            statement.executeUpdate(),
-                            request.getNamespace(), request.getKey(),
+                    return classifyWrite(connection, statement.executeUpdate(), request.getNamespace(), request.getKey(),
                             request.getOwnerToken(), request.getVersion());
                 }
             });
@@ -353,8 +332,7 @@ public final class JdbcIdempotencyRepository
      * 真正接管必须再次调用 tryRecover()，用 expectedOwner/version 做二次确认。</p>
      */
     @Override
-    public List<IdempotencyRecoveryCandidate> findRecoveryCandidates(
-            IdempotencyRecoveryQuery query) {
+    public List<IdempotencyRecoveryCandidate> findRecoveryCandidates(IdempotencyRecoveryQuery query) {
         try {
             return jdbc.withConnection(connection -> queryRecoveryCandidates(connection, query));
         } catch (Exception error) {
@@ -414,9 +392,7 @@ public final class JdbcIdempotencyRepository
      *
      * <p>发生唯一键冲突不视为 ProviderError，而是返回 false，让调用方转入“已有记录”判断。</p>
      */
-    private boolean tryInsertProcessing(
-            Connection connection,
-            IdempotencyAcquireRequest request) throws SQLException {
+    private boolean tryInsertProcessing(Connection connection, IdempotencyAcquireRequest request) throws SQLException {
 
         WindowTimes times = initialWindowTimes(request);
         String sql = "INSERT INTO " + table
@@ -462,10 +438,8 @@ public final class JdbcIdempotencyRepository
      * <p>旧物理记录可能因为 retention 仍存在，因此这里不是 INSERT，而是在 version 条件保护下
      * 重置业务字段并把 version + 1。新的 generation 与旧 generation 在语义上已经是两次独立执行。</p>
      */
-    private IdempotencyRecord restartWindow(
-            Connection connection,
-            IdempotencyRecord current,
-            IdempotencyAcquireRequest request) throws SQLException {
+    private IdempotencyRecord restartWindow(Connection connection, IdempotencyRecord current,
+                                              IdempotencyAcquireRequest request) throws SQLException {
 
         WindowTimes times = initialWindowTimes(request);
         String sql = "UPDATE " + table
@@ -505,10 +479,8 @@ public final class JdbcIdempotencyRepository
      * <p>只允许在已经持有行锁、且旧 version 仍匹配时更新；newOwner + version+1
      * 是后续拒绝旧执行者的核心。</p>
      */
-    private IdempotencyRecord reacquire(
-            Connection connection,
-            IdempotencyRecord previous,
-            IdempotencyRecoveryAcquireRequest request) throws SQLException {
+    private IdempotencyRecord reacquire(Connection connection, IdempotencyRecord previous,
+                                          IdempotencyRecoveryAcquireRequest request) throws SQLException {
 
         String sql = "UPDATE " + table
                 + " SET status=?,owner_token=?,version=?,processing_expire_at=?,"
@@ -537,12 +509,9 @@ public final class JdbcIdempotencyRepository
      *
      * <p>FIXED_FROM_FIRST_ACQUIRE 不会进入这里，因此普通重复访问不会无限延长窗口。</p>
      */
-    private IdempotencyRecord touchSlidingWindowIfNeeded(
-            Connection connection,
-            IdempotencyRecord current,
-            IdempotencyAcquireRequest request) throws SQLException {
-        if (!request.getMode().isWindowed()
-                || request.getWindowPolicy() != IdempotencyWindowPolicy.SLIDING_ON_ACCESS
+    private IdempotencyRecord touchSlidingWindowIfNeeded(Connection connection, IdempotencyRecord current,
+                                                            IdempotencyAcquireRequest request) throws SQLException {
+        if (!request.getMode().isWindowed() || request.getWindowPolicy() != IdempotencyWindowPolicy.SLIDING_ON_ACCESS
                 || request.getIdempotencyWindow() == null) {
             return current;
         }
@@ -587,9 +556,7 @@ public final class JdbcIdempotencyRepository
             return new WindowTimes(windowAt, windowAt.plus(retention));
         }
         IdempotencyRecord current = select(connection, namespace, key, false);
-        return current == null
-                ? WindowTimes.none()
-                : new WindowTimes(current.getWindowExpireAt(), current.getRetentionExpireAt());
+        return current == null ? WindowTimes.none() : new WindowTimes(current.getWindowExpireAt(), current.getRetentionExpireAt());
     }
 
     private WindowTimes initialWindowTimes(IdempotencyAcquireRequest request) {
@@ -604,7 +571,7 @@ public final class JdbcIdempotencyRepository
      * 把 SQL affectedRows=0 翻译成稳定的领域语义。
      *
      * <p>不能只返回 false，因为 0 行可能分别意味着记录不存在、已经终态、owner/version 失效，
-     * 三种情况对上层处理完全不同。</p>
+     * 三种情况对上层处理完全不同。尤其 STALE_OWNER 会让事务路径强制 rollback，防止旧 generation 的业务 SQL 泄漏提交。</p>
      */
     private IdempotencyWriteResult classifyWrite(
             Connection connection,
@@ -636,11 +603,7 @@ public final class JdbcIdempotencyRepository
         return select(connection, namespace, key, true);
     }
 
-    private IdempotencyRecord select(
-            Connection connection,
-            String namespace,
-            String key,
-            boolean forUpdate) throws SQLException {
+    private IdempotencyRecord select(Connection connection, String namespace, String key, boolean forUpdate) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(selectSql(forUpdate))) {
             statement.setString(1, namespace);
             statement.setString(2, key);
@@ -671,8 +634,7 @@ public final class JdbcIdempotencyRepository
                 .failureCode(rs.getString("failure_code"))
                 .failureMessage(rs.getString("failure_message"))
                 .failureRetryable(rs.getBoolean("failure_retryable"))
-                .recoveryMode(enumValue(IdempotencyRecoveryMode.class,
-                        rs.getString("recovery_mode"), IdempotencyRecoveryMode.NONE))
+                .recoveryMode(enumValue(IdempotencyRecoveryMode.class, rs.getString("recovery_mode"), IdempotencyRecoveryMode.NONE))
                 .windowPolicy(enumValue(IdempotencyWindowPolicy.class,
                         rs.getString("window_policy"), IdempotencyWindowPolicy.FIXED_FROM_FIRST_ACQUIRE))
                 .processingExpireAt(toInstant(rs.getTimestamp("processing_expire_at")))

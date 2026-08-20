@@ -15,9 +15,7 @@ public final class IdempotencyStateDecision {
     private final IdempotencyStateAction action;
     private final IdempotencyResultStatus resultStatus;
 
-    private IdempotencyStateDecision(
-            IdempotencyStateAction action,
-            IdempotencyResultStatus resultStatus) {
+    private IdempotencyStateDecision(IdempotencyStateAction action, IdempotencyResultStatus resultStatus) {
         this.action = Objects.requireNonNull(action, "action must not be null");
         this.resultStatus = resultStatus;
     }

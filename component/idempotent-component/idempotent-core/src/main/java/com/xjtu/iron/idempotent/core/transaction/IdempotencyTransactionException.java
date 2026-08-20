@@ -12,11 +12,7 @@ public final class IdempotencyTransactionException extends RuntimeException {
     private final String stage;
     private final IdempotencyTransactionOutcome outcome;
 
-    public IdempotencyTransactionException(
-            String message,
-            String stage,
-            IdempotencyTransactionOutcome outcome,
-            Throwable cause) {
+    public IdempotencyTransactionException(String message, String stage, IdempotencyTransactionOutcome outcome, Throwable cause) {
         super(message, cause);
         this.stage = stage == null ? "UNKNOWN" : stage;
         this.outcome = Objects.requireNonNull(outcome, "outcome must not be null");

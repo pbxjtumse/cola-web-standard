@@ -13,8 +13,13 @@ import java.util.Objects;
  */
 public final class IdempotencyRecoveryPolicy {
 
+    /** NONE 表示不允许外部恢复；EXTERNAL_TASK 表示由外部 Reliable Task 显式调用 recover()。 */
     private final IdempotencyRecoveryMode mode;
+
+    /** PROCESSING 执行租约过期后，Reliable Task 是否允许接管。 */
     private final boolean recoverProcessingTimeout;
+
+    /** FAILED 且 failureRetryable=true 时，Reliable Task 是否允许接管。 */
     private final boolean recoverRetryableFailure;
 
     private IdempotencyRecoveryPolicy(Builder builder) {
@@ -45,10 +50,8 @@ public final class IdempotencyRecoveryPolicy {
 
     public void validate() {
         Objects.requireNonNull(mode, "recovery mode must not be null");
-        if (mode == IdempotencyRecoveryMode.NONE
-                && (recoverProcessingTimeout || recoverRetryableFailure)) {
-            throw new IllegalArgumentException(
-                    "recovery mode NONE cannot enable processing-timeout/failed recovery");
+        if (mode == IdempotencyRecoveryMode.NONE && (recoverProcessingTimeout || recoverRetryableFailure)) {
+            throw new IllegalArgumentException("recovery mode NONE cannot enable processing-timeout/failed recovery");
         }
     }
 

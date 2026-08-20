@@ -13,25 +13,16 @@ import java.sql.Connection;
 import java.util.Objects;
 
 /**
- * transaction-component + Spring 事务资源绑定下的 JDBC 执行管理器。
+ * transaction-component 与 JDBC Repository 之间的 Connection 桥梁。
  *
- * <p>这是幂等 JDBC Provider 真正进入事务模板的关键桥梁：</p>
+ * <p>真正的关键不是“代码外面套了一个事务模板”，而是幂等 Repository 的 SQL 必须拿到业务事务绑定的同一条
+ * Connection。否则 Business 用 Connection-A，markSuccess 又重新 dataSource.getConnection() 得到 Connection-B，
+ * 表面上有事务，实际上仍然存在两个提交点。</p>
+ *
  * <pre>
- * Tx-A / Tx-C:
- *   TransactionExecutor(REQUIRES_NEW)
- *       -> Spring TransactionManager 绑定 Connection
- *       -> DataSourceUtils 取得该 Connection
- *
- * Tx-B:
- *   IdempotencyTransactionCoordinator(REQUIRED)
- *       -> business SQL
- *       -> markSuccess()
- *       -> inCurrentTransaction()
- *       -> 复用同一个 transaction-bound Connection
+ * Tx-A / Tx-C：TransactionExecutor(REQUIRES_NEW) -> 当前事务绑定 Connection -> Repository SQL
+ * Tx-B       ：TransactionCoordinator(REQUIRED) -> Business SQL -> markSuccess -> 复用同一 transaction-bound Connection
  * </pre>
- *
- * <p>这里不能使用 {@code dataSource.getConnection()}，否则 markSuccess 很可能拿到 Connection-B，
- * 与业务 Connection-A 分离，最终失去原子性。</p>
  */
 public final class SpringTransactionJdbcExecutionManager implements JdbcExecutionManager {
 
@@ -45,6 +36,11 @@ public final class SpringTransactionJdbcExecutionManager implements JdbcExecutio
         this.transactionExecutor = Objects.requireNonNull(transactionExecutor, "transactionExecutor must not be null");
     }
 
+    /**
+     * 普通 JDBC 工作入口。
+     *
+     * <p>DataSourceUtils 会优先返回当前事务绑定的 Connection；如果当前没有事务，则正常获取并在 finally 中归还连接池。</p>
+     */
     @Override
     public <T> T withConnection(JdbcWork<T> work) throws Exception {
         Objects.requireNonNull(work, "work must not be null");
@@ -52,27 +48,29 @@ public final class SpringTransactionJdbcExecutionManager implements JdbcExecutio
         try {
             return work.execute(connection);
         } finally {
-            // 如果 Connection 属于当前事务，releaseConnection 不会提前 close；
-            // 如果只是普通查询 Connection，则会正常归还连接池。
             DataSourceUtils.releaseConnection(connection, dataSource);
         }
     }
 
+    /**
+     * Tx-B 完成阶段专用：强制要求当前存在真实本地事务，并确认该事务绑定的就是幂等 Repository 使用的 DataSource。
+     *
+     * <p>这里选择 fail-fast，而不是“拿不到当前事务就偷偷新取 Connection”，因为后者会制造虚假的原子性保证。</p>
+     */
     @Override
     public <T> T inCurrentTransaction(JdbcWork<T> work) throws Exception {
         Objects.requireNonNull(work, "work must not be null");
 
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-            throw new IllegalStateException(
-                    "markSuccess requires an active local transaction, but no transaction is active");
+            throw new IllegalStateException("markSuccess requires an active local transaction, but no transaction is active");
         }
 
         Connection connection = DataSourceUtils.getConnection(dataSource);
         try {
             if (!DataSourceUtils.isConnectionTransactional(connection, dataSource)) {
                 throw new IllegalStateException(
-                        "current transaction does not bind the idempotency DataSource; "
-                                + "business DB and idempotency DB must use the same local transaction resource");
+                        "current transaction does not bind the idempotency DataSource; business DB and idempotency DB "
+                                + "must use the same local transaction resource");
             }
             return work.execute(connection);
         } finally {
@@ -80,6 +78,11 @@ public final class SpringTransactionJdbcExecutionManager implements JdbcExecutio
         }
     }
 
+    /**
+     * Tx-A / Tx-C 专用：通过 transaction-component 建立 REQUIRES_NEW，再复用这个新事务绑定的 Connection。
+     *
+     * <p>不要在这里自己 connection.setAutoCommit(false) 冒充事务模板，否则外层事务挂起、传播语义、异常结果都无法统一。</p>
+     */
     @Override
     public <T> T inNewTransaction(JdbcWork<T> work) throws Exception {
         Objects.requireNonNull(work, "work must not be null");
@@ -92,8 +95,6 @@ public final class SpringTransactionJdbcExecutionManager implements JdbcExecutio
         try {
             return transactionExecutor.execute(options, context -> {
                 try {
-                    // REQUIRES_NEW 已经由 transaction-component 建立真实新事务；
-                    // 这里必须取得那个事务绑定的 Connection，而不是自己 connection.setAutoCommit(false)。
                     return inCurrentTransaction(work);
                 } catch (RuntimeException | Error unchecked) {
                     throw unchecked;
@@ -111,6 +112,7 @@ public final class SpringTransactionJdbcExecutionManager implements JdbcExecutio
         return true;
     }
 
+    /** 仅用于跨过 transaction callback 的 checked-exception 边界。 */
     private static final class CheckedJdbcWorkRuntimeException extends RuntimeException {
         private final Exception original;
 

@@ -81,7 +81,6 @@ policyName
 default-policy
 ```
 
-`IdempotencyOptions` 已删除。
 
 推荐业务调用：
 

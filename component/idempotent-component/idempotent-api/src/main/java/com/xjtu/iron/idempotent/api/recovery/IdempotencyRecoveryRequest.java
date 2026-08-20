@@ -3,11 +3,10 @@ package com.xjtu.iron.idempotent.api.recovery;
 import com.xjtu.iron.idempotent.api.policy.IdempotencyPolicy;
 
 /**
- * 外部 Reliable Task 调用幂等恢复入口时使用的恢复请求。
+ * 外部 Reliable Task 调用 recover() 时使用的请求。
  *
- * <p>{@code expectedOwnerToken / expectedVersion} 是恢复安全性的核心条件：
- * 扫描得到的候选记录在真正执行恢复时必须再次通过 Repository CAS 验证，
- * 防止过时扫描任务接管已经被新 generation 更新的记录。</p>
+ * <p>真正关键的是 {@code expectedOwnerToken + expectedVersion}：扫描 candidate 只能说明“扫描当时看到 A/10 需要恢复”，
+ * 真正执行任务时仍必须再次由 Repository 校验 current 是否还是 A/10。若已经变成 B/11，则返回 STALE_CANDIDATE。</p>
  */
 public final class IdempotencyRecoveryRequest {
 
@@ -29,37 +28,15 @@ public final class IdempotencyRecoveryRequest {
         this.policy = builder.policy;
     }
 
-    public static Builder builder() {
-        return new Builder();
-    }
+    public static Builder builder() { return new Builder(); }
 
-    public String getKey() {
-        return key;
-    }
-
-    public String getRequestHash() {
-        return requestHash;
-    }
-
-    public String getRouteKey() {
-        return routeKey;
-    }
-
-    public String getExpectedOwnerToken() {
-        return expectedOwnerToken;
-    }
-
-    public Long getExpectedVersion() {
-        return expectedVersion;
-    }
-
-    public String getPolicyName() {
-        return policyName;
-    }
-
-    public IdempotencyPolicy getPolicy() {
-        return policy;
-    }
+    public String getKey() { return key; }
+    public String getRequestHash() { return requestHash; }
+    public String getRouteKey() { return routeKey; }
+    public String getExpectedOwnerToken() { return expectedOwnerToken; }
+    public Long getExpectedVersion() { return expectedVersion; }
+    public String getPolicyName() { return policyName; }
+    public IdempotencyPolicy getPolicy() { return policy; }
 
     public static final class Builder {
         private String key;
@@ -70,43 +47,14 @@ public final class IdempotencyRecoveryRequest {
         private String policyName;
         private IdempotencyPolicy policy;
 
-        public Builder key(String value) {
-            this.key = value;
-            return this;
-        }
+        public Builder key(String value) { this.key = value; return this; }
+        public Builder requestHash(String value) { this.requestHash = value; return this; }
+        public Builder routeKey(String value) { this.routeKey = value; return this; }
+        public Builder expectedOwnerToken(String value) { this.expectedOwnerToken = value; return this; }
+        public Builder expectedVersion(Long value) { this.expectedVersion = value; return this; }
+        public Builder policyName(String value) { this.policyName = value; return this; }
+        public Builder policy(IdempotencyPolicy value) { this.policy = value; return this; }
 
-        public Builder requestHash(String value) {
-            this.requestHash = value;
-            return this;
-        }
-
-        public Builder routeKey(String value) {
-            this.routeKey = value;
-            return this;
-        }
-
-        public Builder expectedOwnerToken(String value) {
-            this.expectedOwnerToken = value;
-            return this;
-        }
-
-        public Builder expectedVersion(Long value) {
-            this.expectedVersion = value;
-            return this;
-        }
-
-        public Builder policyName(String value) {
-            this.policyName = value;
-            return this;
-        }
-
-        public Builder policy(IdempotencyPolicy value) {
-            this.policy = value;
-            return this;
-        }
-
-        public IdempotencyRecoveryRequest build() {
-            return new IdempotencyRecoveryRequest(this);
-        }
+        public IdempotencyRecoveryRequest build() { return new IdempotencyRecoveryRequest(this); }
     }
 }

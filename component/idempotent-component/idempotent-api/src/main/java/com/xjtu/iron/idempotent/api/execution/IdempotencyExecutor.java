@@ -19,26 +19,19 @@ public interface IdempotencyExecutor {
     /**
      * 最常用入口：不保存结果，只保证重复请求不再次执行业务。
      */
-    default <T> IdempotencyResult<T> execute(
-            IdempotencyRequest request,
-            IdempotencyCallback<T> callback) {
+    default <T> IdempotencyResult<T> execute(IdempotencyRequest request, IdempotencyCallback<T> callback) {
         return execute(request, IdempotencyResultPolicies.none(), callback);
     }
 
     /**
      * 带结果策略的普通幂等执行。
      */
-    <T> IdempotencyResult<T> execute(
-            IdempotencyRequest request,
-            IdempotencyResultPolicy<T> resultPolicy,
-            IdempotencyCallback<T> callback);
+    <T> IdempotencyResult<T> execute(IdempotencyRequest request, IdempotencyResultPolicy<T> resultPolicy, IdempotencyCallback<T> callback);
 
     /**
      * 最常用恢复入口：不要求结果回放。
      */
-    default <T> IdempotencyResult<T> recover(
-            IdempotencyRecoveryRequest request,
-            IdempotencyCallback<T> callback) {
+    default <T> IdempotencyResult<T> recover(IdempotencyRecoveryRequest request, IdempotencyCallback<T> callback) {
         return recover(request, IdempotencyResultPolicies.none(), callback);
     }
 
@@ -50,17 +43,12 @@ public interface IdempotencyExecutor {
             IdempotencyResultPolicy<T> resultPolicy,
             IdempotencyCallback<T> callback);
 
-    default <T> IdempotencyResult<T> execute(
-            String key,
-            String policyName,
-            IdempotencyCallback<T> callback) {
+    default <T> IdempotencyResult<T> execute(String key, String policyName, IdempotencyCallback<T> callback) {
         Objects.requireNonNull(callback, "callback must not be null");
         return execute(IdempotencyRequest.of(key, policyName), callback);
     }
 
-    default <T> IdempotencyResult<T> execute(
-            String key,
-            IdempotencyCallback<T> callback) {
+    default <T> IdempotencyResult<T> execute(String key, IdempotencyCallback<T> callback) {
         Objects.requireNonNull(callback, "callback must not be null");
         return execute(IdempotencyRequest.of(key), callback);
     }

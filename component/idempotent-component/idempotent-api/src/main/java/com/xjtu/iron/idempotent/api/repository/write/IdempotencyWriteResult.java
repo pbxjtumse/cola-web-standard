@@ -24,24 +24,18 @@ public final class IdempotencyWriteResult {
     /** Provider 异常；只有 PROVIDER_ERROR 时通常非空。 */
     private final Throwable error;
 
-    private IdempotencyWriteResult(
-            IdempotencyWriteStatus status,
-            IdempotencyRecord record,
-            Throwable error) {
+    private IdempotencyWriteResult(IdempotencyWriteStatus status, IdempotencyRecord record, Throwable error) {
         this.status = status;
         this.record = record;
         this.error = error;
     }
 
-    public static IdempotencyWriteResult of(
-            IdempotencyWriteStatus status,
-            IdempotencyRecord record) {
+    public static IdempotencyWriteResult of(IdempotencyWriteStatus status, IdempotencyRecord record) {
         return new IdempotencyWriteResult(status, record, null);
     }
 
     public static IdempotencyWriteResult providerError(Throwable error) {
-        return new IdempotencyWriteResult(
-                IdempotencyWriteStatus.PROVIDER_ERROR, null, error);
+        return new IdempotencyWriteResult(IdempotencyWriteStatus.PROVIDER_ERROR, null, error);
     }
 
     public IdempotencyWriteStatus getStatus() {
