@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.starter.properties;
 
-import com.xjtu.iron.distributed.lock.api.LockOptions;
+import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;

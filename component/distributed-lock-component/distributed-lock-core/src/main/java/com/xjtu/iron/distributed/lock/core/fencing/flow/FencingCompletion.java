@@ -1,8 +1,8 @@
 package com.xjtu.iron.distributed.lock.core.fencing.flow;
 
-import com.xjtu.iron.distributed.lock.api.LockHandle;
-import com.xjtu.iron.distributed.lock.api.LockResult;
-import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
+import com.xjtu.iron.distributed.lock.api.model.LockHandle;
+import com.xjtu.iron.distributed.lock.api.model.LockResult;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockLease;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -26,8 +26,7 @@ public final class FencingCompletion {
     }
 
     public static FencingCompletion failure(LockResult<LockHandle> failureResult) {
-        return new FencingCompletion(null,
-                Objects.requireNonNull(failureResult, "failureResult must not be null"));
+        return new FencingCompletion(null, Objects.requireNonNull(failureResult, "failureResult must not be null"));
     }
 
     public boolean isSuccess() { return lease != null; }

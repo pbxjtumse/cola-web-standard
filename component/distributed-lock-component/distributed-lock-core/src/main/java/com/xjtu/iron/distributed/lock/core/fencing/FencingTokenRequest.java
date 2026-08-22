@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.core.fencing;
 
-import com.xjtu.iron.distributed.lock.api.LockOptions;
+import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 
 import java.util.Objects;
 

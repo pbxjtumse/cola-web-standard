@@ -9,7 +9,6 @@ class RedissonLockKeyBuilderTest {
     @Test
     void shouldBuildNamespacedClusterFriendlyKey() {
         RedissonLockKeyBuilder builder = new RedissonLockKeyBuilder("iron:lock:redisson:");
-        assertEquals("iron:lock:redisson:{demo:order-1001}",
-                builder.buildLockKey("demo", "order-1001"));
+        assertEquals("iron:lock:redisson:{demo:order-1001}", builder.buildLockKey("demo", "order-1001"));
     }
 }

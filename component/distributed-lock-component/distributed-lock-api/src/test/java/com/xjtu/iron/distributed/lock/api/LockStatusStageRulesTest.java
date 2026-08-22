@@ -1,5 +1,8 @@
 package com.xjtu.iron.distributed.lock.api;
 
+import com.xjtu.iron.distributed.lock.api.model.LockResult;
+import com.xjtu.iron.distributed.lock.api.status.LockStage;
+import com.xjtu.iron.distributed.lock.api.status.LockStatus;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -26,9 +29,7 @@ class LockStatusStageRulesTest {
 
     @Test
     void providerErrorAtFencingShouldBeValidAfterLockWasAcquired() {
-        assertTrue(LockStatusStageRules.isValid(
-                LockStatus.PROVIDER_ERROR, LockStage.FENCING, true));
-        assertFalse(LockStatusStageRules.isValid(
-                LockStatus.PROVIDER_ERROR, LockStage.FENCING, false));
+        assertTrue(LockStatusStageRules.isValid(LockStatus.PROVIDER_ERROR, LockStage.FENCING, true));
+        assertFalse(LockStatusStageRules.isValid(LockStatus.PROVIDER_ERROR, LockStage.FENCING, false));
     }
 }

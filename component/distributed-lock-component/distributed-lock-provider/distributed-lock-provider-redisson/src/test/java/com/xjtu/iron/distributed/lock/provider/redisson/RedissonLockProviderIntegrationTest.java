@@ -1,12 +1,12 @@
 package com.xjtu.iron.distributed.lock.provider.redisson;
 
-import com.xjtu.iron.distributed.lock.api.LockOptions;
+import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 import com.xjtu.iron.distributed.lock.api.LockWaitStrategy;
-import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockAcquireRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockReleaseRequest;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockLease;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireResponse;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -47,10 +47,7 @@ class RedissonLockProviderIntegrationTest {
         config.useSingleServer().setAddress(
                 "redis://" + REDIS.getHost() + ':' + REDIS.getMappedPort(6379));
         client = Redisson.create(config);
-        provider = new RedissonLockProvider(
-                client,
-                new RedissonLockKeyBuilder("test:iron:lock:redisson"),
-                new RedissonOwnershipRegistry(),
+        provider = new RedissonLockProvider(client, new RedissonLockKeyBuilder("test:iron:lock:redisson"), new RedissonOwnershipRegistry(),
                 Duration.ofSeconds(2));
     }
 
@@ -189,17 +186,11 @@ class RedissonLockProviderIntegrationTest {
         provider.release(LockReleaseRequest.fromLease(response.getLease()));
     }
 
-    private static LockAcquireRequest request(
-            String lockName,
-            String ownerToken,
-            boolean nativeFencing,
-            LockWaitStrategy waitStrategy
-    ) {
+    private static LockAcquireRequest request(String lockName, String ownerToken, boolean nativeFencing, LockWaitStrategy waitStrategy) {
         LockOptions options = LockOptions.builder()
                 .namespace("test")
                 .leaseTime(Duration.ofSeconds(2))
-                .waitTime(waitStrategy == LockWaitStrategy.PROVIDER_NATIVE
-                        ? Duration.ofSeconds(2) : Duration.ZERO)
+                .waitTime(waitStrategy == LockWaitStrategy.PROVIDER_NATIVE ? Duration.ofSeconds(2) : Duration.ZERO)
                 .waitStrategy(waitStrategy)
                 .build();
         return LockAcquireRequest.builder()

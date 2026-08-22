@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.core.watchdog;
 
-import com.xjtu.iron.distributed.lock.api.LockHandle;
+import com.xjtu.iron.distributed.lock.api.model.LockHandle;
 import com.xjtu.iron.distributed.lock.core.spi.LockAutoRenewMode;
 
 /**

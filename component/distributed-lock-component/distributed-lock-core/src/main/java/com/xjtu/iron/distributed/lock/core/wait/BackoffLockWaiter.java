@@ -1,8 +1,8 @@
 package com.xjtu.iron.distributed.lock.core.wait;
 
-import com.xjtu.iron.distributed.lock.api.LockOptions;
+import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 import com.xjtu.iron.distributed.lock.api.RetryBackoffSpec;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireResponse;
 
 import java.time.Duration;
 import java.time.Instant;

@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.provider.jdbc.fencing;
 
-import com.xjtu.iron.distributed.lock.api.LockOptions;
+import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenRequest;
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenResponse;
 import org.h2.jdbcx.JdbcDataSource;
@@ -67,8 +67,7 @@ class JdbcSequenceFencingTokenProviderTest {
                 tokens.add(future.get());
             }
             assertThat(tokens).doesNotHaveDuplicates();
-            assertThat(tokens).containsExactlyInAnyOrderElementsOf(
-                    java.util.stream.LongStream.rangeClosed(1, 20).boxed().toList());
+            assertThat(tokens).containsExactlyInAnyOrderElementsOf(java.util.stream.LongStream.rangeClosed(1, 20).boxed().toList());
         } finally {
             executor.shutdownNow();
         }

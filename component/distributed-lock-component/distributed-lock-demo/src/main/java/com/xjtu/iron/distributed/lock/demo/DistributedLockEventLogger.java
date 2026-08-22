@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.demo;
 
-import com.xjtu.iron.distributed.lock.core.event.LockEvent;
+import com.xjtu.iron.distributed.lock.core.observability.LockEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;

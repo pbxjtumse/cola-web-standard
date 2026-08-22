@@ -3,15 +3,15 @@ package com.xjtu.iron.distributed.lock.provider.redis;
 import com.xjtu.iron.distributed.lock.core.spi.LockAutoRenewMode;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.core.spi.LockProviderCapabilities;
-import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockAcquireRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockReleaseRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockRenewRequest;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockCheckResponse;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockRenewResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockLease;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockRenewRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockRenewResponse;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -34,8 +34,7 @@ public final class RedisLockProvider implements LockProvider {
         this(scriptExecutor, keyBuilder, new RedisScriptResultParser());
     }
 
-    public RedisLockProvider(RedisLockScriptExecutor scriptExecutor, RedisLockKeyBuilder keyBuilder,
-                             RedisScriptResultParser resultParser) {
+    public RedisLockProvider(RedisLockScriptExecutor scriptExecutor, RedisLockKeyBuilder keyBuilder, RedisScriptResultParser resultParser) {
         this.scriptExecutor = Objects.requireNonNull(scriptExecutor, "scriptExecutor must not be null");
         this.keyBuilder = Objects.requireNonNull(keyBuilder, "keyBuilder must not be null");
         this.resultParser = Objects.requireNonNull(resultParser, "resultParser must not be null");
@@ -50,14 +49,10 @@ public final class RedisLockProvider implements LockProvider {
         String lockKey = keyBuilder.buildLockKey(request.getNamespace(), request.getLockName());
         String fencingKey = keyBuilder.buildFencingKey(request.getNamespace(), request.getLockName());
         List<String> keys = Arrays.asList(lockKey, fencingKey);
-        List<String> args = Arrays.asList(
-                request.getOwnerToken(),
-                String.valueOf(request.getOptions().getLeaseTime().toMillis()),
-                request.isNativeFencingRequired() ? "1" : "0"
-        );
+        List<String> args = Arrays.asList(request.getOwnerToken(), String.valueOf(request.getOptions().getLeaseTime().toMillis()),
+                request.isNativeFencingRequired() ? "1" : "0");
         try {
-            RedisScriptResultParser.AcquireResult result = resultParser.parseAcquire(
-                    scriptExecutor.execute(RedisLockScripts.ACQUIRE, keys, args));
+            RedisScriptResultParser.AcquireResult result = resultParser.parseAcquire(scriptExecutor.execute(RedisLockScripts.ACQUIRE, keys, args));
             if (result.getFlag() == 1L) {
                 Instant acquiredAt = Instant.now();
                 LockLease lease = LockLease.builder()

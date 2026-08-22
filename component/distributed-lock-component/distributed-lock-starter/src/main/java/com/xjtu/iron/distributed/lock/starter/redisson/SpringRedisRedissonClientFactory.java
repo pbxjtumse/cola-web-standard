@@ -26,11 +26,8 @@ public final class SpringRedisRedissonClientFactory {
 
     private SpringRedisRedissonClientFactory() {}
 
-    public static RedissonClient create(
-            RedisConnectionDetails details,
-            RedisProperties redisProperties,
-            RedissonDistributedLockProperties lockProperties
-    ) {
+    public static RedissonClient create(RedisConnectionDetails details, RedisProperties redisProperties,
+            RedissonDistributedLockProperties lockProperties) {
         if (details == null) {
             throw new IllegalStateException("RedisConnectionDetails is required to auto-create RedissonClient");
         }
@@ -52,15 +49,10 @@ public final class SpringRedisRedissonClientFactory {
         return Redisson.create(config);
     }
 
-    private static void configureLockReliability(
-            Config config,
-            RedissonDistributedLockProperties properties
-    ) {
-        config.setLockWatchdogTimeout(requirePositiveMillis(
-                properties.getWatchdogTimeout(), "watchdogTimeout"));
+    private static void configureLockReliability(Config config, RedissonDistributedLockProperties properties) {
+        config.setLockWatchdogTimeout(requirePositiveMillis(properties.getWatchdogTimeout(), "watchdogTimeout"));
         config.setCheckLockSyncedSlaves(properties.isCheckLockSyncedSlaves());
-        config.setSlavesSyncTimeout(requirePositiveMillis(
-                properties.getSlavesSyncTimeout(), "slavesSyncTimeout"));
+        config.setSlavesSyncTimeout(requirePositiveMillis(properties.getSlavesSyncTimeout(), "slavesSyncTimeout"));
     }
 
     private static void configureCredentials(Config config, RedisConnectionDetails details) {
@@ -72,11 +64,7 @@ public final class SpringRedisRedissonClientFactory {
         }
     }
 
-    private static void configureStandalone(
-            Config config,
-            RedisConnectionDetails details,
-            RedisProperties properties
-    ) {
+    private static void configureStandalone(Config config, RedisConnectionDetails details, RedisProperties properties) {
         RedisConnectionDetails.Standalone standalone = details.getStandalone();
         String scheme = scheme(standalone.getSslBundle(), properties);
         applySslBundle(config, standalone.getSslBundle());
@@ -87,11 +75,7 @@ public final class SpringRedisRedissonClientFactory {
         applyTimeouts(server, properties);
     }
 
-    private static void configureSentinel(
-            Config config,
-            RedisConnectionDetails details,
-            RedisProperties properties
-    ) {
+    private static void configureSentinel(Config config, RedisConnectionDetails details, RedisProperties properties) {
         RedisConnectionDetails.Sentinel sentinel = details.getSentinel();
         String scheme = scheme(sentinel.getSslBundle(), properties);
         applySslBundle(config, sentinel.getSslBundle());
@@ -110,11 +94,7 @@ public final class SpringRedisRedissonClientFactory {
         applyTimeouts(servers, properties);
     }
 
-    private static void configureCluster(
-            Config config,
-            RedisConnectionDetails details,
-            RedisProperties properties
-    ) {
+    private static void configureCluster(Config config, RedisConnectionDetails details, RedisProperties properties) {
         RedisConnectionDetails.Cluster cluster = details.getCluster();
         String scheme = scheme(cluster.getSslBundle(), properties);
         applySslBundle(config, cluster.getSslBundle());
@@ -133,8 +113,7 @@ public final class SpringRedisRedissonClientFactory {
             config.setTimeout(toIntMillis(properties.getTimeout(), "spring.data.redis.timeout"));
         }
         if (properties.getConnectTimeout() != null) {
-            config.setConnectTimeout(toIntMillis(
-                    properties.getConnectTimeout(), "spring.data.redis.connect-timeout"));
+            config.setConnectTimeout(toIntMillis(properties.getConnectTimeout(), "spring.data.redis.connect-timeout"));
         }
         if (hasText(properties.getClientName())) {
             config.setClientName(properties.getClientName());

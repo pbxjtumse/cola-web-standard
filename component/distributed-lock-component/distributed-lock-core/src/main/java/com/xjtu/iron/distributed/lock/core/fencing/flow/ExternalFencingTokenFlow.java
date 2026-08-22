@@ -1,11 +1,11 @@
 package com.xjtu.iron.distributed.lock.core.fencing.flow;
 
-import com.xjtu.iron.distributed.lock.api.LockHandle;
-import com.xjtu.iron.distributed.lock.api.LockResult;
+import com.xjtu.iron.distributed.lock.api.model.LockHandle;
+import com.xjtu.iron.distributed.lock.api.model.LockResult;
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenMode;
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenResponse;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
-import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockLease;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -47,8 +47,7 @@ public final class ExternalFencingTokenFlow implements FencingTokenFlow {
          * 外部发号可能比 leaseTime 更慢。发号完成后必须重新确认 ownerToken 仍然持锁，
          * 避免把“已经过期的租约 + 后生成的较大 token”交给业务 callback。
          */
-        LockResult<LockHandle> ownershipFailure = support.verifyOwnershipAfterExternalFencing(
-                lockProvider, fencedLease, context.waitDuration());
+        LockResult<LockHandle> ownershipFailure = support.verifyOwnershipAfterExternalFencing(lockProvider, fencedLease, context.waitDuration());
         if (ownershipFailure != null) {
             return FencingCompletion.failure(ownershipFailure);
         }

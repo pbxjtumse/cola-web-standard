@@ -38,8 +38,7 @@ public final class JdbcSequenceFencingTokenProvider implements FencingTokenProvi
     private final String selectSql;
 
     public JdbcSequenceFencingTokenProvider(DataSource dataSource) {
-        this(dataSource, JdbcFencingTokenConstants.DEFAULT_TABLE_NAME,
-                JdbcFencingTokenConstants.DEFAULT_MAX_RETRIES);
+        this(dataSource, JdbcFencingTokenConstants.DEFAULT_TABLE_NAME, JdbcFencingTokenConstants.DEFAULT_MAX_RETRIES);
     }
 
     public JdbcSequenceFencingTokenProvider(DataSource dataSource, String tableName, int maxRetries) {
@@ -76,20 +75,17 @@ public final class JdbcSequenceFencingTokenProvider implements FencingTokenProvi
         SQLException lastDuplicate = null;
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                return FencingTokenResponse.issued(nextTokenInTransaction(
-                        request.getNamespace(), request.getLockName()));
+                return FencingTokenResponse.issued(nextTokenInTransaction(request.getNamespace(), request.getLockName()));
             } catch (SQLException error) {
                 if (isDuplicateKey(error) && attempt < maxRetries) {
                     lastDuplicate = error;
                     continue;
                 }
                 return FencingTokenResponse.failed(error,
-                        "failed to issue JDBC fencing token, provider=" + providerName()
-                                + ", table=" + tableName + ", attempt=" + attempt);
+                        "failed to issue JDBC fencing token, provider=" + providerName() + ", table=" + tableName + ", attempt=" + attempt);
             }
         }
-        return FencingTokenResponse.failed(lastDuplicate,
-                "failed to issue JDBC fencing token after retries: " + maxRetries);
+        return FencingTokenResponse.failed(lastDuplicate, "failed to issue JDBC fencing token after retries: " + maxRetries);
     }
 
     private long nextTokenInTransaction(String namespace, String lockName) throws SQLException {
@@ -176,8 +172,7 @@ public final class JdbcSequenceFencingTokenProvider implements FencingTokenProvi
 
     private static String validateTableName(String tableName) {
         if (tableName == null || !SAFE_IDENTIFIER.matcher(tableName.trim()).matches()) {
-            throw new IllegalArgumentException(
-                    "tableName must be a simple SQL identifier: " + tableName);
+            throw new IllegalArgumentException("tableName must be a simple SQL identifier: " + tableName);
         }
         return tableName.trim();
     }

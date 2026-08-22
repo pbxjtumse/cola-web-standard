@@ -40,18 +40,15 @@ public final class FencingTokenResponse {
     }
 
     public static FencingTokenResponse notSupported(String message) {
-        return new FencingTokenResponse(FencingTokenStatus.NOT_SUPPORTED, null,
-                LockProviderError.of(null, message));
+        return new FencingTokenResponse(FencingTokenStatus.NOT_SUPPORTED, null, LockProviderError.of(null, message));
     }
 
     public static FencingTokenResponse failed(Throwable error) {
-        return new FencingTokenResponse(FencingTokenStatus.PROVIDER_ERROR, null,
-                LockProviderError.of(error));
+        return new FencingTokenResponse(FencingTokenStatus.PROVIDER_ERROR, null, LockProviderError.of(error));
     }
 
     public static FencingTokenResponse failed(Throwable error, String message) {
-        return new FencingTokenResponse(FencingTokenStatus.PROVIDER_ERROR, null,
-                LockProviderError.of(error, message));
+        return new FencingTokenResponse(FencingTokenStatus.PROVIDER_ERROR, null, LockProviderError.of(error, message));
     }
 
     public FencingTokenStatus getStatus() {

@@ -1,5 +1,8 @@
 package com.xjtu.iron.distributed.lock.api;
 
+import com.xjtu.iron.distributed.lock.api.status.LockStage;
+import com.xjtu.iron.distributed.lock.api.status.LockStatus;
+
 import java.util.Objects;
 
 /**
@@ -22,8 +25,7 @@ public final class LockStatusStageRules {
         Objects.requireNonNull(status, "status must not be null");
         Objects.requireNonNull(stage, "stage must not be null");
         if (!isValid(status, stage, acquired)) {
-            throw new IllegalArgumentException("invalid LockResult combination: status="
-                    + status + ", stage=" + stage + ", acquired=" + acquired);
+            throw new IllegalArgumentException("invalid LockResult combination: status=" + status + ", stage=" + stage + ", acquired=" + acquired);
         }
     }
 

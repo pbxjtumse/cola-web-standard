@@ -1,8 +1,8 @@
 package com.xjtu.iron.distributed.lock.core.fencing;
 
-import com.xjtu.iron.distributed.lock.api.LockOptions;
+import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
-import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockLease;
 
 import java.util.Objects;
 
@@ -41,9 +41,7 @@ public final class FencingTokenCoordinator {
              */
             if (explicitProviderName.equals(lockProvider.providerName())) {
                 if (!lockProvider.capabilities().isFencingTokenSupported()) {
-                    throw new IllegalArgumentException(
-                            "lock provider does not support native fencing token: "
-                                    + lockProvider.providerName());
+                    throw new IllegalArgumentException("lock provider does not support native fencing token: " + lockProvider.providerName());
                 }
                 return FencingTokenPlan.nativeProvider();
             }
@@ -72,8 +70,7 @@ public final class FencingTokenCoordinator {
                 .options(options)
                 .build();
         if (!provider.supports(request)) {
-            return FencingTokenResponse.notSupported(
-                    "fencing token provider does not support request: " + provider.providerName());
+            return FencingTokenResponse.notSupported("fencing token provider does not support request: " + provider.providerName());
         }
         try {
             FencingTokenResponse response = provider.nextToken(request);

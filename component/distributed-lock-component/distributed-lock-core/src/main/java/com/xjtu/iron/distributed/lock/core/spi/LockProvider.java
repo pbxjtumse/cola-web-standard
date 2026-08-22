@@ -1,14 +1,14 @@
 package com.xjtu.iron.distributed.lock.core.spi;
 
-import com.xjtu.iron.distributed.lock.api.LockOptions;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockAcquireRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockReleaseRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockRenewRequest;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockCheckResponse;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockRenewResponse;
+import com.xjtu.iron.distributed.lock.api.model.LockOptions;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockRenewRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockRenewResponse;
 
 /**
  * 分布式锁底层 Provider SPI。

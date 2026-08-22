@@ -1,9 +1,9 @@
 package com.xjtu.iron.distributed.lock.demo.fencing;
 
-import com.xjtu.iron.distributed.lock.api.DistributedLockClient;
-import com.xjtu.iron.distributed.lock.api.FencingTokenGuard;
-import com.xjtu.iron.distributed.lock.api.LockOptions;
-import com.xjtu.iron.distributed.lock.api.LockResult;
+import com.xjtu.iron.distributed.lock.api.client.DistributedLockClient;
+import com.xjtu.iron.distributed.lock.api.fencing.FencingTokenGuard;
+import com.xjtu.iron.distributed.lock.api.model.LockOptions;
+import com.xjtu.iron.distributed.lock.api.model.LockResult;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,10 +25,7 @@ public class JdbcFencingDemoController {
     private final DistributedLockClient lockClient;
     private final JdbcFencedDemoRepository repository;
 
-    public JdbcFencingDemoController(
-            DistributedLockClient lockClient,
-            JdbcFencedDemoRepository repository
-    ) {
+    public JdbcFencingDemoController(DistributedLockClient lockClient, JdbcFencedDemoRepository repository) {
         this.lockClient = lockClient;
         this.repository = repository;
     }

@@ -1,5 +1,6 @@
 package com.xjtu.iron.distributed.lock.api;
 
+import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

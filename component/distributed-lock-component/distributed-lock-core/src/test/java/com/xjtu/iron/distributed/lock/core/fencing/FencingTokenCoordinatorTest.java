@@ -1,16 +1,16 @@
 package com.xjtu.iron.distributed.lock.core.fencing;
 
-import com.xjtu.iron.distributed.lock.api.LockOptions;
+import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.core.spi.LockProviderCapabilities;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockAcquireRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockReleaseRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockRenewRequest;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockCheckResponse;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockRenewResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockRenewRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockRenewResponse;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -22,39 +22,32 @@ class FencingTokenCoordinatorTest {
 
     @Test
     void shouldChooseNativeProviderWhenSupported() {
-        FencingTokenCoordinator coordinator = new FencingTokenCoordinator(
-                new DefaultFencingTokenProviderRegistry(List.of()));
-        FencingTokenPlan plan = coordinator.plan(lockProvider(true),
-                LockOptions.builder().fencingRequired(true).build());
+        FencingTokenCoordinator coordinator = new FencingTokenCoordinator(new DefaultFencingTokenProviderRegistry(List.of()));
+        FencingTokenPlan plan = coordinator.plan(lockProvider(true), LockOptions.builder().fencingRequired(true).build());
         assertThat(plan.mode()).isEqualTo(FencingTokenMode.NATIVE);
     }
 
     @Test
     void explicitLockProviderNameShouldChooseNativeFencing() {
-        FencingTokenCoordinator coordinator = new FencingTokenCoordinator(
-                new DefaultFencingTokenProviderRegistry(List.of()));
+        FencingTokenCoordinator coordinator = new FencingTokenCoordinator(new DefaultFencingTokenProviderRegistry(List.of()));
         FencingTokenPlan plan = coordinator.plan(lockProvider(true),
-                LockOptions.builder().fencingRequired(true)
-                        .fencingTokenProviderName("lock").build());
+                LockOptions.builder().fencingRequired(true) .fencingTokenProviderName("lock").build());
         assertThat(plan.mode()).isEqualTo(FencingTokenMode.NATIVE);
     }
 
     @Test
     void explicitExternalProviderShouldOverrideNativeSupport() {
         FencingTokenProvider external = provider("jdbc-sequence", 10L);
-        FencingTokenCoordinator coordinator = new FencingTokenCoordinator(
-                new DefaultFencingTokenProviderRegistry(List.of(external)));
+        FencingTokenCoordinator coordinator = new FencingTokenCoordinator(new DefaultFencingTokenProviderRegistry(List.of(external)));
         FencingTokenPlan plan = coordinator.plan(lockProvider(true),
-                LockOptions.builder().fencingRequired(true)
-                        .fencingTokenProviderName("jdbc-sequence").build());
+                LockOptions.builder().fencingRequired(true) .fencingTokenProviderName("jdbc-sequence").build());
         assertThat(plan.mode()).isEqualTo(FencingTokenMode.EXTERNAL);
         assertThat(plan.externalProvider()).contains(external);
     }
 
     @Test
     void shouldFailFastWhenNoFencingSourceAvailable() {
-        FencingTokenCoordinator coordinator = new FencingTokenCoordinator(
-                new DefaultFencingTokenProviderRegistry(List.of()));
+        FencingTokenCoordinator coordinator = new FencingTokenCoordinator(new DefaultFencingTokenProviderRegistry(List.of()));
         assertThatThrownBy(() -> coordinator.plan(lockProvider(false),
                 LockOptions.builder().fencingRequired(true).build()))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -64,8 +57,7 @@ class FencingTokenCoordinatorTest {
     @Test
     void shouldNotGuessDefaultExternalProviderWhenProviderNameIsMissing() {
         FencingTokenProvider external = provider("jdbc-sequence", 10L);
-        FencingTokenCoordinator coordinator = new FencingTokenCoordinator(
-                new DefaultFencingTokenProviderRegistry(List.of(external)));
+        FencingTokenCoordinator coordinator = new FencingTokenCoordinator(new DefaultFencingTokenProviderRegistry(List.of(external)));
 
         assertThatThrownBy(() -> coordinator.plan(lockProvider(false),
                 LockOptions.builder().fencingRequired(true).build()))

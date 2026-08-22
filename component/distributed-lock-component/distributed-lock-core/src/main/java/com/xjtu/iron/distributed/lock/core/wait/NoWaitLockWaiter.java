@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.core.wait;
 
-import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireResponse;
 
 /**
  * 不等待策略。

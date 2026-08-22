@@ -1,4 +1,11 @@
-# v26 Redisson Provider + POM 治理收口
+# V28 分包收口版
+
+本版基于 2026-08-22 当前分布式锁代码整理，保持 Maven module 结构 `distributed-lock-api / distributed-lock-core / distributed-lock-provider / distributed-lock-starter / distributed-lock-demo` 不变，只优化各 module 内部 package。没有新增 `distributed-lock-spi` Maven module，也没有修改 Redis Lua、Redisson、JDBC fencing、watchdog、fencing flow 等锁语义。
+
+核心分包见 `docs/package-design-v28.md`，改动清单见 `docs/CHANGELOG-v28-package-cleanup.md`。代码排版采用偏宽行风格：能清晰放在约 150 字符内的声明和调用尽量保持同一行，避免一两个参数就机械换行。
+
+---
+
 
 当前组件在原有 Redis Lua Provider + JDBC fencing 基础上正式纳入 `redisson` LockProvider，并修正上一版 POM 聚合/BOM 关系。业务仍然只依赖 `DistributedLockClient`，不会直接依赖 `RedissonClient/RLock/RFencedLock`。
 

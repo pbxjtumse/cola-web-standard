@@ -1,9 +1,9 @@
 package com.xjtu.iron.distributed.lock.provider.redis;
 
-import com.xjtu.iron.distributed.lock.api.LockOptions;
-import com.xjtu.iron.distributed.lock.core.spi.request.*;
-import com.xjtu.iron.distributed.lock.core.spi.response.*;
-import com.xjtu.iron.distributed.lock.core.spi.status.*;
+import com.xjtu.iron.distributed.lock.api.model.LockOptions;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.*;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.*;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.*;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -30,10 +30,7 @@ class RedisLockProviderTest {
         LockAcquireResponse response = provider.acquire(LockAcquireRequest.builder()
                 .lockName("job:fencing:1")
                 .ownerToken("token")
-                .options(LockOptions.builder()
-                        .leaseTime(Duration.ofSeconds(30))
-                        .fencingRequired(true)
-                        .build())
+                .options(LockOptions.builder() .leaseTime(Duration.ofSeconds(30)) .fencingRequired(true) .build())
                 .build());
         assertEquals(LockAcquireStatus.ACQUIRED, response.getStatus());
         assertTrue(response.getLease().fencingToken().isPresent());
@@ -50,8 +47,7 @@ class RedisLockProviderTest {
         LockAcquireResponse response = provider.acquire(LockAcquireRequest.builder()
                 .lockName("job:external-fencing")
                 .ownerToken("token")
-                .options(LockOptions.builder().fencingRequired(true)
-                        .fencingTokenProviderName("jdbc-sequence").build())
+                .options(LockOptions.builder().fencingRequired(true) .fencingTokenProviderName("jdbc-sequence").build())
                 .nativeFencingRequired(false)
                 .build());
         assertTrue(response.isAcquired());

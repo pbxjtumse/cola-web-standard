@@ -1,6 +1,8 @@
 package com.xjtu.iron.distributed.lock.api;
 
 import com.xjtu.iron.distributed.lock.api.exception.FencingTokenRejectedException;
+import com.xjtu.iron.distributed.lock.api.fencing.FencingTokenGuard;
+import com.xjtu.iron.distributed.lock.api.model.LockHandle;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

@@ -20,15 +20,10 @@ public final class LockWaiterFactory {
         this(new NoWaitLockWaiter(), new BackoffLockWaiter(), new ProviderNativeLockWaiter());
     }
 
-    public LockWaiterFactory(
-            LockWaiter noWaitLockWaiter,
-            LockWaiter backoffLockWaiter,
-            LockWaiter providerNativeLockWaiter
-    ) {
+    public LockWaiterFactory(LockWaiter noWaitLockWaiter, LockWaiter backoffLockWaiter, LockWaiter providerNativeLockWaiter) {
         this.noWaitLockWaiter = Objects.requireNonNull(noWaitLockWaiter, "noWaitLockWaiter must not be null");
         this.backoffLockWaiter = Objects.requireNonNull(backoffLockWaiter, "backoffLockWaiter must not be null");
-        this.providerNativeLockWaiter = Objects.requireNonNull(
-                providerNativeLockWaiter, "providerNativeLockWaiter must not be null");
+        this.providerNativeLockWaiter = Objects.requireNonNull(providerNativeLockWaiter, "providerNativeLockWaiter must not be null");
     }
 
     public LockWaiter getWaiter(LockWaitStrategy strategy) {

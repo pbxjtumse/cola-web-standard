@@ -4,7 +4,7 @@ import com.xjtu.iron.distributed.lock.api.exception.LockProviderException;
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenMode;
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenResponse;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
-import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockLease;
 
 import java.time.Duration;
 import java.util.Objects;

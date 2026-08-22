@@ -9,8 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /** JDBC fencing 业务防旧写演示配置。 */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnBean(JdbcTemplate.class)
-@ConditionalOnProperty(prefix = "xjtu.iron.distributed-lock.fencing.jdbc",
-        name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "xjtu.iron.distributed-lock.fencing.jdbc", name = "enabled", havingValue = "true")
 public class JdbcFencingDemoConfiguration {
 
     @Bean

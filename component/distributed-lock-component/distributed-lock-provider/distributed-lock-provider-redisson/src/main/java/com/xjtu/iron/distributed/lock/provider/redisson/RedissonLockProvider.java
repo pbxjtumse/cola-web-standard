@@ -1,19 +1,19 @@
 package com.xjtu.iron.distributed.lock.provider.redisson;
 
-import com.xjtu.iron.distributed.lock.api.LockOptions;
+import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 import com.xjtu.iron.distributed.lock.api.LockWaitStrategy;
 import com.xjtu.iron.distributed.lock.core.spi.LockAutoRenewMode;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.core.spi.LockProviderCapabilities;
-import com.xjtu.iron.distributed.lock.core.spi.model.LockLease;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockAcquireRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockCheckRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockReleaseRequest;
-import com.xjtu.iron.distributed.lock.core.spi.request.LockRenewRequest;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockAcquireResponse;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockCheckResponse;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockReleaseResponse;
-import com.xjtu.iron.distributed.lock.core.spi.response.LockRenewResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockLease;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockRenewRequest;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseResponse;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockRenewResponse;
 import org.redisson.api.RFencedLock;
 import org.redisson.api.RFuture;
 import org.redisson.api.RLock;
@@ -53,12 +53,8 @@ public final class RedissonLockProvider implements LockProvider {
     private final RedissonOwnershipRegistry ownershipRegistry;
     private final Duration watchdogTimeout;
 
-    public RedissonLockProvider(
-            RedissonClient redissonClient,
-            RedissonLockKeyBuilder keyBuilder,
-            RedissonOwnershipRegistry ownershipRegistry,
-            Duration watchdogTimeout
-    ) {
+    public RedissonLockProvider(RedissonClient redissonClient, RedissonLockKeyBuilder keyBuilder, RedissonOwnershipRegistry ownershipRegistry,
+            Duration watchdogTimeout) {
         this.redissonClient = Objects.requireNonNull(redissonClient, "redissonClient must not be null");
         this.keyBuilder = Objects.requireNonNull(keyBuilder, "keyBuilder must not be null");
         this.ownershipRegistry = Objects.requireNonNull(ownershipRegistry, "ownershipRegistry must not be null");
@@ -128,13 +124,8 @@ public final class RedissonLockProvider implements LockProvider {
      * 清理本地陈旧映射后允许新 ownerToken 再次 acquire；若远端仍由该 threadId 持有，则明确返回冲突，
      * 不让 Redisson 的 reentrant 行为穿透 iron-lock API。</p>
      */
-    private RedissonOwnershipRegistry.Reservation reserveOwner(
-            LockAcquireRequest request,
-            String lockKey,
-            long threadId
-    ) {
-        RedissonOwnershipRegistry.Reservation reservation = ownershipRegistry.reserve(
-                request.getOwnerToken(), lockKey, threadId);
+    private RedissonOwnershipRegistry.Reservation reserveOwner(LockAcquireRequest request, String lockKey, long threadId) {
+        RedissonOwnershipRegistry.Reservation reservation = ownershipRegistry.reserve(request.getOwnerToken(), lockKey, threadId);
         if (reservation.isReserved()) {
             return reservation;
         }
@@ -148,21 +139,14 @@ public final class RedissonLockProvider implements LockProvider {
         return reservation;
     }
 
-    private LockAcquireResponse acquirePlain(
-            LockAcquireRequest request,
-            String lockKey,
-            long waitMillis
-    ) throws InterruptedException {
+    private LockAcquireResponse acquirePlain(LockAcquireRequest request, String lockKey, long waitMillis) throws InterruptedException {
         RLock lock = redissonClient.getLock(lockKey);
         boolean acquired;
         if (request.getOptions().isAutoRenew()) {
             // 不传 leaseTime 才会启用 Redisson Config.lockWatchdogTimeout。
             acquired = lock.tryLock(waitMillis, TimeUnit.MILLISECONDS);
         } else {
-            acquired = lock.tryLock(
-                    waitMillis,
-                    request.getOptions().getLeaseTime().toMillis(),
-                    TimeUnit.MILLISECONDS);
+            acquired = lock.tryLock(waitMillis, request.getOptions().getLeaseTime().toMillis(), TimeUnit.MILLISECONDS);
         }
         if (!acquired) {
             return LockAcquireResponse.notAcquired(remainingTtl(lock));
@@ -170,11 +154,7 @@ public final class RedissonLockProvider implements LockProvider {
         return LockAcquireResponse.acquired(buildLease(request, lockKey, null));
     }
 
-    private LockAcquireResponse acquireFenced(
-            LockAcquireRequest request,
-            String lockKey,
-            long waitMillis
-    ) throws InterruptedException {
+    private LockAcquireResponse acquireFenced(LockAcquireRequest request, String lockKey, long waitMillis) throws InterruptedException {
         RFencedLock lock = redissonClient.getFencedLock(lockKey);
 
         /*
@@ -185,18 +165,14 @@ public final class RedissonLockProvider implements LockProvider {
         if (request.getOptions().isAutoRenew()) {
             token = lock.tryLockAndGetToken(waitMillis, TimeUnit.MILLISECONDS);
         } else {
-            token = lock.tryLockAndGetToken(
-                    waitMillis,
-                    request.getOptions().getLeaseTime().toMillis(),
-                    TimeUnit.MILLISECONDS);
+            token = lock.tryLockAndGetToken(waitMillis, request.getOptions().getLeaseTime().toMillis(), TimeUnit.MILLISECONDS);
         }
         if (token == null) {
             return LockAcquireResponse.notAcquired(remainingTtl(lock));
         }
         if (token <= 0L) {
             safeUnlock(lock, Thread.currentThread().getId());
-            return LockAcquireResponse.failed(
-                    new IllegalStateException("redisson fenced lock returned invalid fencing token: " + token),
+            return LockAcquireResponse.failed(new IllegalStateException("redisson fenced lock returned invalid fencing token: " + token),
                     "redisson native fencing token is invalid");
         }
         return LockAcquireResponse.acquired(buildLease(request, lockKey, token));
@@ -264,8 +240,7 @@ public final class RedissonLockProvider implements LockProvider {
          * 随后的 expire 会误给新 owner 续命。Redisson Provider 的 autoRenew 明确走 PROVIDER_MANAGED watchdog。
          */
         return LockRenewResponse.failed(
-                new UnsupportedOperationException(
-                        "manual renew is not supported by redisson provider; use autoRenew=true"),
+                new UnsupportedOperationException("manual renew is not supported by redisson provider; use autoRenew=true"),
                 "redisson manual renew is unsupported");
     }
 

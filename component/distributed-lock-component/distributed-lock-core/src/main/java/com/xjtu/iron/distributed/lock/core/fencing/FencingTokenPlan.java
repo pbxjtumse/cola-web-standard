@@ -34,8 +34,7 @@ public final class FencingTokenPlan {
     }
 
     public static FencingTokenPlan external(FencingTokenProvider provider) {
-        return new FencingTokenPlan(FencingTokenMode.EXTERNAL,
-                Objects.requireNonNull(provider, "provider must not be null"));
+        return new FencingTokenPlan(FencingTokenMode.EXTERNAL, Objects.requireNonNull(provider, "provider must not be null"));
     }
 
     public FencingTokenMode mode() {

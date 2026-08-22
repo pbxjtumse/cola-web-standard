@@ -9,7 +9,7 @@ skinparam packageStyle rectangle
 skinparam classAttributeIconSize 0
 hide empty members
 
-package "Provider 动作结果\n(core.spi.status)" as provider_status {
+package "Provider 动作结果\n(core.spi.protocol)" as provider_status {
 
   enum LockAcquireStatus <<SPI>> {
     ACQUIRED
