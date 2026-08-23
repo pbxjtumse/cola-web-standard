@@ -1,50 +1,34 @@
 @startuml
-!include ../../_common/style.puml
+title Distributed Lock Component - Maven Module Structure
+skinparam shadowing false
+skinparam packageStyle rectangle
 
-title distributed-lock-component 模块结构图
-
-package "distributed-lock-component" as root {
-  package "distributed-lock-api" as api
-  package "distributed-lock-core" as core
-
-  package "distributed-lock-provider" as provider {
-    package "distributed-lock-provider-redis" as redis
-    package "distributed-lock-fencing-provider-jdbc" as jdbc_fencing
+package "distributed-lock-component" {
+  folder "distributed-lock-api" as api
+  folder "distributed-lock-core" as core
+  folder "distributed-lock-provider" as provider {
+    folder "distributed-lock-provider-redis" as redis
+    folder "distributed-lock-provider-redisson" as redisson
+    folder "distributed-lock-fencing-provider-jdbc" as jdbc
   }
-
-  package "distributed-lock-starter" as starter
-  package "distributed-lock-demo" as demo
+  folder "distributed-lock-starter" as starter
+  folder "distributed-lock-demo" as demo
+  folder "docs" as docs
+  folder "uml" as uml
 }
 
-core ..> api : depends on API
-redis ..> api : use API/SPI model
-redis ..> core : use core SPI/model
-starter ..> api : expose beans
-starter ..> core : auto-config core
-jdbc_fencing ..> core : implement fencing SPI
-starter ..> redis : auto-config Redis provider
-starter ..> jdbc_fencing : auto-config JDBC fencing
-demo ..> starter : use starter
-
-note right of api
-  API 层：
-  业务可见接口与结果模型。
-end note
+starter --> core : assemble core beans
+starter --> redis : register Redis provider
+starter --> redisson : register Redisson provider
+starter --> jdbc : register JDBC fencing provider
+core --> api : public model
+redis --> core : LockProvider SPI
+redisson --> core : LockProvider SPI
+jdbc --> core : FencingTokenProvider SPI
+demo --> starter : use auto configuration
 
 note right of core
-  Core 层：
-  通用流程编排、waiter、watchdog、
-  事件、指标和结果收敛。
+SPI 目前位于 core.spi。
+等 ZK/Etcd Provider 真正落地后，再评估是否拆出 distributed-lock-spi Maven Module。
 end note
-
-note right of redis
-  Redis Provider：
-  一期互斥锁与二期原生 INCR fencing。
-end note
-
-note right of jdbc_fencing
-  JDBC Fencing Provider：
-  二期独立数据库发号实现。
-end note
-
 @enduml

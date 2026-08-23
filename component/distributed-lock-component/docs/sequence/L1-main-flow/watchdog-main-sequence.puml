@@ -1,38 +1,33 @@
 @startuml
-!include ../../_common/style.puml
-title watchdog 自动续期主流程时序图
+title Watchdog Main Flow - Core Managed vs Provider Managed
+autonumber
+skinparam shadowing false
+participant "LockHandleFactory" as Factory
+participant "ScheduledLockWatchdog" as Watchdog
+participant "DefaultLockHandle" as Handle
+participant "LockProvider" as Provider
 
-participant Client as "DefaultDistributedLockClient"
-participant Watchdog as "ScheduledLockWatchdog"
-participant Scheduler as "ScheduledExecutorService"
-participant Handle as "DefaultLockHandle"
-participant Runtime as "LockRuntimeState"
-participant Provider as "LockProvider"
-database Redis
+Factory -> Watchdog : start(handle, options) when autoRenew=true
+Watchdog -> Watchdog : schedule tick by renewInterval
 
-Client -> Watchdog : start(handle, options)
-Watchdog -> Watchdog : read renewInterval / maxRenewTime
-Watchdog -> Scheduler : scheduleAtFixedRate(renewTask)
-
-loop every renewInterval
-    Scheduler -> Watchdog : run renewTask
-    Watchdog -> Runtime : isReleased() / isLost()
-    alt released or lost
-        Watchdog -> Scheduler : cancel task
-    else maxRenewTime exceeded
-        Watchdog -> Runtime : markLostOnce()
-        Watchdog -> Scheduler : cancel task
-    else active
-        Watchdog -> Handle : renew()
-        Handle -> Provider : renew(request)
-        Provider -> Redis : EVAL renew.lua
-        Redis --> Provider : RENEWED / NOT_FOUND / NOT_OWNER / error
-        Provider --> Handle : LockRenewResponse
-        Handle --> Watchdog : true / false
+loop each tick until release/lost/maxRenewTime
+  alt maxRenewTime exceeded
+    Watchdog -> Handle : markLostByWatchdog("maxRenewTime exceeded")
+    alt PROVIDER_MANAGED
+      Watchdog -> Handle : unlock()
+      Handle -> Provider : release(ownerToken)
     end
+    Watchdog -> Watchdog : stop(handle)
+  else CORE_MANAGED
+    Watchdog -> Handle : renew()
+    Handle -> Provider : renew(ownerToken, leaseTime)
+    Provider --> Handle : RENEWED / NOT_OWNER / NOT_FOUND / ERROR
+  else PROVIDER_MANAGED
+    Watchdog -> Handle : checkHeld()
+    Handle -> Provider : check(ownerToken)
+    Provider --> Handle : HELD / NOT_OWNER / NOT_FOUND / ERROR
+  end
 end
 
-Client -> Watchdog : stop(handle)
-Watchdog -> Scheduler : cancel task
-
+Handle -> Watchdog : stop(handle) in release finally
 @enduml

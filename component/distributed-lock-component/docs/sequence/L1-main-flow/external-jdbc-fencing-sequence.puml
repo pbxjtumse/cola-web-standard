@@ -1,48 +1,30 @@
 @startuml
-!include ../../_common/style.puml
+title External JDBC Fencing Flow - Acquire Lock / Issue DB Token / Re-check Ownership
+autonumber
+skinparam shadowing false
+participant "LockAcquisitionService" as Acquire
+participant "LockProvider" as Provider
+participant "ExternalFencingTokenFlow" as Flow
+participant "JdbcSequenceFencingTokenProvider" as JdbcToken
+participant "LockHandleFactory" as Factory
 
-title 外部 JDBC Fencing Token 主流程
-
-participant Client as DefaultDistributedLockClient
-participant Coordinator as FencingTokenCoordinator
-participant RedisProvider as RedisLockProvider
-participant Redis
-participant JdbcProvider as JdbcSequenceFencingTokenProvider
-database DB
-participant Handle as DefaultLockHandle
-participant Callback
-
-Client -> Coordinator : plan(lockProvider, options)
-Coordinator --> Client : EXTERNAL(jdbc-sequence)
-Client -> RedisProvider : acquire(nativeFencingRequired=false)
-RedisProvider -> Redis : EVAL acquire.lua
-Redis --> RedisProvider : ACQUIRED(ownerToken)
-RedisProvider --> Client : LockLease(no fencing token)
-
-Client -> JdbcProvider : nextToken(namespace, lockName)
-JdbcProvider -> DB : BEGIN
-JdbcProvider -> DB : UPDATE token = token + 1
-alt row does not exist
-  JdbcProvider -> DB : INSERT token = 1
-  alt duplicate key
-    JdbcProvider -> DB : ROLLBACK
-    JdbcProvider -> DB : retry UPDATE
-  end
+Acquire -> Provider : acquire(nativeFencingRequired=false)
+Provider --> Acquire : LockAcquireResponse(lease without token)
+Acquire -> Flow : complete(context)
+Flow -> JdbcToken : nextToken(namespace, lockName, ownerToken)
+JdbcToken --> Flow : token=N
+Flow -> Flow : lease.withFencingToken(N, "jdbc-sequence")
+Flow -> Provider : check(ownerToken)
+alt still HELD
+  Provider --> Flow : HELD
+  Flow --> Acquire : FencingCompletion.success(fencedLease)
+  Acquire -> Factory : create handle
+else NOT_FOUND or NOT_OWNER
+  Provider --> Flow : lock lost
+  Flow --> Acquire : LockResult(LOCK_LOST, CHECK)
+else PROVIDER_ERROR
+  Provider --> Flow : error
+  Flow -> Provider : best-effort release
+  Flow --> Acquire : LockResult(PROVIDER_ERROR, CHECK)
 end
-JdbcProvider -> DB : SELECT current_token
-JdbcProvider -> DB : COMMIT
-DB --> JdbcProvider : token=N
-JdbcProvider --> Client : ISSUED(N)
-Client -> Client : lease.withFencingToken(N, jdbc-sequence)
-Client -> RedisProvider : check(ownerToken)
-RedisProvider -> Redis : EVAL check.lua
-Redis --> RedisProvider : HELD
-RedisProvider --> Client : HELD
-Client -> Handle : create
-Client -> Callback : doWithLock(handle)
-Callback -> DB : UPDATE ... WHERE last_token < N
-DB --> Callback : affected rows
-Callback --> Client : value / FencingTokenRejectedException
-Client -> Handle : releaseWithOutcome()
-
 @enduml

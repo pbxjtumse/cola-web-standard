@@ -1,46 +1,46 @@
 @startuml
-!include ../../_common/style.puml
-title tryLock 手动主流程时序图
+title tryLock Main Flow - Acquire / Wait / Fencing / Handle
+autonumber
+skinparam shadowing false
+actor Caller
+participant "DefaultDistributedLockClient" as Client
+participant "LockAcquisitionService" as Acquire
+participant "LockProviderRegistry" as Registry
+participant "FencingTokenCoordinator" as Coordinator
+participant "LockWaiter" as Waiter
+participant "LockProvider" as Provider
+participant "AcquireOutcomeHandlerRegistry" as Outcome
+participant "FencingTokenFlow" as Flow
+participant "LockHandleFactory" as Factory
+participant "LockWatchdog" as Watchdog
 
-actor Biz as "业务代码"
-participant Client as "DistributedLockClient"
-participant DefaultClient as "DefaultDistributedLockClient"
-participant TokenGen as "OwnerTokenGenerator"
-participant Waiter as "LockWaiter"
-participant Provider as "LockProvider"
-database Redis
-participant Handle as "DefaultLockHandle"
-
-Biz -> Client : tryLock(lockName, options)
-Client -> DefaultClient : tryLock(lockName, options)
-DefaultClient -> DefaultClient : validate(lockName, options)
-DefaultClient -> TokenGen : generate(namespace, lockName)
-TokenGen --> DefaultClient : ownerToken
-DefaultClient -> Waiter : waitForLock(request, provider)
+Caller -> Client : tryLock(lockName, options)
+Client -> Acquire : tryLock(lockName, options)
+Acquire -> Acquire : validate lockName/options
+Acquire -> Registry : getProvider(options.providerName)
+Registry --> Acquire : provider
+Acquire -> Coordinator : plan(provider, options)
+Coordinator --> Acquire : FencingTokenPlan
+Acquire -> Acquire : generate ownerToken
+Acquire -> Waiter : waitForLock(request, provider)
 Waiter -> Provider : acquire(request)
-Provider -> Redis : EVAL acquire.lua
-Redis --> Provider : acquired / notAcquired / error
+Provider --> Waiter : LockAcquireResponse
+Waiter --> Acquire : response
+Acquire -> Outcome : handle(context)
 
-alt acquired
-    Provider --> Waiter : ACQUIRED + LockLease
-    Waiter --> DefaultClient : acquired
-    DefaultClient -> Handle : new DefaultLockHandle(lease, runtimeState)
-    DefaultClient --> Biz : LockResult(ACQUIRED, handle)
-else not acquired
-    Provider --> Waiter : NOT_ACQUIRED
-    DefaultClient --> Biz : LockResult(NOT_ACQUIRED)
-else provider error
-    Provider --> Waiter : PROVIDER_ERROR
-    DefaultClient --> Biz : LockResult(PROVIDER_ERROR)
+alt ACQUIRED
+  Outcome -> Flow : complete(fencing context)
+  Flow --> Outcome : FencingCompletion(success lease)
+  Outcome -> Factory : create(provider, lease, options)
+  Factory -> Watchdog : start(handle, options) if autoRenew
+  Factory --> Outcome : DefaultLockHandle
+  Outcome --> Acquire : LockResult(ACQUIRED, handle)
+else NOT_ACQUIRED
+  Outcome --> Acquire : LockResult(NOT_ACQUIRED)
+else PROVIDER_ERROR
+  Outcome --> Acquire : LockResult(PROVIDER_ERROR)
 end
 
-== manual section ==
-Biz -> Biz : if acquired then try/finally
-Biz -> Handle : unlock()
-Handle -> Provider : release(request)
-Provider -> Redis : EVAL release.lua
-Redis --> Provider : release result
-Provider --> Handle : LockReleaseResponse
-Handle --> Biz : true / false
-
+Acquire --> Client : LockResult
+Client --> Caller : LockResult
 @enduml

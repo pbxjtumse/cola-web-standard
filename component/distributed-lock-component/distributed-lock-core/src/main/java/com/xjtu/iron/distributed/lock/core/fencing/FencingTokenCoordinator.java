@@ -7,16 +7,13 @@ import com.xjtu.iron.distributed.lock.core.spi.protocol.LockLease;
 import java.util.Objects;
 
 /**
- * fencing token 计划选择与独立发号协调器。
+ * fencing token 计划选择与外部发号协调器。
  *
- * <p>优先级：</p>
- * <ol>
- *     <li>未要求 fencing：NONE；</li>
- *     <li>LockOptions 显式指定当前锁 Provider 名称：NATIVE；</li>
- *     <li>LockOptions 显式指定独立 Provider：EXTERNAL；</li>
- *     <li>未显式指定且锁 Provider 支持原生 fencing：NATIVE；</li>
- *     <li>未显式指定且锁 Provider 不支持原生 fencing：参数校验失败，要求业务显式指定独立 Provider。</li>
- * </ol>
+ * <p>fencing 是锁组件的正确性增强：锁过期或旧 owner 恢复后，业务资源可以用单调递增 token 拒绝旧写。Coordinator 不负责真正锁操作，
+ * 只根据 LockOptions 与 Provider 能力决定本次 token 来源。</p>
+ *
+ * <p>规则必须保守：如果业务要求 fencing，而当前 LockProvider 不支持 native fencing，又没有显式指定 external provider，则直接 fail-fast。
+ * 不能因为系统中碰巧存在一个默认 JDBC provider 就偷偷替业务选择，因为 token 来源属于一致性边界，必须显式可见。</p>
  */
 public final class FencingTokenCoordinator {
 
@@ -35,10 +32,6 @@ public final class FencingTokenCoordinator {
 
         String explicitProviderName = trimToNull(options.getFencingTokenProviderName());
         if (explicitProviderName != null) {
-            /*
-             * 显式名称既可以指向当前 LockProvider 的原生 fencing（例如 redis），
-             * 也可以指向独立 FencingTokenProvider（例如 jdbc-sequence）。
-             */
             if (explicitProviderName.equals(lockProvider.providerName())) {
                 if (!lockProvider.capabilities().isFencingTokenSupported()) {
                     throw new IllegalArgumentException("lock provider does not support native fencing token: " + lockProvider.providerName());
@@ -52,42 +45,31 @@ public final class FencingTokenCoordinator {
             return FencingTokenPlan.nativeProvider();
         }
 
-        throw new IllegalArgumentException(
-                "fencing token is required, but lock provider has no native support. "
-                        + "Please configure fencingTokenProviderName explicitly, for example jdbc-sequence: "
-                        + lockProvider.providerName());
+        throw new IllegalArgumentException("fencing token is required, but lock provider has no native support. Please configure fencingTokenProviderName explicitly, for example jdbc-sequence: " + lockProvider.providerName());
     }
 
+    /**
+     * 调用 external fencing provider 发号。这里只做适配和异常捕获，真正发号语义由 Provider 实现，例如 JDBC sequence。
+     */
     public FencingTokenResponse issueExternal(FencingTokenPlan plan, LockLease lease, LockOptions options) {
         if (!plan.isExternal()) {
             throw new IllegalArgumentException("plan must be EXTERNAL");
         }
         FencingTokenProvider provider = plan.externalProvider().orElseThrow();
-        FencingTokenRequest request = FencingTokenRequest.builder()
-                .namespace(lease.getNamespace())
-                .lockName(lease.getLockName())
-                .ownerToken(lease.getOwnerToken())
-                .options(options)
-                .build();
+        FencingTokenRequest request = FencingTokenRequest.builder().namespace(lease.getNamespace()).lockName(lease.getLockName())
+                .ownerToken(lease.getOwnerToken()).options(options).build();
         if (!provider.supports(request)) {
             return FencingTokenResponse.notSupported("fencing token provider does not support request: " + provider.providerName());
         }
         try {
             FencingTokenResponse response = provider.nextToken(request);
-            if (response == null) {
-                return FencingTokenResponse.failed(new IllegalStateException(
-                        "fencing token provider returned null response: " + provider.providerName()));
-            }
-            return response;
+            return response == null ? FencingTokenResponse.failed(new IllegalStateException("fencing token provider returned null response: " + provider.providerName())) : response;
         } catch (Throwable error) {
             return FencingTokenResponse.failed(error);
         }
     }
 
     private static String trimToNull(String value) {
-        if (value == null || value.trim().isEmpty()) {
-            return null;
-        }
-        return value.trim();
+        return value == null || value.trim().isEmpty() ? null : value.trim();
     }
 }

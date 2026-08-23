@@ -11,10 +11,10 @@ import com.xjtu.iron.distributed.lock.core.watchdog.LockWatchdog;
 import java.util.Objects;
 
 /**
- * 创建 {@link DefaultLockHandle}。
+ * {@link DefaultLockHandle} 创建器。
  *
- * <p>这里保留一个具体工厂类，是为了集中隐藏 LockHandle 的运行态、事件和指标依赖；
- * 不再额外维护只有一个实现的 Factory 接口与 Default 实现。</p>
+ * <p>Factory 不是为了“套设计模式”，而是为了把 Handle 构造时必须注入的运行态、事件、指标、watchdog 依赖集中起来。acquire 成功后只需要
+ * 调用本类，就能得到一个已经具备运行态管理能力的 Handle；调用方不需要知道 {@link LockRuntimeState}、事件和指标如何组装。</p>
  */
 public final class LockHandleFactory {
 
@@ -23,8 +23,7 @@ public final class LockHandleFactory {
     private final LockMetricsFacade metricsFacade;
     private final LockWatchdog watchdog;
 
-    public LockHandleFactory(LockEventPublisher eventPublisher, LockEventFactory eventFactory, LockMetricsFacade metricsFacade, LockWatchdog watchdog
-) {
+    public LockHandleFactory(LockEventPublisher eventPublisher, LockEventFactory eventFactory, LockMetricsFacade metricsFacade, LockWatchdog watchdog) {
         this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
         this.eventFactory = Objects.requireNonNull(eventFactory, "eventFactory must not be null");
         this.metricsFacade = Objects.requireNonNull(metricsFacade, "metricsFacade must not be null");
@@ -32,15 +31,15 @@ public final class LockHandleFactory {
     }
 
     /**
-     * 创建最终 Handle，并在 autoRenew=true 时立即启动统一 watchdog。
+     * 创建一次成功租约对应的本地 Handle。
      *
-     * <p>把启动点放在“成功 acquire -> Handle 创建”这个公共节点，而不是 execute 模板里，
-     * 可以保证手工 tryLock 和 execute 两种 API 的自动续期语义一致。</p>
+     * <p>autoRenew 的启动点放在这里，而不是 execute 模板中。原因是 {@code tryLock(autoRenew=true)} 和
+     * {@code execute(autoRenew=true)} 都会经过“acquire 成功 -> 创建 Handle”这个公共节点。这样两种 API 的自动续期生命周期完全一致，
+     * 不会出现 execute 能续期、手工 tryLock 不能续期的语义差异。</p>
      */
     public DefaultLockHandle create(LockProvider provider, LockLease lease, LockOptions options) {
         DefaultLockHandle handle = new DefaultLockHandle(Objects.requireNonNull(provider, "provider must not be null"),
-                Objects.requireNonNull(lease, "lease must not be null"), new LockRuntimeState(), eventPublisher, eventFactory, metricsFacade,
-                watchdog);
+                Objects.requireNonNull(lease, "lease must not be null"), new LockRuntimeState(), eventPublisher, eventFactory, metricsFacade, watchdog);
         if (Objects.requireNonNull(options, "options must not be null").isAutoRenew()) {
             watchdog.start(handle, options);
         }

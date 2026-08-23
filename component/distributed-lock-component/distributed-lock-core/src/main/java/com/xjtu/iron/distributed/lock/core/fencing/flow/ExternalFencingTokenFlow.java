@@ -11,7 +11,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 
-/** JDBC sequence 等外部发号：锁已获取，但 token 需要独立 Provider 补充。 */
+/**
+ * External fencing 流程。
+ *
+ * <p>External 的含义是：锁已经由 LockProvider 获取成功，但 token 需要另一个 Provider 独立生成，例如 JDBC sequence。这个流程最容易出错的点是
+ * “发号期间锁可能已经过期”，因此发号成功后必须再次 check ownerToken，确认仍然持锁才允许创建 LockHandle 并进入业务 callback。</p>
+ */
 public final class ExternalFencingTokenFlow implements FencingTokenFlow {
 
     private final FencingTokenFlowSupport support;
@@ -35,18 +40,13 @@ public final class ExternalFencingTokenFlow implements FencingTokenFlow {
         FencingTokenResponse tokenResponse = support.issueExternal(context);
         Duration fencingDuration = Duration.between(fencingStart, support.now());
         if (!tokenResponse.isIssued()) {
-            return FencingCompletion.failure(support.fencingFailure(lockProvider, lease,
-                    context.waitDuration(), source, tokenResponse, fencingDuration));
+            return FencingCompletion.failure(support.fencingFailure(lockProvider, lease, context.waitDuration(), source, tokenResponse, fencingDuration));
         }
 
         long token = tokenResponse.token().orElseThrow();
         LockLease fencedLease = lease.withFencingToken(token, source);
         support.recordFencingSuccess(lockProvider, fencedLease, source, fencingDuration);
 
-        /*
-         * 外部发号可能比 leaseTime 更慢。发号完成后必须重新确认 ownerToken 仍然持锁，
-         * 避免把“已经过期的租约 + 后生成的较大 token”交给业务 callback。
-         */
         LockResult<LockHandle> ownershipFailure = support.verifyOwnershipAfterExternalFencing(lockProvider, fencedLease, context.waitDuration());
         if (ownershipFailure != null) {
             return FencingCompletion.failure(ownershipFailure);

@@ -1,22 +1,22 @@
 package com.xjtu.iron.distributed.lock.core.acquire;
 
+import com.xjtu.iron.distributed.lock.api.LockWaitStrategy;
+import com.xjtu.iron.distributed.lock.api.exception.InvalidLockOptionsException;
 import com.xjtu.iron.distributed.lock.api.model.LockHandle;
 import com.xjtu.iron.distributed.lock.api.model.LockOptions;
-import com.xjtu.iron.distributed.lock.api.LockWaitStrategy;
 import com.xjtu.iron.distributed.lock.api.model.LockResult;
 import com.xjtu.iron.distributed.lock.api.status.LockStage;
 import com.xjtu.iron.distributed.lock.api.status.LockStatus;
-import com.xjtu.iron.distributed.lock.api.exception.InvalidLockOptionsException;
+import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenCoordinator;
+import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenPlan;
 import com.xjtu.iron.distributed.lock.core.observability.LockEventFactory;
 import com.xjtu.iron.distributed.lock.core.observability.LockEventPublisher;
 import com.xjtu.iron.distributed.lock.core.observability.LockEventType;
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenCoordinator;
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenPlan;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireRequest;
-import com.xjtu.iron.distributed.lock.core.support.LockNameValidator;
 import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.core.spi.LockProviderRegistry;
+import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireRequest;
 import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.core.support.LockNameValidator;
 import com.xjtu.iron.distributed.lock.core.support.OwnerTokenGenerator;
 import com.xjtu.iron.distributed.lock.core.wait.LockWaitContext;
 import com.xjtu.iron.distributed.lock.core.wait.LockWaiter;
@@ -28,11 +28,13 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * 分布式锁获取流程。
+ * 加锁主流程服务。
  *
- * <p>本类集中负责一次 acquire 的完整编排：解析并校验参数、选择 Provider、规划 fencing、
- * 生成 ownerToken、调用等待策略以及把 Provider 响应交给状态处理器。短小的 request/context
- * 组装保留在流程内，避免为了 builder 再制造一组 Factory 类。</p>
+ * <p>本类对应一次 {@code tryLock} 的完整业务用例，不是简单工具类。它负责把“用户输入”转换为“Provider 可执行的加锁请求”，再把
+ * Provider 的有限状态响应交给 {@link LockAcquireOutcomeHandlerRegistry} 解释成公开 {@link LockResult}。</p>
+ *
+ * <p>这里保留 request/context 的组装逻辑，是一种有意识的平衡：创建 {@code LockAcquireRequestFactory}、
+ * {@code LockAcquireOutcomeContextFactory} 会让类更多，但不会增加新的变化点。当前类已经是 acquire 用例的边界，把短小组装放在这里更容易读。</p>
  */
 public final class LockAcquisitionService {
 
@@ -63,47 +65,41 @@ public final class LockAcquisitionService {
         this.outcomeHandlerRegistry = Objects.requireNonNull(outcomeHandlerRegistry, "outcomeHandlerRegistry must not be null");
     }
 
-    /** 返回公开 tryLock 所需的最终结果。 */
+    /** 对外 tryLock 入口，只返回公开结果，不暴露内部 AcquireAttempt。 */
     public LockResult<LockHandle> tryLock(String lockName, LockOptions options) {
         return acquire(lockName, options).result();
     }
 
     /**
-     * 获取锁，并额外保留本次真正生效的 LockOptions，供 execute 流程复用。
+     * 执行一次加锁，并保留本次解析后的 {@link LockOptions}。
+     *
+     * <p>{@code execute} 需要知道 acquire 时真正使用的默认值、providerName、leaseTime、autoRenew 等配置。把这些信息放进
+     * {@link AcquireAttempt}，可以避免 execute 再对原始 options 做一次推导，减少“tryLock 用一套 options、execute 又推导出另一套”的隐患。</p>
      */
     public AcquireAttempt acquire(String lockName, LockOptions options) {
         Instant operationStart = Instant.now(clock);
         try {
             LockOptions actualOptions = resolveAndValidate(lockName, options);
             LockProvider provider = providerRegistry.getProvider(actualOptions.getProviderName());
+
+            // fencing 计划必须在构造 LockAcquireRequest 之前确定，因为 native fencing 会影响 Provider acquire 行为。
             FencingTokenPlan fencingPlan = fencingTokenCoordinator.plan(provider, actualOptions);
             validateProviderCapabilities(provider, actualOptions);
 
             String ownerToken = ownerTokenGenerator.generate(actualOptions.getNamespace(), lockName);
-            LockAcquireRequest request = LockAcquireRequest.builder()
-                    .lockName(lockName)
-                    .ownerToken(ownerToken)
-                    .options(actualOptions)
-                    .nativeFencingRequired(fencingPlan.isNative())
-                    .build();
+            LockAcquireRequest request = LockAcquireRequest.builder().lockName(lockName).ownerToken(ownerToken).options(actualOptions)
+                    .nativeFencingRequired(fencingPlan.isNative()).build();
 
             eventPublisher.publish(eventFactory.fromAcquireRequest(provider, request, LockEventType.ACQUIRE_ATTEMPT, LockStage.ACQUIRE, null, null));
 
+            // 等待策略也是扩展点：NO_WAIT/BACKOFF 由 Core 控制，PROVIDER_NATIVE 把等待交给 Redisson/ZK/Etcd 等 Provider。
             LockWaiter waiter = waiterFactory.getWaiter(actualOptions.getWaitStrategy());
             Instant acquireStart = Instant.now(clock);
             LockAcquireResponse response = waiter.waitForLock(new LockWaitContext(request, provider, clock));
             Duration waitDuration = Duration.between(acquireStart, Instant.now(clock));
 
-            LockAcquireOutcomeContext outcomeContext = LockAcquireOutcomeContext.builder()
-                    .lockName(lockName)
-                    .provider(provider)
-                    .options(actualOptions)
-                    .request(request)
-                    .response(response)
-                    .fencingPlan(fencingPlan)
-                    .waitDuration(waitDuration)
-                    .build();
-
+            LockAcquireOutcomeContext outcomeContext = LockAcquireOutcomeContext.builder().lockName(lockName).provider(provider).options(actualOptions)
+                    .request(request).response(response).fencingPlan(fencingPlan).waitDuration(waitDuration).build();
             return AcquireAttempt.completed(outcomeHandlerRegistry.handle(outcomeContext), actualOptions);
         } catch (IllegalArgumentException | InvalidLockOptionsException error) {
             return AcquireAttempt.invalid(invalidOptionsResult(lockName, error, operationStart));
@@ -124,25 +120,19 @@ public final class LockAcquisitionService {
         if (options.getWaitStrategy() == LockWaitStrategy.PROVIDER_NATIVE && !provider.capabilities().isNativeWaitSupported()) {
             throw new IllegalArgumentException("provider does not support provider-native waiting: " + provider.providerName());
         }
-
-        // 通用能力校验之后，再给具体 Provider 一次校验自身约束的机会。
+        // 通用能力校验只能覆盖 cross-provider 规则；Provider 自身约束，例如 Redisson watchdogTimeout 与 leaseTime 的关系，由 Provider 自己校验。
         provider.validateOptions(options);
     }
 
     private LockResult<LockHandle> invalidOptionsResult(String lockName, RuntimeException error, Instant operationStart) {
-        return LockResult.<LockHandle>builder()
-                .status(LockStatus.INVALID_OPTIONS)
-                .stage(LockStage.VALIDATE)
-                .acquired(false)
-                .error(error)
-                .lockName(lockName)
-                .waitDuration(Duration.between(operationStart, Instant.now(clock)))
-                .build();
+        return LockResult.<LockHandle>builder().status(LockStatus.INVALID_OPTIONS).stage(LockStage.VALIDATE).acquired(false).error(error)
+                .lockName(lockName).waitDuration(Duration.between(operationStart, Instant.now(clock))).build();
     }
 
-    /** acquire 的内部结果；避免 execute 再次解析默认 LockOptions。 */
+    /**
+     * acquire 内部返回对象。它不是公开 API，只服务 execute 流程复用“本次已解析 options”。
+     */
     public static final class AcquireAttempt {
-
         private final LockResult<LockHandle> result;
         private final LockOptions options;
 
