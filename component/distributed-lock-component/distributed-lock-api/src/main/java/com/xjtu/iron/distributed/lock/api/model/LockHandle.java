@@ -128,19 +128,6 @@ public interface LockHandle extends AutoCloseable {
     boolean isReleaseAttempted();
 
     /**
-     * 当前 handle 是否已经进入过本地释放流程。
-     *
-     * <p>兼容旧命名。该方法容易被误解为“底层锁已经释放成功”，因此新代码应优先使用
-     * {@link #isReleaseAttempted()}。</p>
-     *
-     * @return 已进入过本地释放流程返回 {@code true}。
-     */
-    @Deprecated
-    default boolean isReleased() {
-        return isReleaseAttempted();
-    }
-
-    /**
      * 当前时刻是否仍然持有锁。
      *
      * <p>该方法通常会访问底层 Provider 校验 ownerToken。它只代表检查这一刻的结果，不代表后续业务执行期间

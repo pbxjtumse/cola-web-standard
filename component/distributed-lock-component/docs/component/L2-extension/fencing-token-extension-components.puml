@@ -1,4 +1,5 @@
 @startuml
+allowmixing
 !include ../../_common/style.puml
 
 title Fencing Token 二期扩展组件图
