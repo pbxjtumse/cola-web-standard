@@ -25,6 +25,7 @@
     </dependencyManagement>
     <modules>
         <module>distributed-lock-api</module>
+        <module>distributed-lock-spi</module>
         <module>distributed-lock-core</module>
         <module>distributed-lock-provider</module>
         <module>distributed-lock-starter</module>

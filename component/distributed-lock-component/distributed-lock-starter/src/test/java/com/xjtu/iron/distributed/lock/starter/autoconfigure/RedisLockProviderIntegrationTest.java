@@ -1,14 +1,14 @@
 package com.xjtu.iron.distributed.lock.starter.autoconfigure;
 
 import com.xjtu.iron.distributed.lock.api.model.LockOptions;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockRenewRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireResponse;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckStatus;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseStatus;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockRenewStatus;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockCheckRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockReleaseRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockRenewRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockCheckStatus;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockReleaseStatus;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockRenewStatus;
 import com.xjtu.iron.distributed.lock.provider.redis.RedisLockProvider;
 import com.xjtu.iron.distributed.lock.starter.redis.StringRedisTemplateRedisLockScriptExecutor;
 import org.junit.jupiter.api.AfterAll;

@@ -1,7 +1,7 @@
 package com.xjtu.iron.distributed.lock.starter.autoconfigure;
 
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenProviderRegistry;
-import com.xjtu.iron.distributed.lock.core.spi.LockProviderRegistry;
+import com.xjtu.iron.distributed.lock.spi.LockProviderRegistry;
 import com.xjtu.iron.distributed.lock.starter.observability.DistributedLockHealthIndicator;
 import com.xjtu.iron.distributed.lock.starter.properties.DistributedLockProperties;
 import com.xjtu.iron.distributed.lock.starter.properties.JdbcFencingTokenProperties;

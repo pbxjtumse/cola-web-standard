@@ -2,7 +2,7 @@ package com.xjtu.iron.distributed.lock.core.observability;
 
 import com.xjtu.iron.distributed.lock.api.status.LockStatus;
 import com.xjtu.iron.distributed.lock.core.support.LockNamePatternResolver;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockLease;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockLease;
 
 import java.time.Duration;
 import java.util.Objects;

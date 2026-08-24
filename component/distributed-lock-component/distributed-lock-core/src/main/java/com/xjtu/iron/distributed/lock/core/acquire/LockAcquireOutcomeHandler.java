@@ -2,7 +2,7 @@ package com.xjtu.iron.distributed.lock.core.acquire;
 
 import com.xjtu.iron.distributed.lock.api.model.LockHandle;
 import com.xjtu.iron.distributed.lock.api.model.LockResult;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireStatus;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireStatus;
 
 /** 根据 Provider acquire 状态解释并生成最终 Core 结果。 */
 public interface LockAcquireOutcomeHandler {

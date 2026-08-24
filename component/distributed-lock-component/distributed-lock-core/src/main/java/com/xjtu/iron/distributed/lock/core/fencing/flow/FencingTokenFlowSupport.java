@@ -12,12 +12,12 @@ import com.xjtu.iron.distributed.lock.core.observability.LockEventType;
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenCoordinator;
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenResponse;
 import com.xjtu.iron.distributed.lock.core.observability.LockMetricsFacade;
-import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockLease;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckResponse;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseResponse;
+import com.xjtu.iron.distributed.lock.spi.LockProvider;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockLease;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockCheckRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockReleaseRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockCheckResponse;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockReleaseResponse;
 
 import java.time.Clock;
 import java.time.Duration;

@@ -1,17 +1,17 @@
 package com.xjtu.iron.distributed.lock.provider.redis;
 
-import com.xjtu.iron.distributed.lock.core.spi.LockAutoRenewMode;
-import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
-import com.xjtu.iron.distributed.lock.core.spi.LockProviderCapabilities;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockLease;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockRenewRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireResponse;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckResponse;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseResponse;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockRenewResponse;
+import com.xjtu.iron.distributed.lock.spi.LockAutoRenewMode;
+import com.xjtu.iron.distributed.lock.spi.LockProvider;
+import com.xjtu.iron.distributed.lock.spi.LockProviderCapabilities;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockLease;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockCheckRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockReleaseRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockRenewRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockCheckResponse;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockReleaseResponse;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockRenewResponse;
 
 import java.time.Duration;
 import java.time.Instant;

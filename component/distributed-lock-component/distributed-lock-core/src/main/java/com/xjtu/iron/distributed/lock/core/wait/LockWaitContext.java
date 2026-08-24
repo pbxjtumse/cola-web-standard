@@ -1,7 +1,7 @@
 package com.xjtu.iron.distributed.lock.core.wait;
 
-import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.spi.LockProvider;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireRequest;
 
 import java.time.Clock;
 import java.util.Objects;

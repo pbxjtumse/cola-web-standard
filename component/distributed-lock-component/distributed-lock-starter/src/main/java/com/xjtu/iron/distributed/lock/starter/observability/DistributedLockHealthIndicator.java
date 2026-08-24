@@ -1,9 +1,9 @@
 package com.xjtu.iron.distributed.lock.starter.observability;
 
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenProviderRegistry;
-import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
-import com.xjtu.iron.distributed.lock.core.spi.LockProviderCapabilities;
-import com.xjtu.iron.distributed.lock.core.spi.LockProviderRegistry;
+import com.xjtu.iron.distributed.lock.spi.LockProvider;
+import com.xjtu.iron.distributed.lock.spi.LockProviderCapabilities;
+import com.xjtu.iron.distributed.lock.spi.LockProviderRegistry;
 import com.xjtu.iron.distributed.lock.provider.jdbc.fencing.JdbcFencingTokenConstants;
 import com.xjtu.iron.distributed.lock.provider.redisson.RedissonLockConstants;
 import com.xjtu.iron.distributed.lock.starter.properties.DistributedLockProperties;

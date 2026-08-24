@@ -6,11 +6,11 @@ import com.xjtu.iron.distributed.lock.core.observability.NoOpLockMetricsRecorder
 import com.xjtu.iron.distributed.lock.core.support.DefaultLockNamePatternResolver;
 import com.xjtu.iron.distributed.lock.core.observability.LockEventFactory;
 import com.xjtu.iron.distributed.lock.core.execute.LockReleaseOutcome;
-import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
-import com.xjtu.iron.distributed.lock.core.spi.LockProviderCapabilities;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockLease;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.*;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.*;
+import com.xjtu.iron.distributed.lock.spi.LockProvider;
+import com.xjtu.iron.distributed.lock.spi.LockProviderCapabilities;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockLease;
+import com.xjtu.iron.distributed.lock.spi.protocol.*;
+import com.xjtu.iron.distributed.lock.spi.protocol.*;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

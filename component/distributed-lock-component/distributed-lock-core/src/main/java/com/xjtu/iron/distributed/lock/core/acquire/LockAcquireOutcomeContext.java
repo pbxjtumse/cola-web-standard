@@ -2,9 +2,9 @@ package com.xjtu.iron.distributed.lock.core.acquire;
 
 import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenPlan;
-import com.xjtu.iron.distributed.lock.core.spi.LockProvider;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.spi.LockProvider;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireResponse;
 
 import java.time.Duration;
 import java.util.Objects;

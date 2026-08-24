@@ -1,7 +1,7 @@
 package com.xjtu.iron.distributed.lock.core.watchdog;
 
 import com.xjtu.iron.distributed.lock.api.model.LockOptions;
-import com.xjtu.iron.distributed.lock.core.spi.LockAutoRenewMode;
+import com.xjtu.iron.distributed.lock.spi.LockAutoRenewMode;
 
 import java.time.Clock;
 import java.time.Duration;

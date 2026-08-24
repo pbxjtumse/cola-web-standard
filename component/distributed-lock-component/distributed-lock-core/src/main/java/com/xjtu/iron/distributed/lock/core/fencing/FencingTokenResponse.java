@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.core.fencing;
 
-import com.xjtu.iron.distributed.lock.core.spi.LockProviderError;
+import com.xjtu.iron.distributed.lock.spi.LockProviderError;
 
 import java.util.Objects;
 import java.util.OptionalLong;

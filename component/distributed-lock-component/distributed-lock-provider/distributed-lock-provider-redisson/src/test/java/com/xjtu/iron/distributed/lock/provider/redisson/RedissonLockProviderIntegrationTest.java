@@ -2,11 +2,11 @@ package com.xjtu.iron.distributed.lock.provider.redisson;
 
 import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 import com.xjtu.iron.distributed.lock.api.LockWaitStrategy;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockLease;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockCheckRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockReleaseRequest;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockLease;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockCheckRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockReleaseRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireResponse;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;

@@ -8,7 +8,7 @@ import com.xjtu.iron.distributed.lock.core.observability.LockEventFactory;
 import com.xjtu.iron.distributed.lock.core.observability.LockEventPublisher;
 import com.xjtu.iron.distributed.lock.core.observability.LockEventType;
 import com.xjtu.iron.distributed.lock.core.observability.LockMetricsFacade;
-import com.xjtu.iron.distributed.lock.core.spi.protocol.LockAcquireStatus;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireStatus;
 
 import java.util.Objects;
 

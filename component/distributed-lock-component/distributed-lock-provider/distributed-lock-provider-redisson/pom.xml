@@ -25,7 +25,10 @@
             <groupId>com.xjtu.iron</groupId>
             <artifactId>distributed-lock-core</artifactId>
         </dependency>
-
+        <dependency>
+            <groupId>com.xjtu.iron</groupId>
+            <artifactId>distributed-lock-spi</artifactId>
+        </dependency>
         <!--
             Redisson 是第三方基础库，版本不要写在子模块。
             由 cola-web-standard 根 POM dependencyManagement 统一管理。
