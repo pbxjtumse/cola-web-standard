@@ -2,14 +2,21 @@
 title execute Main Flow - Acquire / Callback / Release / Resolve
 autonumber
 skinparam shadowing false
-actor Caller
+
+box "API Module" #D9EAF7
 participant "DefaultDistributedLockClient" as Client
-participant "LockExecutionTemplate" as Execute
-participant "LockAcquisitionService" as Acquire
 participant "LockCallback" as Callback
 participant "DefaultLockHandle" as Handle
 participant "LockResultResolver" as Resolver
+end box
+
+box "Core Module" #DFF2BF
+actor Caller
+participant "LockExecutionTemplate" as Execute
+participant "LockAcquisitionService" as Acquire
 participant "LockMetricsFacade" as Metrics
+end box
+
 
 Caller -> Client : execute(lockName, options, callback)
 Client -> Execute : execute(lockName, options, callback)

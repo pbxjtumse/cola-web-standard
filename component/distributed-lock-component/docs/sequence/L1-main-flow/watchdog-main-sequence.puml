@@ -2,10 +2,20 @@
 title Watchdog Main Flow - Core Managed vs Provider Managed
 autonumber
 skinparam shadowing false
+
+box "API Module" #D9EAF7
 participant "LockHandleFactory" as Factory
-participant "ScheduledLockWatchdog" as Watchdog
 participant "DefaultLockHandle" as Handle
+end box
+
+box "Core Module" #DFF2BF
+participant "ScheduledLockWatchdog" as Watchdog
+end box
+
+box "Provider Module" #FFE6CC
 participant "LockProvider" as Provider
+end box
+
 
 Factory -> Watchdog : start(handle, options) when autoRenew=true
 Watchdog -> Watchdog : schedule tick by renewInterval

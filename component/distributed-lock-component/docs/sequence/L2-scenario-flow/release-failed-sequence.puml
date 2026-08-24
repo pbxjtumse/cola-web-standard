@@ -2,13 +2,23 @@
 !include ../../_common/style.puml
 title RELEASE_FAILED 释放失败路径时序图
 
-actor Biz
+
+box "API Module" #D9EAF7
 participant DefaultClient as "DefaultDistributedLockClient"
-participant Provider as "LockProvider"
-database Redis
 participant Handle as "DefaultLockHandle"
 participant Callback as "LockCallback"
+end box
+
+box "Core Module" #DFF2BF
+actor Biz
 participant Event as "LockEventPublisher"
+end box
+
+box "Provider Module" #FFE6CC
+participant Provider as "LockProvider"
+database Redis
+end box
+
 
 Biz -> DefaultClient : execute(lockName, options, callback)
 DefaultClient -> Provider : acquire(request)

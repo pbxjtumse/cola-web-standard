@@ -3,11 +3,21 @@
 
 title 外部 Fencing Provider 异常时序
 
+
+box "API Module" #D9EAF7
 participant Client as DefaultDistributedLockClient
-participant LockProvider
-participant FencingProvider
+end box
+
+box "Core Module" #DFF2BF
 participant Events
 participant Metrics
+end box
+
+box "Provider Module" #FFE6CC
+participant LockProvider
+participant FencingProvider
+end box
+
 
 Client -> LockProvider : acquire()
 LockProvider --> Client : ACQUIRED lease

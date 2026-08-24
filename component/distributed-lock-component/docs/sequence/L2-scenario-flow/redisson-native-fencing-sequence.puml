@@ -3,15 +3,25 @@
 
 title Redisson Native Fencing（RFencedLock）
 
-actor Biz
+
+box "API Module" #D9EAF7
 participant DistributedLockClient as Client
+end box
+
+box "Core Module" #DFF2BF
+actor Biz
 participant LockAcquisitionService as Acquire
 participant FencingTokenCoordinator as Fencing
+participant RFencedLock as RFenced
+end box
+
+box "Provider Module" #FFE6CC
 participant ProviderNativeLockWaiter as Waiter
 participant RedissonLockProvider as Provider
 participant RedissonOwnershipRegistry as Ownership
-participant RFencedLock as RFenced
 participant Redis
+end box
+
 
 Biz -> Client : execute(lockName, options)
 Client -> Acquire : acquire

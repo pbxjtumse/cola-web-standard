@@ -2,14 +2,24 @@
 !include ../../_common/style.puml
 title SUCCESS 成功路径时序图
 
-actor Biz
+
+box "API Module" #D9EAF7
 participant Client as "DistributedLockClient"
 participant DefaultClient as "DefaultDistributedLockClient"
-participant Provider as "LockProvider"
-database Redis
 participant Handle as "DefaultLockHandle"
 participant Callback as "LockCallback"
+end box
+
+box "Core Module" #DFF2BF
+actor Biz
 participant Watchdog as "LockWatchdog"
+end box
+
+box "Provider Module" #FFE6CC
+participant Provider as "LockProvider"
+database Redis
+end box
+
 
 Biz -> Client : execute(lockName, options, callback)
 Client -> DefaultClient : execute(...)

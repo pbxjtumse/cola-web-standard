@@ -2,10 +2,17 @@
 !include ../../_common/style.puml
 title RedisLockProvider.renew() 内部时序图
 
+
+box "Core Module" #DFF2BF
 participant Watchdog as "Watchdog / Handle"
-participant Provider as "RedisLockProvider"
 participant Executor as "RedisLockScriptExecutor"
+end box
+
+box "Provider Module" #FFE6CC
+participant Provider as "RedisLockProvider"
 database Redis
+end box
+
 
 Watchdog -> Provider : renew(request)
 Provider -> Executor : execute renew.lua\nKEYS[lockKey]\nARGV[ownerToken, leaseMillis]

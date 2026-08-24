@@ -2,11 +2,21 @@
 !include ../../_common/style.puml
 title BackoffLockWaiter 等待重试内部时序图
 
+
+box "API Module" #D9EAF7
 participant Client as "DefaultDistributedLockClient"
+end box
+
+box "Core Module" #DFF2BF
 participant Waiter as "BackoffLockWaiter"
+participant Sleeper as "Sleeper"
+end box
+
+box "Provider Module" #FFE6CC
 participant Provider as "LockProvider"
 database Redis
-participant Sleeper as "Sleeper"
+end box
+
 
 Client -> Waiter : waitForLock(request, provider)
 Waiter -> Waiter : deadline = now + waitTime

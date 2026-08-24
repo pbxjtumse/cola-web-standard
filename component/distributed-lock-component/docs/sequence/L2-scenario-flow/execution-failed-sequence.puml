@@ -2,12 +2,22 @@
 !include ../../_common/style.puml
 title EXECUTION_FAILED 业务异常路径时序图
 
-actor Biz
+
+box "API Module" #D9EAF7
 participant DefaultClient as "DefaultDistributedLockClient"
-participant Provider as "LockProvider"
-database Redis
 participant Handle as "DefaultLockHandle"
 participant Callback as "LockCallback"
+end box
+
+box "Core Module" #DFF2BF
+actor Biz
+end box
+
+box "Provider Module" #FFE6CC
+participant Provider as "LockProvider"
+database Redis
+end box
+
 
 Biz -> DefaultClient : execute(lockName, options, callback)
 DefaultClient -> Provider : acquire(request)

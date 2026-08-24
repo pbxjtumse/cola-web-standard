@@ -3,13 +3,23 @@
 
 title Redisson Provider-managed Watchdog
 
+
+box "API Module" #D9EAF7
+participant DefaultLockHandle as Handle
+end box
+
+box "Core Module" #DFF2BF
 participant LockExecutionTemplate as Execute
 participant ScheduledLockWatchdog as CoreWatchdog
-participant DefaultLockHandle as Handle
+end box
+
+box "Provider Module" #FFE6CC
 participant RedissonLockProvider as Provider
 participant RedissonOwnershipRegistry as Ownership
 participant "Redisson internal watchdog" as RedissonWatchdog
 participant Redis
+end box
+
 
 Execute -> Provider : acquire(autoRenew=true)
 Provider -> Ownership : reserve(ownerToken, lockKey, acquireThreadId)

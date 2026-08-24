@@ -2,10 +2,20 @@
 !include ../../_common/style.puml
 title RedisLockProvider.release() 内部时序图
 
+
+box "API Module" #D9EAF7
 participant Handle as "DefaultLockHandle"
-participant Provider as "RedisLockProvider"
+end box
+
+box "Core Module" #DFF2BF
 participant Executor as "RedisLockScriptExecutor"
+end box
+
+box "Provider Module" #FFE6CC
+participant Provider as "RedisLockProvider"
 database Redis
+end box
+
 
 Handle -> Provider : release(request)
 Provider -> Executor : execute release.lua\nKEYS[lockKey]\nARGV[ownerToken]

@@ -2,12 +2,22 @@
 !include ../../_common/style.puml
 title DefaultLockHandle.checkHeld() / assertHeld() 内部时序图
 
-actor Caller
+
+box "API Module" #D9EAF7
 participant Handle as "DefaultLockHandle"
+end box
+
+box "Core Module" #DFF2BF
+actor Caller
 participant Runtime as "LockRuntimeState"
+participant Event as "LockEventPublisher"
+end box
+
+box "Provider Module" #FFE6CC
 participant Provider as "LockProvider"
 database Redis
-participant Event as "LockEventPublisher"
+end box
+
 
 Caller -> Handle : checkHeld() / assertHeld()
 Handle -> Runtime : isReleased() / isLost()

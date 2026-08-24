@@ -2,11 +2,21 @@
 title External JDBC Fencing Flow - Acquire Lock / Issue DB Token / Re-check Ownership
 autonumber
 skinparam shadowing false
-participant "LockAcquisitionService" as Acquire
-participant "LockProvider" as Provider
-participant "ExternalFencingTokenFlow" as Flow
-participant "JdbcSequenceFencingTokenProvider" as JdbcToken
+
+box "API Module" #D9EAF7
 participant "LockHandleFactory" as Factory
+end box
+
+box "Core Module" #DFF2BF
+participant "LockAcquisitionService" as Acquire
+participant "ExternalFencingTokenFlow" as Flow
+end box
+
+box "Provider Module" #FFE6CC
+participant "LockProvider" as Provider
+participant "JdbcSequenceFencingTokenProvider" as JdbcToken
+end box
+
 
 Acquire -> Provider : acquire(nativeFencingRequired=false)
 Provider --> Acquire : LockAcquireResponse(lease without token)

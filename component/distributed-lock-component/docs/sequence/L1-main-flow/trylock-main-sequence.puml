@@ -2,17 +2,27 @@
 title tryLock Main Flow - Acquire / Wait / Fencing / Handle
 autonumber
 skinparam shadowing false
-actor Caller
+
+box "API Module" #D9EAF7
 participant "DefaultDistributedLockClient" as Client
+participant "AcquireOutcomeHandlerRegistry" as Outcome
+participant "LockHandleFactory" as Factory
+end box
+
+box "Core Module" #DFF2BF
+actor Caller
 participant "LockAcquisitionService" as Acquire
-participant "LockProviderRegistry" as Registry
 participant "FencingTokenCoordinator" as Coordinator
 participant "LockWaiter" as Waiter
-participant "LockProvider" as Provider
-participant "AcquireOutcomeHandlerRegistry" as Outcome
 participant "FencingTokenFlow" as Flow
-participant "LockHandleFactory" as Factory
 participant "LockWatchdog" as Watchdog
+end box
+
+box "Provider Module" #FFE6CC
+participant "LockProviderRegistry" as Registry
+participant "LockProvider" as Provider
+end box
+
 
 Caller -> Client : tryLock(lockName, options)
 Client -> Acquire : tryLock(lockName, options)

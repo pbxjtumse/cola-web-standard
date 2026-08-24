@@ -2,11 +2,21 @@
 !include ../../_common/style.puml
 title NOT_ACQUIRED 未获取锁路径时序图
 
-actor Biz
+
+box "API Module" #D9EAF7
 participant DefaultClient as "DefaultDistributedLockClient"
+end box
+
+box "Core Module" #DFF2BF
+actor Biz
 participant Waiter as "LockWaiter"
+end box
+
+box "Provider Module" #FFE6CC
 participant Provider as "LockProvider"
 database Redis
+end box
+
 
 Biz -> DefaultClient : execute / tryLock
 DefaultClient -> Waiter : waitForLock(request, provider)

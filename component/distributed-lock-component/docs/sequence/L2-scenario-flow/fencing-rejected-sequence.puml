@@ -3,12 +3,22 @@
 
 title 旧 Owner 写入被 Fencing Token 拒绝
 
+
+box "API Module" #D9EAF7
 participant Client as DefaultDistributedLockClient
 participant Callback
+participant Handle as DefaultLockHandle
+end box
+
+box "Core Module" #DFF2BF
 participant Guard as FencingTokenGuard
+end box
+
+box "Business Resource" #EEEEEE
 participant Repository
 database DB
-participant Handle as DefaultLockHandle
+end box
+
 
 Client -> Callback : doWithLock(handle token=10)
 Callback -> Guard : requireAccepted(handle, conditionalWrite)
