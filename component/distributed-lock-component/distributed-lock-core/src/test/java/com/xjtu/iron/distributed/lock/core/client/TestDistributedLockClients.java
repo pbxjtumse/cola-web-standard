@@ -25,7 +25,7 @@ import com.xjtu.iron.distributed.lock.core.observability.LockMetricsFacade;
 import com.xjtu.iron.distributed.lock.core.observability.NoOpLockMetricsRecorder;
 import com.xjtu.iron.distributed.lock.core.support.DefaultLockNamePatternResolver;
 import com.xjtu.iron.distributed.lock.core.support.DefaultLockNameValidator;
-import com.xjtu.iron.distributed.lock.spi.DefaultLockProviderRegistry;
+import com.xjtu.iron.distributed.lock.core.registry.DefaultLockProviderRegistry;
 import com.xjtu.iron.distributed.lock.core.execute.LockResultResolver;
 import com.xjtu.iron.distributed.lock.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.core.support.DefaultOwnerTokenGenerator;

@@ -5,7 +5,7 @@ import com.xjtu.iron.distributed.lock.core.observability.LockEventFactory;
 import com.xjtu.iron.distributed.lock.core.observability.LockEventPublisher;
 import com.xjtu.iron.distributed.lock.core.observability.LockMetricsFacade;
 import com.xjtu.iron.distributed.lock.spi.LockProvider;
-import com.xjtu.iron.distributed.lock.spi.protocol.LockLease;
+import com.xjtu.iron.distributed.lock.spi.protocol.common.LockLease;
 import com.xjtu.iron.distributed.lock.core.watchdog.LockWatchdog;
 
 import java.util.Objects;

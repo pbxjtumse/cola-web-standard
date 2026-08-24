@@ -1,6 +1,8 @@
-package com.xjtu.iron.distributed.lock.spi.protocol;
+package com.xjtu.iron.distributed.lock.spi.protocol.acquire;
 
 import com.xjtu.iron.distributed.lock.spi.LockProviderError;
+import com.xjtu.iron.distributed.lock.spi.protocol.common.LockLease;
+import com.xjtu.iron.distributed.lock.spi.protocol.common.LockProviderResponse;
 
 import java.time.Duration;
 import java.util.Objects;

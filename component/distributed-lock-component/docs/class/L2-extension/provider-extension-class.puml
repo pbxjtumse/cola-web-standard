@@ -1,0 +1,26 @@
+@startuml
+!include ../../_common/style.puml
+title Distributed Lock Class L2 Provider Extension
+
+package "distributed-lock-spi" {
+interface LockProvider
+interface FencingTokenProvider
+}
+
+package "distributed-lock-provider-redis" {
+class RedisLockProvider
+}
+
+package "distributed-lock-provider-redisson" {
+class RedissonLockProvider
+}
+
+package "distributed-lock-fencing-provider-jdbc" {
+class JdbcSequenceFencingTokenProvider
+}
+
+LockProvider <|.. RedisLockProvider
+LockProvider <|.. RedissonLockProvider
+FencingTokenProvider <|.. JdbcSequenceFencingTokenProvider
+
+@enduml

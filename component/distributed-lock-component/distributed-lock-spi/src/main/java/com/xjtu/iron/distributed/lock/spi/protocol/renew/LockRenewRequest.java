@@ -1,5 +1,8 @@
-package com.xjtu.iron.distributed.lock.spi.protocol;
+package com.xjtu.iron.distributed.lock.spi.protocol.renew;
 
+
+import com.xjtu.iron.distributed.lock.spi.protocol.common.LockLease;
+import com.xjtu.iron.distributed.lock.spi.protocol.common.LockLeaseRef;
 
 import java.time.Duration;
 import java.util.Objects;

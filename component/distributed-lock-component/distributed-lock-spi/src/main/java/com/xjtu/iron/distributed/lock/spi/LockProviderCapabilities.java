@@ -1,5 +1,7 @@
 package com.xjtu.iron.distributed.lock.spi;
 
+import com.xjtu.iron.distributed.lock.api.model.LockAutoRenewMode;
+
 /**
  * Provider 能力描述。
  *

@@ -2,7 +2,7 @@ package com.xjtu.iron.distributed.lock.core.fencing;
 
 import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 import com.xjtu.iron.distributed.lock.spi.LockProvider;
-import com.xjtu.iron.distributed.lock.spi.protocol.LockLease;
+import com.xjtu.iron.distributed.lock.spi.protocol.common.LockLease;
 
 import java.util.Objects;
 

@@ -1,0 +1,40 @@
+@startuml
+!include ../../_common/style.puml
+title Distributed Lock Class L1 Core Relationship (SPI Separated)
+
+package "distributed-lock-api" {
+interface DistributedLockClient
+interface LockHandle
+class LockOptions
+}
+
+package "distributed-lock-core" {
+class DefaultDistributedLockClient
+class LockExecutionTemplate
+class LockAcquisitionService
+class DefaultLockHandle
+class FencingTokenCoordinator
+class LockWatchDog
+}
+
+package "distributed-lock-spi" {
+interface LockProvider
+interface FencingTokenProvider
+}
+
+package "distributed-lock-provider-redis" {
+class RedisLockProvider
+}
+
+DefaultDistributedLockClient ..|> DistributedLockClient
+DefaultDistributedLockClient --> LockExecutionTemplate
+LockExecutionTemplate --> LockAcquisitionService
+LockAcquisitionService --> LockProvider
+LockAcquisitionService --> FencingTokenCoordinator
+LockAcquisitionService --> DefaultLockHandle
+DefaultLockHandle ..|> LockHandle
+DefaultLockHandle --> LockWatchDog
+LockProvider <|.. RedisLockProvider
+FencingTokenCoordinator --> FencingTokenProvider
+
+@enduml

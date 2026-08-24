@@ -1,0 +1,38 @@
+@startuml
+!include ../../_common/style.puml
+title Distributed Lock Class L0 Role Overview
+
+package "distributed-lock-api" {
+ interface DistributedLockClient
+ interface LockHandle
+}
+
+package "distributed-lock-spi" {
+ interface LockProvider
+ interface FencingTokenProvider
+}
+
+package "distributed-lock-core" {
+ class LockExecutionTemplate
+ class LockAcquisitionService
+ class DefaultLockHandle
+ class FencingTokenCoordinator
+ class LockWatchDog
+}
+
+package "distributed-lock-provider" {
+ class RedisLockProvider
+ class RedissonLockProvider
+ class JdbcSequenceFencingTokenProvider
+}
+
+DistributedLockClient --> LockExecutionTemplate
+LockExecutionTemplate --> LockAcquisitionService
+LockAcquisitionService --> LockProvider
+LockAcquisitionService --> FencingTokenCoordinator
+LockAcquisitionService --> LockHandle
+LockProvider <|.. RedisLockProvider
+LockProvider <|.. RedissonLockProvider
+FencingTokenProvider <|.. JdbcSequenceFencingTokenProvider
+
+@enduml

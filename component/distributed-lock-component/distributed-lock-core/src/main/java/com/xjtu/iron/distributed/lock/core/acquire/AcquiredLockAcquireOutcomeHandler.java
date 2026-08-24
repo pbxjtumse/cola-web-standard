@@ -14,8 +14,8 @@ import com.xjtu.iron.distributed.lock.core.fencing.flow.FencingContext;
 import com.xjtu.iron.distributed.lock.core.fencing.flow.FencingTokenFlow;
 import com.xjtu.iron.distributed.lock.core.fencing.flow.FencingTokenFlowRegistry;
 import com.xjtu.iron.distributed.lock.core.observability.LockMetricsFacade;
-import com.xjtu.iron.distributed.lock.spi.protocol.LockLease;
-import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireStatus;
+import com.xjtu.iron.distributed.lock.spi.protocol.common.LockLease;
+import com.xjtu.iron.distributed.lock.spi.protocol.acquire.LockAcquireStatus;
 
 import java.util.Objects;
 

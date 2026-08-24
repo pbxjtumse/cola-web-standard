@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.spi.protocol;
+package com.xjtu.iron.distributed.lock.spi.protocol.check;
 
 /**
  * 底层持锁检查状态。

@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.core.wait;
 
-import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireResponse;
+import com.xjtu.iron.distributed.lock.spi.protocol.acquire.LockAcquireResponse;
 
 /**
  * Provider 原生等待器。

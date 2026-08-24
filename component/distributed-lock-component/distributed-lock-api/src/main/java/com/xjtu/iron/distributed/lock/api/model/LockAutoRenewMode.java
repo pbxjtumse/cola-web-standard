@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.spi;
+package com.xjtu.iron.distributed.lock.api.model;
 
 /**
  * 自动续期由谁负责。

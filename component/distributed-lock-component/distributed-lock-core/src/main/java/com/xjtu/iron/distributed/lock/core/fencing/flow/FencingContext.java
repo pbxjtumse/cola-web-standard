@@ -3,7 +3,7 @@ package com.xjtu.iron.distributed.lock.core.fencing.flow;
 import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenPlan;
 import com.xjtu.iron.distributed.lock.spi.LockProvider;
-import com.xjtu.iron.distributed.lock.spi.protocol.LockLease;
+import com.xjtu.iron.distributed.lock.spi.protocol.common.LockLease;
 
 import java.time.Duration;
 import java.util.Objects;

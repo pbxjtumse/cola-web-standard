@@ -2,7 +2,7 @@ package com.xjtu.iron.distributed.lock.core.acquire;
 
 import com.xjtu.iron.distributed.lock.api.model.LockHandle;
 import com.xjtu.iron.distributed.lock.api.model.LockResult;
-import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireStatus;
+import com.xjtu.iron.distributed.lock.spi.protocol.acquire.LockAcquireStatus;
 
 import java.util.Optional;
 import java.util.Set;

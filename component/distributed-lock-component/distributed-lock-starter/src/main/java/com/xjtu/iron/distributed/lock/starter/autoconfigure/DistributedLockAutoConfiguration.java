@@ -32,7 +32,7 @@ import com.xjtu.iron.distributed.lock.core.support.DefaultLockNamePatternResolve
 import com.xjtu.iron.distributed.lock.core.support.DefaultLockNameValidator;
 import com.xjtu.iron.distributed.lock.core.support.LockNamePatternResolver;
 import com.xjtu.iron.distributed.lock.core.support.LockNameValidator;
-import com.xjtu.iron.distributed.lock.spi.DefaultLockProviderRegistry;
+import com.xjtu.iron.distributed.lock.core.registry.DefaultLockProviderRegistry;
 import com.xjtu.iron.distributed.lock.core.execute.LockResultResolver;
 import com.xjtu.iron.distributed.lock.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.spi.LockProviderRegistry;

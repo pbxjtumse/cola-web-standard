@@ -1,8 +1,8 @@
 package com.xjtu.iron.distributed.lock.core.execute;
 
 import com.xjtu.iron.distributed.lock.api.status.LockStage;
-import com.xjtu.iron.distributed.lock.spi.protocol.LockReleaseResponse;
-import com.xjtu.iron.distributed.lock.spi.protocol.LockReleaseStatus;
+import com.xjtu.iron.distributed.lock.spi.protocol.release.LockReleaseResponse;
+import com.xjtu.iron.distributed.lock.spi.protocol.release.LockReleaseStatus;
 
 /** Core 对 release 动作的解释结果。 */
 public final class LockReleaseOutcome {

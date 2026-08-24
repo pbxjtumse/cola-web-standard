@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.spi.protocol;
+package com.xjtu.iron.distributed.lock.spi.protocol.release;
 
 /**
  * 底层解锁状态。

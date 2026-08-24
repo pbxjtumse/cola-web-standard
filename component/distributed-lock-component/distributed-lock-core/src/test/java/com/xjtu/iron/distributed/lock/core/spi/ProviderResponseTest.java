@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.core.spi;
 
-import com.xjtu.iron.distributed.lock.spi.protocol.LockReleaseResponse;
+import com.xjtu.iron.distributed.lock.spi.protocol.release.LockReleaseResponse;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;

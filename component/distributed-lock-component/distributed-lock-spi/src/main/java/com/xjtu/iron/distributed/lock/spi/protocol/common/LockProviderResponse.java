@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.spi.protocol;
+package com.xjtu.iron.distributed.lock.spi.protocol.common;
 
 import com.xjtu.iron.distributed.lock.spi.LockProviderError;
 

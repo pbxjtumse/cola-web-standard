@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.spi.protocol;
+package com.xjtu.iron.distributed.lock.spi.protocol.renew;
 
 /**
  * 底层Provider续期状态,是细粒度的结果。

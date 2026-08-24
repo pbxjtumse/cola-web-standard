@@ -1,0 +1,18 @@
+@startuml
+!include ../../_common/style.puml
+title Distributed Lock Class L3 Internal Mapping
+
+package "distributed-lock-core" {
+class LockRuntimeState
+class LockAcquireContext
+class LockWaitContext
+class LockAcquireOutcomeHandler
+class LockProviderRegistry
+}
+
+package "distributed-lock-spi" {
+interface LockProvider
+interface FencingTokenProvider
+}
+
+@enduml

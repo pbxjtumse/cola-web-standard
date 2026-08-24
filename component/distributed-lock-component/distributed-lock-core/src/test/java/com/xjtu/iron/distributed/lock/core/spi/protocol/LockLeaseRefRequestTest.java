@@ -1,6 +1,10 @@
 package com.xjtu.iron.distributed.lock.core.spi.protocol;
 
-import com.xjtu.iron.distributed.lock.spi.protocol.*;
+import com.xjtu.iron.distributed.lock.spi.protocol.check.LockCheckRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.common.LockLease;
+import com.xjtu.iron.distributed.lock.spi.protocol.common.LockLeaseRef;
+import com.xjtu.iron.distributed.lock.spi.protocol.release.LockReleaseRequest;
+import com.xjtu.iron.distributed.lock.spi.protocol.renew.LockRenewRequest;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
