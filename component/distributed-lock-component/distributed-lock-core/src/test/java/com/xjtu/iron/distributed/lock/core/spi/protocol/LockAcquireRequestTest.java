@@ -1,6 +1,7 @@
 package com.xjtu.iron.distributed.lock.core.spi.protocol;
 
 import com.xjtu.iron.distributed.lock.api.model.LockOptions;
+import com.xjtu.iron.distributed.lock.spi.protocol.LockAcquireRequest;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
