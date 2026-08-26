@@ -1,35 +1,35 @@
 @startuml
 !include ../../_common/style.puml
-title L2：Kafka 发送 Provider 协作
 
-participant "MessageSendExecutor" as Executor
+title L2：Kafka Provider 发送流程（方法级）
+
+box "Core Send 模块\nmessage-core.send" #FFF3E0
+participant "DirectMessageSender / DefaultReliableMessageSender" as Sender
+end box
+box "SPI 模块\nmessage-spi" #ECEFF1
+participant "ProviderSendRequest\nspi" as Request
+participant "ProviderSendResult\nspi" as Result
+end box
+box "Kafka Provider\nmessage-integration-kafka" #FFEBEE
 participant "KafkaMessageProvider" as KafkaProvider
 participant "KafkaProducer" as KafkaProducer
-queue "Kafka Broker" as KafkaBroker
+end box
+box "Broker" #FFFDE7
+queue "Kafka Topic" as Topic
+end box
 
-Executor -> KafkaProvider: send(ProviderSendRequest)
-KafkaProvider -> KafkaProvider: build ProducerRecord(topic, key, body)
-KafkaProvider -> KafkaProvider: copy headers / system headers
-KafkaProvider -> KafkaProducer: send(record, callback)
-KafkaProducer -> KafkaBroker: produce request
-
-alt Broker 明确确认
-  KafkaBroker --> KafkaProducer: RecordMetadata(topic, partition, offset)
-  KafkaProducer --> KafkaProvider: callback(metadata, null)
-  KafkaProvider --> Executor: ProviderSendResult.CONFIRMED
-else 认证、授权、非法 topic、消息过大、序列化错误
-  KafkaProducer --> KafkaProvider: callback(null, exception)
-  KafkaProvider --> Executor: ProviderSendResult.REJECTED / FAILED(non-retryable)
-else 网络抖动 / RetriableException
-  KafkaProducer --> KafkaProvider: callback(null, exception)
-  KafkaProvider --> Executor: ProviderSendResult.FAILED + NETWORK_ERROR
-else Future 超时 / ack 未返回
-  KafkaProducer --x KafkaProvider: future not completed in confirmTimeout
-  KafkaProvider --> Executor: ProviderSendResult.UNKNOWN + TIMEOUT
+Sender -> KafkaProvider: send(request)
+KafkaProvider -> Request: destination() / messageKey() / headers() / body()
+KafkaProvider -> KafkaProducer: send(producerRecord, callback)
+KafkaProducer -> Topic: append record
+Topic --> KafkaProducer: RecordMetadata / exception
+KafkaProducer --> KafkaProvider: callback(metadata, exception)
+alt success
+  KafkaProvider -> Result: confirmed(providerMessageId, metadata)
+else failure
+  KafkaProvider -> KafkaProvider: classifySendFailure(exception)
+  KafkaProvider -> Result: failed(status, failureType, description, metadata)
 end
-
-note over Executor,KafkaProvider
-Kafka Provider 只负责把 Kafka 客户端结果转成 ProviderSendResult。
-是否重试由 message-core 的 MessageSendRetryClassifier 判断。
-end note
+Result --> KafkaProvider: ProviderSendResult
+KafkaProvider --> Sender: CompletionStage<ProviderSendResult>
 @enduml

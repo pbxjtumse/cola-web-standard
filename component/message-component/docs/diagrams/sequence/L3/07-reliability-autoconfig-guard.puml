@@ -1,34 +1,34 @@
 @startuml
 !include ../../_common/style.puml
-title L3：可靠发送自动配置启动保护
 
-participant SpringBoot as "Spring Boot"
-participant MessageAutoConfiguration as "MessageAutoConfiguration"
-participant MessageProperties as "xjtu.iron.message.*"
-participant RetryExecutor as "RetryExecutor Bean"
-participant RetryPolicyRegistry as "RetryPolicyRegistry Bean"
-participant DirectSender as "DirectMessageSender"
-participant ReliableSender as "DefaultReliableMessageSender"
+title L3：可靠发送自动装配保护（方法级）
 
-SpringBoot -> MessageAutoConfiguration: create MessageSendExecutor
-MessageAutoConfiguration -> MessageProperties: reliability.send.enabled?
+box "Starter / Config\nmessage-starter" #F3E8FF
+participant "MessageAutoConfiguration" as AutoConfig
+participant "MessageSendReliabilityProperties" as Properties
+end box
+box "Core Send\nmessage-core.send" #FFF3E0
+participant "DirectMessageSender" as DirectSender
+participant "DefaultReliableMessageSender" as ReliableSender
+end box
+box "Retry Component" #FCE4EC
+participant "RetryExecutor" as RetryExecutor
+participant "RetryPolicyRegistry" as PolicyRegistry
+end box
 
-alt enabled = false
-  MessageAutoConfiguration -> DirectSender: new DirectMessageSender(clock)
-  DirectSender --> SpringBoot: MessageSendExecutor bean
-else enabled = true
-  MessageAutoConfiguration -> RetryExecutor: getIfAvailable()
-  MessageAutoConfiguration -> RetryPolicyRegistry: getIfAvailable()
-  alt retry beans present
-    MessageAutoConfiguration -> ReliableSender: new DefaultReliableMessageSender(...)
-    ReliableSender --> SpringBoot: MessageSendExecutor bean
-  else retry beans missing
-    MessageAutoConfiguration --> SpringBoot: fail startup with clear message
-  end
+AutoConfig -> AutoConfig: messageSendReliabilityOptions(properties)
+AutoConfig -> Properties: getReliability().getSend()
+Properties --> AutoConfig: enabled / retryPolicy / retryWhenUnknown
+AutoConfig -> AutoConfig: messageSendExecutor(...)
+alt reliability.send.enabled = false
+  AutoConfig -> DirectSender: new DirectMessageSender(clock)
+  DirectSender --> AutoConfig: MessageSendExecutor
+else reliability.send.enabled = true and retry beans exist
+  AutoConfig -> RetryExecutor: getIfAvailable()
+  AutoConfig -> PolicyRegistry: getIfAvailable()
+  AutoConfig -> ReliableSender: new DefaultReliableMessageSender(...)
+  ReliableSender --> AutoConfig: MessageSendExecutor
+else reliability.send.enabled = true and retry beans missing
+  AutoConfig -> AutoConfig: throw IllegalStateException
 end
-
-note over MessageAutoConfiguration
-可靠发送开启但 retry-component 未装配时必须启动失败，
-不能静默降级成直发，否则配置和真实行为不一致。
-end note
 @enduml

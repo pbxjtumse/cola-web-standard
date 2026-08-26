@@ -1,0 +1,93 @@
+@startuml
+!include ../../_common/style.puml
+
+title L0：组件模块总览（模块着色）
+left to right direction
+
+package "Business / Demo\nmessage-demo-springboot" #E8F5E9 {
+  class MessageDemoController
+  class DemoMessageListener
+  class DemoSubscriptionRunner
+}
+
+package "API 模块\nmessage-api" #E3F2FD {
+  interface MessagePublisher
+  interface MessageConsumerRegistrar
+  class MessageEnvelope
+  class MessageDestination
+  class SendOptions
+  class SendResult
+  class ConsumerDefinition
+  interface MessageHandler
+}
+
+package "Core 模块\nmessage-core" #EDE7F6 {
+  class MessageTemplate
+  class MessageComponentOptions
+  class MessageEnvelopeEnricher
+  interface DestinationResolver
+  class MessageProviderRegistry
+  class MessageWireCodec
+  class CurrentMessage
+}
+
+package "Core Send 模块\nmessage-core.send" #FFF3E0 {
+  class PreparedMessageSend
+  interface MessageSendExecutor
+  class DirectMessageSender
+  class DefaultReliableMessageSender
+  class MessageSendRetryClassifier
+}
+
+package "SPI 模块\nmessage-spi" #ECEFF1 {
+  interface MessageProvider
+  class ProviderSendRequest
+  class ProviderSendResult
+  class ProviderInboundMessage
+  class ProviderSubscriptionRequest
+  interface ProviderSubscription
+}
+
+package "Provider 模块\nmessage-integrations" #FFEBEE {
+  class KafkaMessageProvider
+  class PulsarMessageProvider
+  class RocketMqMessageProvider
+}
+
+package "Retry Component" #FCE4EC {
+  class RetryExecutor
+  class RetryResult
+}
+
+package "Foundation" #E0F2F1 {
+  interface MessageIdGenerator
+  class FoundationMessageIdGenerator
+  interface MessageSerializer
+  class JacksonMessageSerializer
+}
+
+MessagePublisher <|.. MessageTemplate
+MessageConsumerRegistrar <|.. MessageTemplate
+MessageDemoController --> MessagePublisher
+DemoSubscriptionRunner --> MessageConsumerRegistrar
+DemoMessageListener ..|> MessageHandler
+MessageTemplate --> MessageEnvelopeEnricher
+MessageTemplate --> DestinationResolver
+MessageTemplate --> MessageProviderRegistry
+MessageTemplate --> MessageWireCodec
+MessageTemplate --> MessageSendExecutor
+MessageTemplate --> ConsumerDefinition
+MessageSendExecutor <|.. DirectMessageSender
+MessageSendExecutor <|.. DefaultReliableMessageSender
+DefaultReliableMessageSender --> MessageSendRetryClassifier
+DefaultReliableMessageSender --> RetryExecutor
+DefaultReliableMessageSender --> RetryResult
+MessageProviderRegistry --> MessageProvider
+MessageProvider <|.. KafkaMessageProvider
+MessageProvider <|.. PulsarMessageProvider
+MessageProvider <|.. RocketMqMessageProvider
+MessageEnvelopeEnricher --> MessageIdGenerator
+FoundationMessageIdGenerator ..|> MessageIdGenerator
+MessageWireCodec --> MessageSerializer
+JacksonMessageSerializer ..|> MessageSerializer
+@enduml

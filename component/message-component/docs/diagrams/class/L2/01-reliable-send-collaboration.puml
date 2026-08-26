@@ -1,0 +1,58 @@
+@startuml
+!include ../../_common/style.puml
+
+title L2：可靠发送内部协作类图
+left to right direction
+
+package "Core\nmessage-core" #EDE7F6 {
+  class MessageTemplate
+  class MessageWireCodec
+  class MessageProviderRegistry
+}
+
+package "Core Send\nmessage-core.send" #FFF3E0 {
+  class PreparedMessageSend
+  interface MessageSendExecutor
+  class DirectMessageSender
+  class MessageSendReliabilityOptions
+}
+
+package "Core Send Reliability\nmessage-core.send.reliability" #FFF3E0 {
+  class DefaultReliableMessageSender
+  class MessageSendRetryClassifier
+}
+
+package "SPI\nmessage-spi" #ECEFF1 {
+  interface MessageProvider
+  class ProviderSendRequest
+  class ProviderSendResult
+}
+
+package "Retry Component" #FCE4EC {
+  class RetryExecutor
+  class RetryResult
+  class RetryPolicyRegistry
+}
+
+package "API\nmessage-api" #E3F2FD {
+  class SendResult
+  class SendReliabilityInfo
+}
+
+MessageTemplate --> PreparedMessageSend
+MessageTemplate --> MessageSendExecutor
+MessageTemplate --> MessageWireCodec
+MessageTemplate --> MessageProviderRegistry
+MessageSendExecutor <|.. DirectMessageSender
+MessageSendExecutor <|.. DefaultReliableMessageSender
+PreparedMessageSend --> ProviderSendRequest
+PreparedMessageSend --> MessageProvider
+DefaultReliableMessageSender --> MessageSendReliabilityOptions
+DefaultReliableMessageSender --> MessageSendRetryClassifier
+DefaultReliableMessageSender --> RetryExecutor
+DefaultReliableMessageSender --> RetryPolicyRegistry
+DefaultReliableMessageSender --> RetryResult
+MessageSendRetryClassifier --> ProviderSendResult
+DefaultReliableMessageSender --> SendResult
+SendResult --> SendReliabilityInfo
+@enduml

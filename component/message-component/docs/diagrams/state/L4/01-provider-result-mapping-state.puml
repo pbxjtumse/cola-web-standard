@@ -1,24 +1,21 @@
 @startuml
 !include ../../_common/style.puml
-title State L4：Provider 原生结果到 ProviderSendResult 映射
-hide empty description
 
-[*] --> NATIVE_RESULT
+title L4：Provider 原生结果到统一发送状态映射
 
-NATIVE_RESULT --> CONFIRMED : Kafka RecordMetadata
-NATIVE_RESULT --> CONFIRMED : Pulsar MessageId
-NATIVE_RESULT --> CONFIRMED : RocketMQ SEND_OK
+state "Native Provider Result" as NATIVE #FFEBEE
+state "CONFIRMED" as CONFIRMED #DCFCE7
+state "FAILED" as FAILED #FEE2E2
+state "UNKNOWN" as UNKNOWN #FEF3C7
+state "REJECTED" as REJECTED #FFE4E6
 
-NATIVE_RESULT --> REJECTED : 参数非法 / 权限错误 / topic 错误 / unsupported capability
-NATIVE_RESULT --> FAILED_RETRYABLE : 网络连接失败 / 临时客户端错误
-NATIVE_RESULT --> UNKNOWN : confirmTimeout / ack lost / future timeout
-NATIVE_RESULT --> UNKNOWN : RocketMQ FLUSH_DISK_TIMEOUT
-NATIVE_RESULT --> UNKNOWN : RocketMQ FLUSH_SLAVE_TIMEOUT / SLAVE_NOT_AVAILABLE
-NATIVE_RESULT --> FAILED_NON_RETRYABLE : 序列化失败 / 明确 Broker 拒绝
-
-CONFIRMED --> [*] : ProviderSendResult.CONFIRMED
-REJECTED --> [*] : ProviderSendResult.REJECTED
-FAILED_RETRYABLE --> [*] : ProviderSendResult.FAILED + NETWORK_ERROR/CLIENT_ERROR
-FAILED_NON_RETRYABLE --> [*] : ProviderSendResult.FAILED + non-retryable failureType
-UNKNOWN --> [*] : ProviderSendResult.UNKNOWN
+[*] --> NATIVE
+NATIVE --> CONFIRMED : success ack / send ok
+NATIVE --> FAILED : network error / client error
+NATIVE --> UNKNOWN : timeout / flush timeout / uncertain result
+NATIVE --> REJECTED : serialization / authorization / invalid topic
+CONFIRMED --> [*]
+FAILED --> [*]
+UNKNOWN --> [*]
+REJECTED --> [*]
 @enduml

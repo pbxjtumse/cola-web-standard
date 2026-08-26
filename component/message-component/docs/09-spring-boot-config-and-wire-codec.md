@@ -1,4 +1,4 @@
-# 11 Spring Boot 配置结构与消息线级协议
+# 09 Spring Boot 配置结构与消息线级协议
 
 ## 1. 配置类分层
 
@@ -14,15 +14,15 @@ message-starter
         ├── MessageSerializerProperties
         └── MessageDemoProperties
 
-message-integration-pulsar
-└── com.xjtu.iron.message.integration.pulsar.autoconfigure
-    ├── PulsarMessageAutoConfiguration
-    └── PulsarMessageProperties
+message-integrations
+├── message-integration-kafka
+├── message-integration-pulsar
+└── message-integration-rocketmq
 ```
 
 `MessageProperties` 只描述 message-core 的通用配置，例如默认 Provider、应用名、确认超时、路由模式和逻辑目的地路由表。
 
-`PulsarMessageProperties` 只描述 Pulsar Provider 的原生连接配置，例如 serviceUrl、operationTimeout、negativeAckRedeliveryDelay 和 receiverQueueSize。
+各 Provider properties 只描述对应 MQ 的原生连接配置，例如 Kafka bootstrapServers、Pulsar serviceUrl、RocketMQ nameServer。
 
 因此 Demo 或业务应用的 `application.yml` 应该放在应用模块中，而不是放在 starter 中。Starter 只提供字段定义和自动装配逻辑。
 
@@ -52,7 +52,7 @@ mvn clean compile -DskipTests
 META-INF/spring-configuration-metadata.json
 ```
 
-IDEA 重新加载 Maven 后，`xjtu.iron.message.*` 和 `xjtu.iron.message.pulsar.*` 应能提示和跳转。
+IDEA 重新加载 Maven 后，`xjtu.iron.message.*`、`xjtu.iron.message.kafka.*`、`xjtu.iron.message.pulsar.*`、`xjtu.iron.message.rocketmq.*` 应能提示和跳转。
 
 ## 3. 消息线级协议与 payload 序列化
 
@@ -87,7 +87,7 @@ MessageWireCodec
 
 当前代码保留 `MessageSerializer` 作为消息组件的 payload 序列化端口。
 
-Starter 中默认提供 Jackson 实现，但使用了 `@ConditionalOnMissingBean`。因此业务或后续 `message-codec-foundation` 模块只要提供一个 `MessageSerializer` Bean，默认 Jackson Bean 就会自动让位。
+`JacksonMessageSerializer` 已合并到 `message-core.codec`。Starter 默认提供 Jackson 实现，并使用 `@ConditionalOnMissingBean`。因此业务或后续 foundation 序列化适配模块只要提供一个 `MessageSerializer` Bean，默认 Jackson Bean 就会自动让位。
 
 推荐后续接入方式：
 
@@ -101,4 +101,4 @@ MessageWireCodec
 ProviderSendRequest / ProviderInboundMessage
 ```
 
-不要让 `message-core` 直接依赖 foundation 的具体序列化实现，避免消息核心模块和基础组件实现细节耦合。
+当前版本允许 core 持有默认 Jackson 实现，但不应该让业务代码直接依赖 Jackson。后续如果 foundation-serialization 完全稳定，可以通过 `MessageSerializer` Bean 替换默认实现。

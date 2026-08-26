@@ -1,0 +1,49 @@
+@startuml
+!include ../../_common/style.puml
+
+title L4：Provider 实现类视图
+left to right direction
+
+package "SPI\nmessage-spi" #ECEFF1 {
+  interface MessageProvider
+  class ProviderSendRequest
+  class ProviderSendResult
+  class ProviderInboundMessage
+  class ProviderSubscriptionRequest
+  interface ProviderSubscription
+}
+
+package "Kafka Provider\nmessage-integration-kafka" #FFEBEE {
+  class KafkaMessageProvider
+  class KafkaMessageProviderConfig
+  class KafkaMessageProperties
+  class KafkaMetadataKeys
+}
+
+package "Pulsar Provider\nmessage-integration-pulsar" #FFEBEE {
+  class PulsarMessageProvider
+  class PulsarMessageProviderConfig
+  class PulsarMessageProperties
+  class PulsarMetadataKeys
+}
+
+package "RocketMQ4 Provider\nmessage-integration-rocketmq" #FFEBEE {
+  class RocketMqMessageProvider
+  class RocketMqMessageProviderConfig
+  class RocketMqMessageProperties
+  class RocketMqMetadataKeys
+}
+
+MessageProvider <|.. KafkaMessageProvider
+MessageProvider <|.. PulsarMessageProvider
+MessageProvider <|.. RocketMqMessageProvider
+KafkaMessageProvider --> ProviderSendRequest
+KafkaMessageProvider --> ProviderSendResult
+KafkaMessageProvider --> ProviderSubscriptionRequest
+PulsarMessageProvider --> ProviderSendRequest
+PulsarMessageProvider --> ProviderSendResult
+PulsarMessageProvider --> ProviderSubscriptionRequest
+RocketMqMessageProvider --> ProviderSendRequest
+RocketMqMessageProvider --> ProviderSendResult
+RocketMqMessageProvider --> ProviderSubscriptionRequest
+@enduml

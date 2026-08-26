@@ -1,0 +1,81 @@
+@startuml
+!include ../../_common/style.puml
+
+title L2：Core 全量分包类图（message-core）
+left to right direction
+
+package "Core Root\ncore" #EDE7F6 {
+  class MessageTemplate
+  class MessageComponentOptions
+}
+
+package "Codec\ncore.codec" #EDE7F6 {
+  class MessageWireCodec
+  class JacksonMessageSerializer
+}
+
+package "Context\ncore.context" #EDE7F6 {
+  class CurrentMessage
+  interface MessageContextAccessor
+  class ThreadLocalMessageContextAccessor
+}
+
+package "Enrich\ncore.enrich" #EDE7F6 {
+  class MessageEnvelopeEnricher
+}
+
+package "ID\ncore.id" #E0F2F1 {
+  interface MessageIdGenerator
+  class FoundationMessageIdGenerator
+  class UuidMessageIdGenerator
+}
+
+package "Provider Registry\ncore.provider" #EDE7F6 {
+  class MessageProviderRegistry
+}
+
+package "Routing\ncore.routing" #EDE7F6 {
+  interface DestinationResolver
+  class DefaultDestinationResolver
+  class DestinationRoute
+  class DestinationRouteRegistry
+  enum DestinationRoutingMode
+}
+
+package "Send\ncore.send" #FFF3E0 {
+  class PreparedMessageSend
+  interface MessageSendExecutor
+  class DirectMessageSender
+  class MessageSendReliabilityOptions
+}
+
+package "Reliable Send\ncore.send.reliability" #FFF3E0 {
+  class DefaultReliableMessageSender
+  class MessageSendRetryClassifier
+}
+
+MessageTemplate --> MessageComponentOptions
+MessageTemplate --> MessageEnvelopeEnricher
+MessageTemplate --> DestinationResolver
+MessageTemplate --> MessageProviderRegistry
+MessageTemplate --> MessageWireCodec
+MessageTemplate --> MessageContextAccessor
+MessageTemplate --> MessageSendExecutor
+MessageEnvelopeEnricher --> MessageIdGenerator
+FoundationMessageIdGenerator ..|> MessageIdGenerator
+UuidMessageIdGenerator ..|> MessageIdGenerator
+JacksonMessageSerializer ..> MessageWireCodec
+CurrentMessage --> MessageContextAccessor
+ThreadLocalMessageContextAccessor ..|> MessageContextAccessor
+DefaultDestinationResolver ..|> DestinationResolver
+DefaultDestinationResolver --> DestinationRouteRegistry
+DestinationRouteRegistry --> DestinationRoute
+DestinationRoute --> DestinationRoutingMode
+PreparedMessageSend --> MessageProviderRegistry
+MessageSendExecutor <|.. DirectMessageSender
+MessageSendExecutor <|.. DefaultReliableMessageSender
+DefaultReliableMessageSender --> MessageSendReliabilityOptions
+DefaultReliableMessageSender --> MessageSendRetryClassifier
+DirectMessageSender --> PreparedMessageSend
+DefaultReliableMessageSender --> PreparedMessageSend
+@enduml

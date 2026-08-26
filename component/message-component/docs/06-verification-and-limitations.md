@@ -1,50 +1,92 @@
 # 06 验证与限制
 
-## 已验证
+## 1. 已验证
 
-`verify-core.sh` 已使用：
-
-```text
-javac --release 17 -Xlint:all -Werror
-```
-
-验证模块：
+### 一期普通收发
 
 ```text
-message-api
-message-spi
-message-core
-message-testkit
-message-demo
+Kafka 单独收发：通过
+Pulsar 单独收发：通过
+RocketMQ4 单独收发：通过
+Kafka + Pulsar + RocketMQ4 同时收发：通过
 ```
 
-验证场景：
+三 Provider 并行验证中，`POST /demo/messages/send/all` 返回三条 `CONFIRMED`，`GET /demo/messages/received-summary` 返回 Kafka、Pulsar、RocketMQ 各 1 条，说明普通发送和普通消费闭环已经成立。
 
-- 根消息默认 correlationId
-- source 可选行为
-- messageId 与 messageKey 不同语义
-- 父子消息 correlationId/causationId 传播
-- 严格路由拒绝
-- 系统头保护
-- 逻辑目的地串线拒绝
+### 二期可靠发送代码层验证
 
-## 未完成
+当前版本已经补充可靠发送核心测试：
 
-当前环境没有 Maven 和外部依赖缓存，因此没有完成三种真实 Provider 的全模块 Maven 编译和真实 Broker 集成测试。
+```text
+message-core/src/test/java/com/xjtu/iron/message/core/send/reliability/
+├── MessageSendRetryClassifierTest.java
+└── DefaultReliableMessageSenderTest.java
+```
 
-需要在本地执行：
+覆盖：
+
+- `CONFIRMED -> SUCCESS`
+- `FAILED + NETWORK_ERROR -> RETRY`
+- `UNKNOWN + TIMEOUT -> STOP`
+- `UNKNOWN + retryWhenUnknown=true -> RETRY`
+- `REJECTED -> STOP`
+- 第一次网络失败、第二次成功
+- 多次网络失败后 `RETRY_EXHAUSTED`
+- UNKNOWN 默认不重试
+
+## 2. 未完成验证
+
+二期可靠发送还需要在本地完整验证：
 
 ```bash
-mvn clean verify
+mvn -pl component/message-component/message-demo-springboot -am clean package -DskipTests
 ```
 
-并分别连接 Kafka、RocketMQ 5.x、Pulsar 集群。
+或者在 message-component 聚合根目录：
 
-## 一期已知限制
+```bash
+mvn -pl :message-demo-springboot -am clean package -DskipTests
+```
 
-- Kafka Handler 在 poll 线程同步执行。
-- Kafka 每条成功消息执行一次同步位点提交，吞吐不是最终形态。
-- Kafka RETRY 的本地 sleep 会阻塞 poll 线程。
-- 没有最大重试次数、Retry Topic 和 DLQ。
-- 没有统一 deliveryAttempt。
-- 没有幂等、Outbox、事务、顺序、延时和回放。
+随后重新验证：
+
+```http
+POST /demo/messages/send/all
+GET  /demo/messages/received-summary
+```
+
+期望每个 Provider 返回：
+
+```json
+{
+  "status": "CONFIRMED",
+  "reliabilityEnabled": true,
+  "retryStatus": "SUCCESS",
+  "attempts": 1
+}
+```
+
+## 3. 当前限制
+
+| 限制 | 说明 |
+|---|---|
+| 不保证端到端 Exactly Once | 还没有 Outbox、幂等消费和事务组件接入 |
+| UNKNOWN 默认不重试 | 避免 Broker 可能已收到消息时重复发送 |
+| 只做进程内短重试 | 服务宕机后的补偿发送留给 Outbox |
+| 消费可靠性未展开 | 当前消费仍保持一期 ACK/commit 基线 |
+| Provider 映射还需实测 | Kafka/Pulsar/RocketMQ4 异常映射需要结合真实集群继续校验 |
+| Maven 编译需本地执行 | 当前交付环境不具备完整 Maven/Jackson/Spring/MQ 客户端依赖 |
+
+## 4. 验收标准
+
+二期发送可靠性冻结前必须满足：
+
+```text
+1. 全工程 Maven 编译通过
+2. message-core 可靠发送测试通过
+3. 三 Provider send/all 在可靠发送链路下通过
+4. SendMessageResponse 展示 reliabilityEnabled=true
+5. UNKNOWN 默认不重试测试通过
+6. RETRY_EXHAUSTED 映射测试通过
+7. docs/diagrams 与代码链路一致
+```

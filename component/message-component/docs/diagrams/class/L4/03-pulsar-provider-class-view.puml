@@ -1,0 +1,41 @@
+@startuml
+!include ../../_common/style.puml
+
+title L4：Pulsar Provider 类图
+left to right direction
+
+package "SPI\nmessage-spi" #ECEFF1 {
+  interface MessageProvider
+  class ProviderSendRequest
+  class ProviderSendResult
+  class ProviderSubscriptionRequest
+  class ProviderInboundMessage
+  interface ProviderSubscription
+}
+
+package "Pulsar Provider\nmessage-integration-pulsar" #FFEBEE {
+  class PulsarMessageProvider
+  class PulsarMessageProviderConfig
+  class PulsarMessageProperties
+  class PulsarMetadataKeys
+}
+
+package "Pulsar Native" #FFFDE7 {
+  class PulsarClient
+  class Producer
+  class Consumer
+}
+
+PulsarMessageProvider ..|> MessageProvider
+PulsarMessageProvider --> PulsarMessageProviderConfig
+PulsarMessageProvider --> PulsarMessageProperties
+PulsarMessageProvider --> PulsarMetadataKeys
+PulsarMessageProvider --> PulsarClient
+PulsarMessageProvider --> Producer
+PulsarMessageProvider --> Consumer
+PulsarMessageProvider --> ProviderSendRequest
+PulsarMessageProvider --> ProviderSendResult
+PulsarMessageProvider --> ProviderSubscriptionRequest
+PulsarMessageProvider --> ProviderInboundMessage
+PulsarMessageProvider --> ProviderSubscription
+@enduml

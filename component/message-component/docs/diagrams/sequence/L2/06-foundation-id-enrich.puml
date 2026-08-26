@@ -1,30 +1,49 @@
 @startuml
 !include ../../_common/style.puml
-title L2：messageId 生成复用 foundation-id
 
-participant "MessageTemplate" as Template
+title L2：messageId 补齐与 foundation-id 适配（方法级）
+
+box "Starter / Config\nmessage-starter" #F3E8FF
+participant "MessageAutoConfiguration" as AutoConfig
+end box
+box "Core 模块\nmessage-core" #EDE7F6
+participant "MessageTemplate\ncore" as Template
 participant "MessageEnvelopeEnricher\ncore.enrich" as Enricher
-participant "MessageIdGenerator\nmessage domain SPI" as MsgIdGenerator
-participant "FoundationMessageIdGenerator\ncore.id" as FoundationAdapter
-participant "IdGenerator\nfoundation-component" as FoundationId
-participant "MessageEnvelope" as Envelope
+end box
+box "Core ID\nmessage-core.id" #EDE7F6
+participant "MessageIdGenerator\ncore.id" as MessageIdGenerator
+participant "FoundationMessageIdGenerator\ncore.id" as FoundationGenerator
+participant "UuidMessageIdGenerator\ncore.id" as UuidGenerator
+end box
+box "Foundation" #E0F2F1
+participant "foundation-id Bean" as FoundationId
+end box
+box "API 模块\nmessage-api" #E3F2FD
+participant "MessageEnvelope\napi.model" as Envelope
+end box
 
-Template -> Enricher: enrich(envelope)
-alt envelope 已有 messageId
-  Enricher -> Enricher: 保留已有 messageId
-else messageId 缺失
-  Enricher -> MsgIdGenerator: nextId()
-  MsgIdGenerator -> FoundationAdapter: delegate
-  FoundationAdapter -> FoundationId: nextId()
-  FoundationId --> FoundationAdapter: generated id
-  FoundationAdapter --> MsgIdGenerator: String messageId
-  MsgIdGenerator --> Enricher: messageId
-  Enricher -> Envelope: set metadata.messageId
+AutoConfig -> AutoConfig: messageIdGenerator(beanFactory)
+AutoConfig -> AutoConfig: detectFoundationIdSupplier(beanFactory)
+alt foundation id Bean exists
+  AutoConfig -> FoundationGenerator: from(supplier)
+  FoundationGenerator --> AutoConfig: MessageIdGenerator
+else missing
+  AutoConfig -> UuidGenerator: new UuidMessageIdGenerator()
+  UuidGenerator --> AutoConfig: MessageIdGenerator
 end
-Enricher --> Template: enriched envelope
 
-note over MsgIdGenerator,FoundationId
-message-component 保留 MessageIdGenerator 领域接口，
-默认实现委托 foundation-id，避免各技术组件重复发明 ID 体系。
-end note
+Template -> Enricher: enrich(message)
+Enricher -> Envelope: metadata()
+alt messageId missing
+  Enricher -> MessageIdGenerator: nextId()
+  MessageIdGenerator -> FoundationGenerator: nextId()
+  FoundationGenerator -> FoundationId: nextId() / nextStringId() / generateId() / next()
+  FoundationId --> FoundationGenerator: id
+  FoundationGenerator --> MessageIdGenerator: messageId
+  MessageIdGenerator --> Enricher: messageId
+else messageId already exists
+  Envelope --> Enricher: existing messageId
+end
+Enricher -> Envelope: toBuilder().messageId(...).context(...).build()
+Envelope --> Enricher: enriched envelope
 @enduml

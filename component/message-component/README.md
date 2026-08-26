@@ -1,84 +1,56 @@
-# message-component-final
+# message-component
 
-这是面向一期 Pulsar 验收的最终版项目骨架，核心调整：
+> 技术组件体系中的统一消息组件。当前版本聚焦 Kafka / Pulsar / RocketMQ4 的统一消息模型、普通收发闭环，以及二期发送可靠性增强。
 
-1. Demo 不再使用 `main` 方法手动 new Provider，而是作为真实 Spring Boot 应用启动。
-2. 发送通过 Controller 触发，消费通过 Spring Bean + `@MessageListener` 触发。
-3. Pulsar 连接、Topic、订阅等参数全部放在 `application.yml`。
-4. `JacksonMessageSerializer` 不再维护 ObjectMapper，而是依赖 foundation 的 `JsonCodec`。
-5. `message-testkit` 不再作为 Demo 入口；本项目直接用 `message-demo-springboot` 验收。
+## 当前状态
 
-## 模块说明
+```text
+一期普通收发：已完成
+- Kafka 单独收发通过
+- Pulsar 单独收发通过
+- RocketMQ4 单独收发通过
+- Kafka + Pulsar + RocketMQ4 同时收发通过
+
+二期发送可靠性：工程验证阶段
+- RetryExecutor 接入设计已完成
+- MessageSendExecutor / DefaultReliableMessageSender 已接入
+- UNKNOWN 默认不重试语义已确定
+- FakeProvider 测试已补充
+- 待本地 Maven 编译与三 MQ 可靠发送联调
+```
+
+## 模块结构
 
 ```text
 message-component
-├─ foundation-serialization
-├─ foundation-serialization-jackson
-├─ message-api
-├─ message-spi
-├─ message-core
-├─ message-spring-boot-starter
-├─ message-integrations/message-integration-pulsar
-└─ message-demo-springboot
+├── message-api                # 稳定 API：model / publish / consume / codec / exception / annotation
+├── message-spi                # Provider 扩展契约
+├── message-core               # 生命周期编排、路由、编解码、可靠发送
+├── message-integrations       # Kafka / Pulsar / RocketMQ4 Provider
+├── message-starter            # Spring Boot 自动装配
+├── message-demo-springboot    # 三 Provider 验证 Demo
+└── docs                       # 设计文档和 PlantUML 图
 ```
 
-如果你现有工程里已经有 `foundation-serialization` 与 `foundation-serialization-jackson`，可以保留你现有 foundation，只把 `message-core` 中的 `JacksonMessageSerializer` 改成依赖你已有的 `JsonCodec` 或统一 `ObjectMapper`。
+## 核心链路
 
-## 启动
-
-```bash
-mvn -pl message-demo-springboot -am spring-boot:run
+```text
+业务代码
+  -> MessageTemplate
+  -> MessageEnvelopeEnricher
+  -> DestinationResolver
+  -> MessageWireCodec
+  -> MessageSendExecutor
+  -> DirectMessageSender / DefaultReliableMessageSender
+  -> MessageProvider
+  -> Kafka / Pulsar / RocketMQ4
 ```
 
-## 发送消息
+二期可靠发送启用后，发送动作会经过 `DefaultReliableMessageSender`，由它复用 `retry-component` 的 `RetryExecutor` 完成有限次数、短时间、可解释的发送重试。
 
-```bash
-curl -X POST http://localhost:18081/demo/messages/send \
-  -H "Content-Type: application/json" \
-  -d '{
-    "businessKey": "order-1001",
-    "eventType": "PAY_SUCCESS",
-    "payload": {
-      "orderNo": "order-1001",
-      "amount": 100.20,
-      "event": "PAY_SUCCESS"
-    },
-    "headers": {
-      "source": "message-demo"
-    }
-  }'
-```
+## 文档入口
 
-## 查看消费结果
-
-```bash
-curl http://localhost:18081/demo/messages/received
-```
-
-## 清空消费结果
-
-```bash
-curl -X DELETE http://localhost:18081/demo/messages/received
-```
-
-## 验收点
-
-- Spring Boot 能正常启动。
-- `MessageTemplate` 是 Spring Bean。
-- `@MessageListener` 能自动注册 Pulsar Consumer。
-- Controller 能发送消息。
-- Listener 能收到同一个 Topic 中的消息。
-- `/demo/messages/received` 能看到消费结果。
-- 业务代码不直接依赖 PulsarClient。
-- Pulsar 参数完全从 YAML 读取。
-- Jackson 配置由 foundation 管理，消息组件不再重复 new ObjectMapper。
-
-
-## phase2-send-reliability-v2-clean 结构收口
-
-本版本在二期可靠发送第一版基础上做工程收口：
-
-1. `message-core` 按 context、routing、codec、id、provider、enrich、send、send.reliability 分包。
-2. `MessageTemplate` 支持注入 `MessageIdGenerator`，生产工程可用 `FoundationMessageIdGenerator` 适配 foundation-component 统一 ID。
-3. 删除独立 `message-codec-jackson` 模块，将默认 `JacksonMessageSerializer` 合并到 `message-core.codec`。
-4. `MessageWireCodec` 继续保留，负责消息线级协议，不与 payload JSON 序列化混淆。
+- `docs/README.md`：文档目录和阅读顺序
+- `docs/01-architecture.md`：总体架构
+- `docs/11-phase2-send-reliability.md`：二期可靠发送设计
+- `docs/diagrams/README.md`：L0-L4 图示规范

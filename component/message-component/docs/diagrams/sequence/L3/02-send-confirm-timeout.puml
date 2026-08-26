@@ -1,39 +1,33 @@
 @startuml
 !include ../../_common/style.puml
-title L3：发送确认超时为何返回 UNKNOWN（二期发送执行器版）
 
-actor Caller
-participant MessageTemplate
-participant MessageSendExecutor as Executor
-participant DefaultReliableMessageSender as Sender
-participant RetryExecutor as Retry
-participant MessageProvider as Provider
-queue Broker
+title L3：发送确认超时流程（方法级）
 
-Caller -> MessageTemplate: send(confirmTimeout = 3s)
-MessageTemplate -> Executor: send(PreparedMessageSend)
-Executor -> Sender: send(prepared)
-Sender -> Retry: execute(message-send)
-Retry -> Sender: attempt #1
-Sender -> Provider: provider.send(request)
-Provider -> Broker: publish
-Sender -> Sender: wait provider future up to 3s
+actor Caller as "MessageTemplate"
 
-... 3 秒到达但 Future 未完成 ...
-Sender --> Retry: ProviderSendResult.UNKNOWN / TIMEOUT
-Retry -> Retry: classify UNKNOWN
-Retry --> Sender: RetryResult.NOT_RETRYABLE
-Sender --> Executor: SendResult.UNKNOWN / TIMEOUT / CONFIRM
-Executor --> MessageTemplate: SendResult.UNKNOWN
-MessageTemplate --> Caller: SendResult.UNKNOWN
+box "Core Send 模块\nmessage-core.send" #FFF3E0
+participant "DirectMessageSender / DefaultReliableMessageSender" as Sender
+end box
+box "SPI 模块\nmessage-spi" #ECEFF1
+participant "MessageProvider\nspi" as Provider
+participant "ProviderSendResult\nspi" as ProviderResult
+end box
+box "API 模块\nmessage-api" #E3F2FD
+participant "SendResult\napi.publish" as Result
+end box
 
-... 之后 Broker 可能才确认 ...
-Broker --> Provider: confirmed at 5s
-Provider -> Provider: complete future CONFIRMED
-
-note over Caller,Broker
-UNKNOWN 不是 FAILED。
-超时只说明调用方没有等到确认，不能证明 Broker 没收到。
-V1 默认不对 UNKNOWN 继续重试，避免重复业务消息。
-end note
+Caller -> Sender: send(prepared)
+Sender -> Provider: send(request)
+Provider --> Sender: CompletionStage<ProviderSendResult>
+Sender -> Sender: get(confirmTimeout)
+alt confirmed before timeout
+  Sender -> Sender: mapProviderResult(...)
+  Sender -> Result: new SendResult(CONFIRMED, ...)
+else TimeoutException
+  Sender -> ProviderResult: failed(UNKNOWN, TIMEOUT, description)
+  ProviderResult --> Sender: ProviderSendResult
+  Sender -> Sender: mapProviderResult(...)
+  Sender -> Result: new SendResult(UNKNOWN, TIMEOUT, ...)
+end
+Result --> Caller: SendResult
 @enduml

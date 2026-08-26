@@ -1,17 +1,26 @@
+' Common style for message-component PlantUML diagrams.
+' Keep the same module-box and color convention as distributed-lock-component.
+
 skinparam backgroundColor #FFFFFF
 skinparam shadowing false
-skinparam roundcorner 8
+skinparam roundcorner 10
 skinparam defaultFontName "PingFang SC"
 skinparam defaultFontSize 14
+skinparam maxMessageSize 120
+skinparam classAttributeIconSize 0
+hide empty members
+hide circle
+hide footbox
+
 skinparam sequence {
-  ArrowColor #3F4A5A
-  LifeLineBorderColor #6B7280
+  ArrowColor #334155
+  LifeLineBorderColor #64748B
   LifeLineBackgroundColor #F8FAFC
   ParticipantBorderColor #475569
-  ParticipantBackgroundColor #F1F5F9
+  ParticipantBackgroundColor #F8FAFC
   ParticipantFontColor #0F172A
   ActorBorderColor #475569
-  ActorBackgroundColor #E2E8F0
+  ActorBackgroundColor #DCFCE7
   ActorFontColor #0F172A
   GroupBorderColor #94A3B8
   GroupBackgroundColor #F8FAFC
@@ -22,12 +31,36 @@ skinparam sequence {
   NoteBorderColor #D97706
   NoteFontColor #78350F
 }
+
+skinparam class {
+  BorderColor #475569
+  BackgroundColor #F8FAFC
+  FontColor #0F172A
+  ArrowColor #334155
+}
+
 skinparam state {
   BackgroundColor #F8FAFC
   BorderColor #475569
   FontColor #0F172A
   StartColor #16A34A
   EndColor #DC2626
-  ArrowColor #3F4A5A
+  ArrowColor #334155
 }
-hide footbox
+
+skinparam package {
+  BorderColor #64748B
+  BackgroundColor #F8FAFC
+}
+
+' Module colors
+' Business / Demo    #E8F5E9
+' API                #E3F2FD
+' Core               #EDE7F6
+' Core Send          #FFF3E0
+' SPI                #ECEFF1
+' Provider           #FFEBEE
+' Retry Component    #FCE4EC
+' Foundation         #E0F2F1
+' Broker             #FFFDE7
+' Starter / Config   #F3E8FF

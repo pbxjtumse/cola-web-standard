@@ -1,40 +1,36 @@
 @startuml
 !include ../../_common/style.puml
-title L2：Kafka 单 Topic、多分区消费
 
-participant KafkaConsumerWorker as Worker
-participant KafkaConsumer
-queue KafkaBroker
-participant CoreListener
+title L2：Kafka 消费分区流程（方法级）
 
-Worker -> KafkaConsumer: subscribe([one physical topic])
-loop while running
-  Worker -> KafkaConsumer: poll(pollTimeout)
-  KafkaConsumer -> KafkaBroker: fetch assigned partitions
-  KafkaBroker --> KafkaConsumer: records(P0, P1, ...)
-  KafkaConsumer --> Worker: ConsumerRecords
+box "Kafka Provider\nmessage-integration-kafka" #FFEBEE
+participant "KafkaMessageProvider" as KafkaProvider
+participant "KafkaConsumerWorker" as Worker
+participant "KafkaConsumer" as Consumer
+end box
+box "SPI 模块\nmessage-spi" #ECEFF1
+participant "ProviderSubscriptionRequest\nspi" as Request
+participant "ProviderInboundMessage\nspi" as Inbound
+end box
+box "Broker" #FFFDE7
+queue "Kafka Topic" as Topic
+end box
 
-  loop each TopicPartition
-    loop records in current partition by offset
-      Worker -> CoreListener: onMessage(inbound)
-      alt SUCCESS
-        CoreListener --> Worker: SUCCESS
-        Worker -> KafkaConsumer: commitSync(partition, offset + 1)
-      else RETRY / exception
-        CoreListener --> Worker: RETRY
-        Worker -> KafkaConsumer: seek(partition, failed offset)
-        Worker -> Worker: consumerRetryBackoff
-        note right of Worker
-          停止当前分区后续记录，
-          继续处理本轮其他分区。
-        end note
-      end
-    end
+KafkaProvider -> KafkaProvider: subscribe(request)
+KafkaProvider -> Consumer: subscribe(List.of(topic))
+KafkaProvider -> Worker: new worker(...)
+KafkaProvider -> Worker: start()
+loop poll loop
+  Worker -> Consumer: poll(pollTimeout)
+  Consumer -> Topic: fetch records
+  Topic --> Consumer: ConsumerRecords
+  Worker -> Inbound: toInbound(record)
+  Worker -> Request: listener().onMessage(inbound)
+  Request --> Worker: ConsumeDecision
+  alt success
+    Worker -> Consumer: commitSync()
+  else retry
+    Worker -> Consumer: seek(partition, offset)
   end
 end
-
-note over Worker
-当前一个 ConsumerDefinition 对应一个 Topic、一个 Worker、一个 poll 线程。
-消费可靠性、DLQ 和毒消息治理属于后续阶段。
-end note
 @enduml

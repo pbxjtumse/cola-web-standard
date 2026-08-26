@@ -1,49 +1,34 @@
 @startuml
 !include ../../_common/style.puml
-title L3：消费解码与业务异常分支
 
-participant Provider
-participant MessageTemplate
-participant MessageWireCodec
-participant MessageContextAccessor as Context
-participant MessageHandler
+title L3：消费异常流程（方法级）
 
-Provider -> MessageTemplate: onMessage(inbound)
-MessageTemplate -> MessageWireCodec: decode
+box "Provider 模块\nmessage-integrations" #FFEBEE
+participant "Kafka / Pulsar / RocketMQ Provider" as ProviderImpl
+end box
+box "Core 模块\nmessage-core" #EDE7F6
+participant "MessageTemplate\ncore" as Template
+participant "MessageWireCodec\ncore.codec" as Codec
+participant "MessageContextAccessor\ncore.context" as ContextAccessor
+end box
+box "API 模块\nmessage-api" #E3F2FD
+participant "MessageHandler\napi.consume" as Handler
+participant "ConsumeDecision\napi.consume" as Decision
+end box
 
-alt 必填系统头缺失
-  MessageWireCodec --> MessageTemplate: IllegalArgumentException
-  MessageTemplate --> Provider: RETRY
-else 逻辑目的地不匹配
-  MessageWireCodec --> MessageTemplate: IllegalArgumentException
-  MessageTemplate --> Provider: RETRY
-else content-type 不支持
-  MessageWireCodec --> MessageTemplate: IllegalArgumentException
-  MessageTemplate --> Provider: RETRY
-else payload 反序列化失败
-  MessageWireCodec --> MessageTemplate: exception
-  MessageTemplate --> Provider: RETRY
-else 解码成功
-  MessageWireCodec --> MessageTemplate: DecodedInbound
-  MessageTemplate -> Context: open(CurrentMessage)
-  MessageTemplate -> MessageHandler: handle
-  alt Handler 返回 null
-    MessageHandler --> MessageTemplate: null
-    MessageTemplate -> Context: close
-    MessageTemplate --> Provider: RETRY
-  else Handler 抛异常
-    MessageHandler --> MessageTemplate: exception
-    MessageTemplate -> Context: close
-    MessageTemplate --> Provider: RETRY
-  else Handler 正常返回
-    MessageHandler --> MessageTemplate: SUCCESS / RETRY
-    MessageTemplate -> Context: close
-    MessageTemplate --> Provider: decision
-  end
+ProviderImpl -> Template: handleInbound(definition, handler, providerDestination, inbound)
+Template -> Codec: decode(definition, providerDestination, inbound)
+alt decode failure
+  Codec --> Template: RuntimeException
+  Template --> ProviderImpl: ConsumeDecision.RETRY
+else handler failure
+  Codec --> Template: DecodedInbound
+  Template -> ContextAccessor: open(currentMessage)
+  Template -> Handler: handle(envelope, consumeContext)
+  Handler --> Template: RuntimeException
+  Template --> ProviderImpl: ConsumeDecision.RETRY
+else success
+  Handler --> Template: ConsumeDecision.SUCCESS
+  Template --> ProviderImpl: ConsumeDecision.SUCCESS
 end
-
-note over MessageTemplate
-当前图仍是消费一期异常策略：保守 RETRY。
-消费可靠性、最大重试、毒消息和 DLQ 是后续阶段。
-end note
 @enduml

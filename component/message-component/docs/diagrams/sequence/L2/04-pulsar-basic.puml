@@ -1,45 +1,48 @@
 @startuml
 !include ../../_common/style.puml
-title L2：Pulsar 普通消息发送与 Shared 消费
 
-participant "MessageSendExecutor" as Executor
-participant PulsarMessageProvider as Provider
-participant PulsarProducer as Producer
-queue PulsarBroker as Broker
-participant "Shared Consumer" as Consumer
-participant CoreListener
+title L2：Pulsar Provider 基础发送消费（方法级）
 
-== 发送 ==
-Executor -> Provider: send(ProviderSendRequest)
-Provider -> Provider: newMessage().value(body)
-opt messageKey 存在
-  Provider -> Provider: key(messageKey)
+box "Core Send 模块\nmessage-core.send" #FFF3E0
+participant "DirectMessageSender / DefaultReliableMessageSender" as Sender
+end box
+box "Pulsar Provider\nmessage-integration-pulsar" #FFEBEE
+participant "PulsarMessageProvider" as PulsarProvider
+participant "PulsarClient" as PulsarClient
+participant "Producer<byte[]>" as Producer
+participant "Consumer<byte[]>" as Consumer
+end box
+box "SPI 模块\nmessage-spi" #ECEFF1
+participant "ProviderSendRequest\nspi" as SendRequest
+participant "ProviderSubscriptionRequest\nspi" as SubscribeRequest
+participant "ProviderSendResult\nspi" as SendResult
+end box
+box "Broker" #FFFDE7
+queue "Pulsar Topic" as Topic
+end box
+
+Sender -> PulsarProvider: send(sendRequest)
+PulsarProvider -> PulsarProvider: producerFor(topic)
+PulsarProvider -> Producer: newMessage().key(...).properties(...).value(...).sendAsync()
+Producer -> Topic: publish
+Topic --> Producer: MessageId / exception
+Producer --> PulsarProvider: whenComplete(messageId, throwable)
+alt success
+  PulsarProvider -> SendResult: confirmed(messageId.toString())
+else failure
+  PulsarProvider -> PulsarProvider: classifySendFailure(throwable)
+  PulsarProvider -> SendResult: failed(status, failureType, description, metadata)
 end
-Provider -> Provider: properties(headers)
-Provider -> Producer: sendAsync()
-Producer -> Broker: publish
-Broker --> Producer: MessageId / error
-Producer --> Provider: completion
-Provider --> Executor: ProviderSendResult
+SendResult --> PulsarProvider: ProviderSendResult
+PulsarProvider --> Sender: CompletionStage<ProviderSendResult>
 
-== 消费 ==
-Broker -> Consumer: Message<byte[]>
-Consumer -> Provider: messageListener
-Provider -> CoreListener: onMessage(inbound)
-alt SUCCESS
-  CoreListener --> Provider: SUCCESS
-  Provider -> Consumer: acknowledgeAsync(message)
-  alt ACK 异常
-    Consumer --> Provider: exception
-    Provider -> Consumer: negativeAcknowledge(message)
-  end
-else RETRY / exception
-  CoreListener --> Provider: RETRY
-  Provider -> Consumer: negativeAcknowledge(message)
-end
-
-note over Provider
-Shared Subscription 不承诺同 key 顺序。
-Key_Shared、事务和精确重投治理属于后续阶段。
-end note
+== consume ==
+PulsarProvider -> PulsarProvider: subscribe(subscribeRequest)
+PulsarProvider -> PulsarClient: newConsumer()
+PulsarClient --> PulsarProvider: Consumer<byte[]>
+Topic -> Consumer: message
+Consumer -> PulsarProvider: messageListener(...)
+PulsarProvider -> SubscribeRequest: listener().onMessage(inbound)
+SubscribeRequest --> PulsarProvider: ConsumeDecision
+PulsarProvider -> Consumer: acknowledge(message) / negativeAcknowledge(message)
 @enduml

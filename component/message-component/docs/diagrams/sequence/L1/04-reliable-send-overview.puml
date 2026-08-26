@@ -1,42 +1,40 @@
 @startuml
 !include ../../_common/style.puml
-title L1：二期可靠发送总览
 
-actor Biz as "业务代码"
-participant "MessageTemplate" as Template
-participant "PreparedMessageSend" as Prepared
-participant "MessageSendExecutor" as Executor
-participant "DefaultReliableMessageSender" as Sender
-participant "RetryExecutor\n(retry-component)" as Retry
-participant "MessageSendRetryClassifier" as Classifier
-participant "MessageProvider" as Provider
-queue "Kafka / Pulsar / RocketMQ4" as Broker
-participant "SendResult" as Result
+title L1：可靠发送总览（二期入口，方法级）
 
-Biz -> Template: send(destination, envelope)
-Template -> Template: validate / enrich / resolve / serialize
-Template -> Prepared: create immutable prepared send
-Template -> Executor: send(prepared)
-Executor -> Sender: send(prepared)
-Sender -> Retry: execute(RetryExecution<ProviderSendResult>)
+actor Caller as "业务代码"
 
-loop attempt <= maxAttempts && within maxDuration
-  Retry -> Sender: execute attempt
-  Sender -> Provider: provider.send(request)
-  Provider -> Broker: native publish
-  Broker --> Provider: ack / reject / timeout / error
-  Provider --> Sender: ProviderSendResult
-  Retry -> Classifier: classify(attempt result)
-  Classifier --> Retry: SUCCESS / RETRY / STOP / ABORT
-end
+box "Core 模块\nmessage-core" #EDE7F6
+participant "MessageTemplate\ncore" as Template
+end box
+box "Core Send 模块\nmessage-core.send" #FFF3E0
+participant "MessageSendExecutor\ncore.send" as SendExecutor
+participant "DefaultReliableMessageSender\ncore.send.reliability" as ReliableSender
+participant "MessageSendRetryClassifier\ncore.send.reliability" as Classifier
+end box
+box "Retry Component" #FCE4EC
+participant "RetryExecutor" as RetryExecutor
+participant "RetryResult" as RetryResult
+end box
+box "SPI 模块\nmessage-spi" #ECEFF1
+participant "MessageProvider\nspi" as Provider
+participant "ProviderSendResult\nspi" as ProviderResult
+end box
 
-Retry --> Sender: RetryResult
-Sender -> Result: map RetryResult + ProviderSendResult
-Result --> Template: SendResult(status, failureType, reliabilityInfo)
-Template --> Biz: SendResult
-
-note over Classifier
-UNKNOWN 默认 STOP，不继续重试。
-原因：Broker 可能已经收到消息，直接重试可能产生重复业务消息。
-end note
+Caller -> Template: send(...)
+Template -> Template: prepare(...)
+Template -> SendExecutor: send(prepared)
+SendExecutor -> ReliableSender: send(prepared)
+ReliableSender -> RetryExecutor: execute(execution)
+RetryExecutor -> ReliableSender: doProviderSendAttempt(prepared)
+ReliableSender -> Provider: send(request)
+Provider --> ReliableSender: ProviderSendResult
+ReliableSender -> Classifier: classify(attempt)
+Classifier --> RetryExecutor: RetryDecision
+RetryExecutor --> ReliableSender: RetryResult
+ReliableSender -> ReliableSender: mapRetryResult(prepared, retryResult)
+ReliableSender --> SendExecutor: SendResult
+SendExecutor --> Template: SendResult
+Template --> Caller: SendResult
 @enduml

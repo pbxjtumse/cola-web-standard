@@ -1,47 +1,56 @@
 @startuml
 !include ../../_common/style.puml
-title L1：普通消息消费核心流程
 
-actor Application
-participant MessageTemplate
-participant DestinationResolver as Resolver
-participant MessageProviderRegistry as Registry
-participant MessageProvider as Provider
-participant MessageWireCodec as Codec
-participant MessageContextAccessor as Context
-participant MessageHandler as Handler
+title L1：消费核心主流程（方法级）
 
-Application -> MessageTemplate: subscribe(definition, handler)
-MessageTemplate -> Resolver: resolve(definition.destination)
-Resolver --> MessageTemplate: ProviderDestination
-MessageTemplate -> Registry: getRequired(providerName)
-Registry --> MessageTemplate: Provider
-MessageTemplate -> Provider: subscribe(ProviderSubscriptionRequest)
-Provider --> Application: MessageSubscription
+actor Caller as "业务代码"
 
-== 每次投递 ==
-Provider -> MessageTemplate: onMessage(ProviderInboundMessage)
-MessageTemplate -> Codec: decode(definition, destination, inbound)
-Codec --> MessageTemplate: DecodedInbound
-MessageTemplate -> Context: open(CurrentMessage)
-MessageTemplate -> Handler: handle(envelope, consumeContext)
+box "API 模块\nmessage-api" #E3F2FD
+participant "MessageConsumerRegistrar\napi.consume" as Registrar
+participant "ConsumerDefinition\napi.consume" as Definition
+participant "MessageHandler\napi.consume" as Handler
+participant "ConsumeDecision\napi.consume" as Decision
+end box
 
-alt Handler 返回 SUCCESS
-  Handler --> MessageTemplate: SUCCESS
-  MessageTemplate -> Context: close()
-  MessageTemplate --> Provider: SUCCESS
-else Handler 返回 RETRY
-  Handler --> MessageTemplate: RETRY
-  MessageTemplate -> Context: close()
-  MessageTemplate --> Provider: RETRY
-else Handler 抛出运行时异常
-  Handler --> MessageTemplate: exception
-  MessageTemplate -> Context: close()
-  MessageTemplate --> Provider: RETRY（一期保守策略）
-end
+box "Core 模块\nmessage-core" #EDE7F6
+participant "MessageTemplate\ncore" as Template
+participant "DestinationResolver\ncore.routing" as Resolver
+participant "MessageProviderRegistry\ncore.provider" as Registry
+participant "MessageWireCodec\ncore.codec" as Codec
+participant "MessageContextAccessor\ncore.context" as ContextAccessor
+participant "CurrentMessage\ncore.context" as Current
+end box
 
-note over MessageTemplate,Handler
-本图仍是消费一期主流程。
-消费可靠性、消费重试、DLQ、消费幂等属于后续阶段。
-end note
+box "SPI 模块\nmessage-spi" #ECEFF1
+participant "MessageProvider\nspi" as Provider
+participant "ProviderSubscriptionRequest\nspi" as ProviderRequest
+participant "ProviderInboundMessage\nspi" as Inbound
+participant "ProviderSubscription\nspi" as ProviderSubscription
+end box
+
+Caller -> Registrar: subscribe(definition, handler)
+Registrar -> Template: subscribe(definition, handler)
+Template -> Resolver: resolve(definition.destination())
+Resolver --> Template: ProviderDestination
+Template -> Registry: getRequired(providerName)
+Registry --> Template: MessageProvider
+Template -> Provider: capabilities()
+Provider --> Template: BASIC_CONSUME
+Template -> ProviderRequest: new ProviderSubscriptionRequest(...)
+ProviderRequest --> Template: providerRequest
+Template -> Provider: subscribe(providerRequest)
+Provider --> Template: ProviderSubscription
+Template --> Registrar: MessageSubscription
+Registrar --> Caller: MessageSubscription
+
+== inbound callback ==
+Provider -> Template: handleInbound(definition, handler, providerDestination, inbound)
+Template -> Codec: decode(definition, providerDestination, inbound)
+Codec --> Template: DecodedInbound
+Template -> Current: new CurrentMessage(envelope, consumeContext)
+Template -> ContextAccessor: open(currentMessage)
+ContextAccessor --> Template: Scope
+Template -> Handler: handle(envelope, consumeContext)
+Handler --> Template: ConsumeDecision
+Template --> Provider: ConsumeDecision
 @enduml

@@ -1,67 +1,65 @@
 @startuml
 !include ../../_common/style.puml
-title L0：message-component 生命周期总览（二期可靠发送版）
 
-actor "业务发布方" as ProducerApp
-participant "MessageTemplate\n(core)" as Template
-participant "MessageEnvelopeEnricher\n(core.enrich)" as Enricher
-participant "MessageIdGenerator\n(core.id)" as IdGen
-participant "Foundation ID\n(foundation-component)" as FoundationId
-participant "DestinationResolver\n(core.routing)" as Resolver
-participant "MessageWireCodec\n(core.codec)" as Codec
-participant "MessageSendExecutor\n(core.send)" as SendExecutor
-participant "DefaultReliableMessageSender\n(core.send.reliability)" as ReliableSender
-participant "RetryExecutor\n(retry-component)" as Retry
-participant "MessageProvider\nKafka / Pulsar / RocketMQ4" as Provider
-queue "Broker" as Broker
-participant "Provider Consumer" as Consumer
-participant "MessageContextAccessor\n(core.context)" as Context
-participant "MessageHandler" as Handler
+title L0：消息组件生命周期总览（方法级主链路）
 
-== 同步 / 异步发送 ==
-ProducerApp -> Template: send(destination, envelope)
-Template -> Enricher: enrich(envelope)
-Enricher -> IdGen: nextId()
-IdGen -> FoundationId: nextId()
-FoundationId --> IdGen: global id
-IdGen --> Enricher: messageId
-Enricher --> Template: enriched envelope
-Template -> Resolver: resolve(logical destination)
-Resolver --> Template: provider + physical destination
-Template -> Codec: encode(enriched envelope)
-Codec --> Template: ProviderSendRequest
-Template -> SendExecutor: send(PreparedMessageSend)
+actor Caller as "业务系统 / Demo"
 
-alt reliability.send.enabled = true
-  SendExecutor -> ReliableSender: send(prepared)
-  ReliableSender -> Retry: execute(message-send)
-  Retry -> ReliableSender: attempt provider.send()
-  ReliableSender -> Provider: send(request)
-else reliability.send.enabled = false
-  SendExecutor -> Provider: send(request)
-end
+box "API 模块\nmessage-api" #E3F2FD
+participant "MessagePublisher\napi.publish" as Publisher
+participant "MessageConsumerRegistrar\napi.consume" as Registrar
+participant "MessageHandler\napi.consume" as Handler
+end box
 
-Provider -> Broker: 原生消息发送
-Broker --> Provider: ack / reject / timeout / unknown
-Provider --> SendExecutor: ProviderSendResult
-SendExecutor --> Template: SendResult(status + reliabilityInfo)
-Template --> ProducerApp: SendResult
+box "Core 模块\nmessage-core" #EDE7F6
+participant "MessageTemplate\ncore" as Template
+participant "MessageWireCodec\ncore.codec" as Codec
+participant "CurrentMessage\ncore.context" as Current
+end box
 
-== 消费闭环 ==
-Broker -> Consumer: 投递原生消息
-Consumer -> Template: ProviderInboundMessage
-Template -> Codec: decode(inbound)
-Codec --> Template: MessageEnvelope + ConsumeContext
-Template -> Context: open(CurrentMessage)
-Template -> Handler: handle(envelope, context)
-Handler --> Template: SUCCESS / RETRY
-Template -> Context: close()
-Template --> Consumer: ConsumeDecision
-Consumer --> Broker: commit / ack / retry
+box "Core Send 模块\nmessage-core.send" #FFF3E0
+participant "MessageSendExecutor\ncore.send" as SendExecutor
+participant "DefaultReliableMessageSender\ncore.send.reliability" as ReliableSender
+end box
 
-note over Template,ReliableSender
-二期发送可靠性只解决“单次调用维度”的进程内可靠发送增强：
-重试、超时、UNKNOWN 保守处理、结果可解释。
-它不等价于 Outbox、分布式事务或服务宕机后的补偿投递。
-end note
+box "SPI 模块\nmessage-spi" #ECEFF1
+participant "MessageProvider\nspi" as Provider
+participant "ProviderSendResult\nspi" as ProviderResult
+end box
+
+box "Provider 模块\nmessage-integrations" #FFEBEE
+participant "KafkaMessageProvider / PulsarMessageProvider / RocketMqMessageProvider" as ProviderImpl
+end box
+
+box "Broker" #FFFDE7
+queue "Kafka / Pulsar / RocketMQ4" as Broker
+end box
+
+Caller -> Publisher: send(destination, envelope, options)
+Publisher -> Template: send(...)
+Template -> Template: prepare(...)
+Template -> SendExecutor: send(prepared)
+SendExecutor -> ReliableSender: send(prepared)
+ReliableSender -> Provider: send(request)
+Provider -> ProviderImpl: send(request)
+ProviderImpl -> Broker: native send
+Broker --> ProviderImpl: ack / exception / timeout
+ProviderImpl --> Provider: ProviderSendResult
+Provider --> ReliableSender: ProviderSendResult
+ReliableSender --> SendExecutor: SendResult
+SendExecutor --> Template: SendResult
+Template --> Caller: SendResult
+
+Caller -> Registrar: subscribe(definition, handler)
+Registrar -> Template: subscribe(...)
+Template -> Provider: subscribe(providerRequest)
+Provider -> ProviderImpl: subscribe(request)
+ProviderImpl -> Broker: subscribe / poll / listener
+Broker --> ProviderImpl: native message
+ProviderImpl -> Codec: decode(definition, providerDestination, inbound)
+Codec --> ProviderImpl: DecodedInbound
+ProviderImpl -> Current: open(currentMessage)
+ProviderImpl -> Handler: handle(envelope, consumeContext)
+Handler --> ProviderImpl: ConsumeDecision
+ProviderImpl --> Broker: ack / commit / reconsume
 @enduml

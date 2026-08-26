@@ -1,37 +1,36 @@
 @startuml
 !include ../../_common/style.puml
-title L1：消费中发送子消息的关联上下文传播（二期发送执行器版）
 
-participant ProviderConsumer
-participant MessageTemplate
-participant MessageContextAccessor as Accessor
-participant ParentHandler
-participant MessageEnvelopeEnricher as Enricher
-participant MessageIdGenerator as IdGenerator
-participant MessageSendExecutor as SendExecutor
+title L1：父子消息上下文传递（方法级）
 
-ProviderConsumer -> MessageTemplate: inbound parent M1
-MessageTemplate -> Accessor: open(CurrentMessage(M1))
-MessageTemplate -> ParentHandler: handle(M1)
-ParentHandler -> MessageTemplate: send(child M2)
-MessageTemplate -> Enricher: enrich(M2)
-Enricher -> Accessor: current()
-Accessor --> Enricher: M1
+actor ConsumerCode as "消费业务代码"
+
+box "API 模块\nmessage-api" #E3F2FD
+participant "MessageEnvelope\napi.model" as Envelope
+participant "MessageContext\napi.model" as MessageContext
+participant "MessagePublisher\napi.publish" as Publisher
+end box
+
+box "Core 模块\nmessage-core" #EDE7F6
+participant "MessageTemplate\ncore" as Template
+participant "MessageContextAccessor\ncore.context" as ContextAccessor
+participant "CurrentMessage\ncore.context" as Current
+participant "MessageEnvelopeEnricher\ncore.enrich" as Enricher
+participant "MessageIdGenerator\ncore.id" as IdGenerator
+end box
+
+ConsumerCode -> ContextAccessor: current()
+ContextAccessor --> ConsumerCode: Optional<CurrentMessage>
+ConsumerCode -> Publisher: send(childDestination, childEnvelope, options)
+Publisher -> Template: send(...)
+Template -> Enricher: enrich(childEnvelope)
+Enricher -> ContextAccessor: current()
+ContextAccessor --> Enricher: parent CurrentMessage
 Enricher -> IdGenerator: nextId()
-IdGenerator --> Enricher: M2.messageId
-Enricher -> Enricher: M2.correlationId = M1.correlationId
-Enricher -> Enricher: M2.causationId = M1.messageId
-Enricher -> Enricher: M2.source = current applicationName
-Enricher --> MessageTemplate: enriched M2
-MessageTemplate -> SendExecutor: send(PreparedMessageSend)
-SendExecutor --> MessageTemplate: SendResult
-MessageTemplate --> ParentHandler: SendResult
-ParentHandler --> MessageTemplate: SUCCESS
-MessageTemplate -> Accessor: close() / restore parent scope
-MessageTemplate --> ProviderConsumer: SUCCESS
-
-note over Enricher
-messageKey 不自动继承。
-它由业务根据子消息关联的实体显式设置。
-end note
+IdGenerator --> Enricher: child messageId
+Enricher -> MessageContext: new MessageContext(source, correlationId, causationId, tenantId)
+MessageContext --> Enricher: child context
+Enricher -> Envelope: toBuilder().context(...).build()
+Envelope --> Enricher: enriched child envelope
+Enricher --> Template: enriched child envelope
 @enduml

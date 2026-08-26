@@ -1,0 +1,37 @@
+@startuml
+!include ../../_common/style.puml
+
+title L0：Demo 入口类图（三 Provider 验证）
+left to right direction
+
+package "Demo\nmessage-demo-springboot" #E8F5E9 {
+  class MessageDemoApplication
+  class MessageDemoController
+  class SendMessageRequest
+  class SendMessageResponse
+  class MultiSendMessageResponse
+  class ReceivedMessageView
+  class DemoSubscriptionRunner
+  class DemoMessageListener
+  class InMemoryReceivedMessageStore
+}
+
+package "API\nmessage-api" #E3F2FD {
+  interface MessagePublisher
+  class MessageEnvelope
+  class MessageDestination
+  interface MessageHandler
+}
+
+MessageDemoController --> MessagePublisher
+MessageDemoController --> SendMessageRequest
+MessageDemoController --> SendMessageResponse
+MessageDemoController --> MultiSendMessageResponse
+MessageDemoController --> InMemoryReceivedMessageStore
+DemoSubscriptionRunner --> MessagePublisher
+DemoSubscriptionRunner --> DemoMessageListener
+DemoMessageListener ..|> MessageHandler
+DemoMessageListener --> InMemoryReceivedMessageStore
+ReceivedMessageView --> MessageEnvelope
+SendMessageRequest --> MessageDestination
+@enduml

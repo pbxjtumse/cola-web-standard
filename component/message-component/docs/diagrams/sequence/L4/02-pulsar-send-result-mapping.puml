@@ -1,35 +1,44 @@
 @startuml
 !include ../../_common/style.puml
-title L4：Pulsar Provider 发送结果映射
 
-participant PulsarMessageProvider as Provider
-participant PulsarProducer as Producer
-queue PulsarBroker as Broker
+title L4：Pulsar 发送结果映射（方法级）
+
+box "Pulsar Provider\nmessage-integration-pulsar" #FFEBEE
+participant "PulsarMessageProvider" as Provider
+participant "Producer<byte[]>" as Producer
+end box
+box "Broker" #FFFDE7
+queue "Pulsar Topic" as Topic
+end box
+box "SPI\nmessage-spi" #ECEFF1
 participant "ProviderSendResult" as Result
+end box
 
-Provider -> Producer: sendAsync(Message<byte[]>)
-Producer -> Broker: publish
-
-alt CompletableFuture complete with MessageId
-  Broker --> Producer: MessageId
-  Producer --> Provider: MessageId
-  Provider -> Result: CONFIRMED + providerMessageId
-else AuthorizationException / ProducerBusyException / InvalidConfigurationException
-  Producer --> Provider: PulsarClientException
-  Provider -> Result: REJECTED or FAILED + non-retryable failureType
-else LookupException / BrokerMetadataException / ConnectException
-  Producer --> Provider: PulsarClientException
-  Provider -> Result: FAILED + NETWORK_ERROR / CLIENT_ERROR
-else TimeoutException / future timeout
-  Producer --x Provider: future not completed in confirmTimeout
-  Provider -> Result: UNKNOWN + TIMEOUT
-else exception after publish state unclear
-  Producer --> Provider: exception
-  Provider -> Result: UNKNOWN + UNKNOWN_OUTCOME
+Provider -> Producer: newMessage().key(...).properties(...).value(...).sendAsync()
+alt MessageId returned
+  Producer -> Topic: publish
+  Topic --> Producer: MessageId
+  Producer --> Provider: whenComplete(messageId, null)
+  Provider -> Result: confirmed(messageId.toString())
+else TimeoutException
+  Producer --> Provider: whenComplete(null, throwable)
+  Provider -> Provider: classifySendFailure(throwable)
+  Provider -> Result: failed(UNKNOWN, TIMEOUT, ...)
+else AuthorizationException
+  Producer --> Provider: whenComplete(null, throwable)
+  Provider -> Provider: classifySendFailure(throwable)
+  Provider -> Result: failed(REJECTED, AUTHORIZATION_ERROR, ...)
+else NotFound / invalid topic
+  Producer --> Provider: whenComplete(null, throwable)
+  Provider -> Provider: classifySendFailure(throwable)
+  Provider -> Result: failed(REJECTED, ROUTING_ERROR, ...)
+else connection / broker unavailable
+  Producer --> Provider: whenComplete(null, throwable)
+  Provider -> Provider: classifySendFailure(throwable)
+  Provider -> Result: failed(FAILED, NETWORK_ERROR, ...)
+else other client error
+  Producer --> Provider: whenComplete(null, throwable)
+  Provider -> Provider: classifySendFailure(throwable)
+  Provider -> Result: failed(FAILED, CLIENT_ERROR, ...)
 end
-
-note over Provider
-Pulsar sendAsync 如果没有拿到 MessageId，不能简单断定 Broker 没收到。
-确认超时默认映射 UNKNOWN，由 message-core 决定是否继续重试。
-end note
 @enduml

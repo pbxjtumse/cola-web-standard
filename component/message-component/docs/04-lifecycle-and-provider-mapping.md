@@ -1,76 +1,89 @@
 # 04 生命周期与 Provider 映射
 
-## 1. 发送主流程
+## 1. 发送生命周期
+
+二期以后，发送生命周期分为两个部分：发送前准备和发送执行。
+
+### 发送前准备
 
 ```text
-validate
-→ enrich metadata/context
-→ resolve destination
-→ select provider
-→ capability check
-→ MessageWireCodec.encode
-→ provider.send
-→ standardize result
+VALIDATE
+  -> ENRICH
+  -> RESOLVE
+  -> SERIALIZE
+  -> PreparedMessageSend
 ```
 
-同步 `send` 只是在异步结果上等待 `SendOptions.confirmTimeout`。等待超时返回 `UNKNOWN`，因为 Broker 之后仍可能完成写入。
+含义：
 
-## 2. 消费主流程
+| 阶段 | 负责对象 | 说明 |
+|---|---|---|
+| `VALIDATE` | `MessageTemplate` | 校验 destination、message、options |
+| `ENRICH` | `MessageEnvelopeEnricher` | 补齐 messageId、createdAt、context |
+| `RESOLVE` | `DestinationResolver` / `MessageProviderRegistry` | 解析 ProviderDestination，选择 Provider |
+| `SERIALIZE` | `MessageWireCodec` | 将 envelope 编码为 ProviderSendRequest |
+
+### 发送执行
 
 ```text
-provider native message
-→ ProviderInboundMessage
-→ MessageWireCodec.decode
-→ open CurrentMessage scope
-→ MessageHandler
-→ close scope
-→ SUCCESS / RETRY
-→ native commit / ack / retry
+PreparedMessageSend
+  -> MessageSendExecutor
+  -> DirectMessageSender / DefaultReliableMessageSender
+  -> Provider.send
+  -> ProviderSendResult
+  -> SendResult
 ```
 
-一期不暴露统一 `deliveryAttempt`。RocketMQ 和 Pulsar 的原生次数仍保留在 `providerMetadata`，Kafka 普通记录没有可靠统一值。
+| 发送执行器 | 使用场景 |
+|---|---|
+| `DirectMessageSender` | `reliability.send.enabled=false`，保持一期直发逻辑 |
+| `DefaultReliableMessageSender` | `reliability.send.enabled=true`，复用 retry-component 做可靠发送 |
 
-## 3. Kafka Worker
-
-当前映射：
+## 2. 可靠发送生命周期
 
 ```text
-一个 ConsumerDefinition
-= 一个逻辑目的地
-= 一个物理 Topic
-= 一个 KafkaConsumerWorker
-= 一个 KafkaConsumer
-= 一个专用 poll 线程
+CREATE_RETRY_EXECUTION
+  -> ATTEMPT
+  -> WAIT_CONFIRM
+  -> CLASSIFY
+  -> SUCCESS / STOP / RETRY / EXHAUSTED
 ```
 
-`poll()` 返回的是该 Consumer 已分配分区的一批记录，不是“拉完一个 Topic 再拉下一个 Topic”。当前 Worker 只订阅一个 Topic，但一次 poll 可以同时返回 P0、P1、P2 等多个分区。
+`MessageSendRetryClassifier` 负责把 `ProviderSendResult` 转成 `RetryDecision`。
 
-处理规则：
+## 3. 消费生命周期
 
-- 分区内按 offset 顺序处理。
-- SUCCESS 提交当前分区 `offset + 1`。
-- RETRY 对当前分区 `seek(failedOffset)`，停止当前分区本轮后续记录。
-- 本轮其他分区仍继续处理，避免它们已拉取的记录被静默越过。
+```text
+Provider 原生消息
+  -> ProviderInboundMessage
+  -> MessageWireCodec.decode
+  -> CurrentMessage scope
+  -> MessageHandler
+  -> ConsumeDecision
+  -> Provider ack / retry / commit
+```
 
-注册多个 `ConsumerDefinition` 会创建多个 Worker，因此可并发消费多个 Topic。当前单 Worker 内不并发处理多个分区；二期将升级为 poll 线程 + 分区有界执行器。
+消费可靠性不是本轮重点。目前消费侧仍保持一期语义：业务处理成功后再提交/ACK，失败时按 Provider 当前策略重试。
 
-## 4. 原生映射
+## 4. Provider 发送结果公共映射
 
-| 公共字段 | Kafka | RocketMQ | Pulsar |
-|---|---|---|---|
-| physical destination | Topic | Topic | Topic |
-| messageKey | Record Key | Message Keys | Message Key |
-| headers | Headers | Properties | Properties |
-| SUCCESS | commit offset+1 | ConsumeResult.SUCCESS | acknowledgeAsync |
-| RETRY | seek failed offset | ConsumeResult.FAILURE | negativeAcknowledge |
+| ProviderSendResult | RetryDecision | 最终 SendResult |
+|---|---|---|
+| `CONFIRMED + NONE` | `SUCCESS` | `CONFIRMED` |
+| `REJECTED + *` | `STOP` | `REJECTED` |
+| `FAILED + NETWORK_ERROR` | `RETRY` | 成功则 `CONFIRMED`，耗尽则 `FAILED + RETRY_EXHAUSTED` |
+| `FAILED + CLIENT_ERROR` | V1 暂允许短重试 | 成功则 `CONFIRMED`，耗尽则 `FAILED + RETRY_EXHAUSTED` |
+| `UNKNOWN + TIMEOUT` | 默认 `STOP` | `UNKNOWN + TIMEOUT` |
+| `UNKNOWN + UNKNOWN_OUTCOME` | 默认 `STOP` | `UNKNOWN + UNKNOWN_OUTCOME` |
 
-## 5. 元数据键
+## 5. Provider 差异隔离原则
 
-Provider 元数据开放但不散落魔法值：
+Kafka、Pulsar、RocketMQ4 的具体异常、ack、messageId、sendStatus 不能污染 API 层。
 
-- Kafka：`KafkaMetadataKeys`
-- RocketMQ：`RocketMqMetadataKeys`
-- Pulsar：`PulsarMetadataKeys`
-- Testkit：`InMemoryMetadataKeys`
+```text
+Kafka / Pulsar / RocketMQ4 原生结果
+  -> Integration 层转换为 ProviderSendResult
+  -> Core 层统一转换为 SendResult
+```
 
-使用字符串常量而非统一 enum，是因为不同 Provider 的诊断字段集合天然开放，enum 会把 SPI 固定成最低公共集合。
+具体差异放在 `docs/diagrams/sequence/L4` 的 Provider 映射图中维护。

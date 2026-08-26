@@ -1,31 +1,31 @@
 @startuml
 !include ../../_common/style.puml
-title L3：Kafka 某分区失败时不越过其他分区
 
-participant KafkaConsumerWorker as Worker
-participant CoreListener
-participant KafkaConsumer
+title L3：Kafka 分区消费失败处理（方法级）
 
-note over Worker
-一次 poll 返回：
-P0: offset 10, 11
-P1: offset 20, 21
-end note
+box "Kafka Provider\nmessage-integration-kafka" #FFEBEE
+participant "KafkaConsumerWorker" as Worker
+participant "KafkaConsumer" as Consumer
+end box
+box "SPI 模块\nmessage-spi" #ECEFF1
+participant "ProviderSubscriptionRequest\nspi" as Request
+participant "ProviderInboundMessage\nspi" as Inbound
+end box
+box "Broker" #FFFDE7
+queue "Kafka Topic" as Topic
+end box
 
-Worker -> CoreListener: P0 offset 10
-CoreListener --> Worker: RETRY
-Worker -> KafkaConsumer: seek(P0, 10)
-Worker -> Worker: break P0 loop
-
-Worker -> CoreListener: P1 offset 20
-CoreListener --> Worker: SUCCESS
-Worker -> KafkaConsumer: commit(P1, 21)
-Worker -> CoreListener: P1 offset 21
-CoreListener --> Worker: SUCCESS
-Worker -> KafkaConsumer: commit(P1, 22)
-
-note over Worker,KafkaConsumer
-P0 不推进，下一轮仍从 10 开始；
-P1 已处理记录正常推进，不会因为 P0 失败被静默丢弃。
-end note
+Worker -> Consumer: poll(pollTimeout)
+Consumer -> Topic: fetch records
+Topic --> Consumer: ConsumerRecords
+Worker -> Inbound: toInbound(record)
+Worker -> Request: listener().onMessage(inbound)
+Request --> Worker: ConsumeDecision
+alt SUCCESS
+  Worker -> Consumer: commitSync()
+else RETRY
+  Worker -> Consumer: seek(record.partition(), record.offset())
+else exception
+  Worker -> Consumer: seek(record.partition(), record.offset())
+end
 @enduml

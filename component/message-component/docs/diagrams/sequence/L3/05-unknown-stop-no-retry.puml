@@ -1,38 +1,37 @@
 @startuml
 !include ../../_common/style.puml
-title L3：UNKNOWN 默认停止重试，避免重复消息
 
-actor Caller
-participant MessageTemplate as Template
-participant DefaultReliableMessageSender as Sender
-participant RetryExecutor as Retry
-participant MessageProvider as Provider
-queue Broker
-participant MessageSendRetryClassifier as Classifier
+title L3：UNKNOWN 默认不重试（方法级）
 
-Caller -> Template: send()
-Template -> Sender: send(prepared)
-Sender -> Retry: execute(message-send)
-Retry -> Sender: attempt #1
-Sender -> Provider: provider.send(request)
-Provider -> Broker: publish request may arrive
-Broker --x Provider: ack lost / response timeout
-Provider --> Sender: ProviderSendResult.UNKNOWN + TIMEOUT
-Retry -> Classifier: classify(UNKNOWN)
+box "Core Send Reliability\nmessage-core.send.reliability" #FFF3E0
+participant "DefaultReliableMessageSender" as ReliableSender
+participant "MessageSendRetryClassifier" as Classifier
+end box
+box "Retry Component" #FCE4EC
+participant "RetryExecutor" as RetryExecutor
+participant "RetryAttempt" as Attempt
+end box
+box "SPI 模块\nmessage-spi" #ECEFF1
+participant "MessageProvider" as Provider
+participant "ProviderSendResult" as ProviderResult
+end box
+box "API 模块\nmessage-api" #E3F2FD
+participant "SendResult" as SendResult
+end box
 
-alt retryWhenUnknown=false
-  Classifier --> Retry: STOP / UNKNOWN
-  Retry --> Sender: RetryResult.NOT_RETRYABLE
-  Sender --> Template: SendResult.UNKNOWN
-  Template --> Caller: UNKNOWN
-else retryWhenUnknown=true
-  Classifier --> Retry: RETRY
-  Retry -> Retry: backoff
-  Retry -> Sender: attempt #2
-end
-
-note over Caller,Broker
-UNKNOWN 表示“无法确认 Broker 是否收到”。
-默认 STOP 是保守策略：宁愿暴露 UNKNOWN，也不在没有幂等/Outbox 前制造重复消息。
-end note
+ReliableSender -> RetryExecutor: execute(execution)
+RetryExecutor -> ReliableSender: doProviderSendAttempt(prepared)
+ReliableSender -> Provider: send(request)
+Provider --> ReliableSender: ProviderSendResult(UNKNOWN, TIMEOUT)
+ReliableSender --> RetryExecutor: ProviderSendResult
+RetryExecutor -> Attempt: new RetryAttempt(result)
+RetryExecutor -> Classifier: classify(attempt)
+Classifier -> Attempt: getResult()
+Attempt --> Classifier: ProviderSendResult
+Classifier -> Classifier: classifyProviderResult(result)
+Classifier --> RetryExecutor: RetryDecision.stop(...)
+RetryExecutor --> ReliableSender: RetryResult(NOT_RETRYABLE)
+ReliableSender -> ReliableSender: notRetryableResult(...)
+ReliableSender -> SendResult: new SendResult(UNKNOWN, TIMEOUT, ...)
+SendResult --> ReliableSender: SendResult
 @enduml

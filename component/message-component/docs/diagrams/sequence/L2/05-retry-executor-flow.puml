@@ -1,38 +1,52 @@
 @startuml
 !include ../../_common/style.puml
-title L2：可靠发送与 retry-component 内部协作
 
-participant "DefaultReliableMessageSender" as Sender
+title L2：可靠发送与 retry-component 协作（方法级）
+
+box "Core Send 模块\nmessage-core.send" #FFF3E0
+participant "PreparedMessageSend\ncore.send" as Prepared
+participant "DefaultReliableMessageSender\ncore.send.reliability" as ReliableSender
+participant "MessageSendRetryClassifier\ncore.send.reliability" as Classifier
+end box
+
+box "Retry Component" #FCE4EC
 participant "RetryPolicyRegistry" as PolicyRegistry
-participant "RetryPolicy(message-send)" as Policy
-participant "RetryExecutor" as Retry
-participant "MessageSendRetryClassifier" as Classifier
-participant "MessageProvider" as Provider
+participant "RetryExecutor" as RetryExecutor
+participant "RetryAttempt" as RetryAttempt
+participant "RetryResult" as RetryResult
+end box
 
-Sender -> PolicyRegistry: getRequired("message-send")
-PolicyRegistry --> Sender: base RetryPolicy
-Sender -> Sender: clone policy + replace classifier
-Sender -> Retry: execute(RetryExecution<ProviderSendResult>)
+box "SPI 模块\nmessage-spi" #ECEFF1
+participant "MessageProvider\nspi" as Provider
+participant "ProviderSendResult\nspi" as ProviderResult
+end box
 
+box "API 模块\nmessage-api" #E3F2FD
+participant "SendResult\napi.publish" as SendResult
+participant "SendReliabilityInfo\napi.publish" as ReliabilityInfo
+end box
+
+Prepared -> ReliableSender: send(prepared)
+ReliableSender -> ReliableSender: createRetryId(prepared)
+ReliableSender -> PolicyRegistry: getRequired(retryPolicyName)
+PolicyRegistry --> ReliableSender: RetryPolicy
+ReliableSender -> ReliableSender: createMessageSendPolicy()
+ReliableSender -> RetryExecutor: execute(execution)
 loop attempt
-  Retry -> Sender: operation.apply(RetryContext)
-  Sender -> Provider: provider.send(request)
-  Provider --> Sender: ProviderSendResult
-  Sender --> Retry: ProviderSendResult
-  Retry -> Classifier: classify(RetryAttempt)
-  Classifier --> Retry: RetryDecision
-  alt RETRY
-    Retry -> Retry: backoff by policy
-  else SUCCESS / STOP / ABORT
-    Retry -> Retry: finish execution
-  end
+  RetryExecutor -> ReliableSender: doProviderSendAttempt(prepared)
+  ReliableSender -> Provider: send(request)
+  Provider --> ReliableSender: ProviderSendResult
+  ReliableSender --> RetryExecutor: ProviderSendResult
+  RetryExecutor -> RetryAttempt: new RetryAttempt(...)
+  RetryExecutor -> Classifier: classify(attempt)
+  Classifier -> RetryAttempt: hasFailure() / getResult()
+  RetryAttempt --> Classifier: ProviderSendResult
+  Classifier -> Classifier: classifyProviderResult(result)
+  Classifier --> RetryExecutor: RetryDecision
 end
-
-Retry --> Sender: RetryResult(status, attempts, failureCode)
-Sender -> Sender: mapRetryResult -> SendResult
-
-note over Sender,Classifier
-retry-component 提供次数、时长、退避、监听和结果状态。
-message-component 提供 MQ 发送语义分类器。
-end note
+RetryExecutor --> ReliableSender: RetryResult
+ReliableSender -> ReliableSender: mapRetryResult(prepared, retryResult)
+ReliableSender -> ReliabilityInfo: enabled(...)
+ReliableSender -> SendResult: new SendResult(...)
+SendResult --> ReliableSender: SendResult
 @enduml

@@ -1,0 +1,35 @@
+@startuml
+!include ../../_common/style.puml
+
+title L2：路由模型类图
+left to right direction
+
+package "API Model\napi.model" #E3F2FD {
+  class MessageDestination
+}
+
+package "Routing\ncore.routing" #EDE7F6 {
+  interface DestinationResolver
+  class DefaultDestinationResolver
+  class DestinationRouteRegistry
+  class DestinationRoute
+  enum DestinationRoutingMode
+}
+
+package "SPI\nmessage-spi" #ECEFF1 {
+  class ProviderDestination
+}
+
+DefaultDestinationResolver ..|> DestinationResolver
+DefaultDestinationResolver --> DestinationRouteRegistry
+DestinationRouteRegistry --> DestinationRoute
+DestinationRoute --> DestinationRoutingMode
+DestinationRoute --> ProviderDestination
+DestinationResolver --> MessageDestination
+DestinationResolver --> ProviderDestination
+
+note right of DestinationRoutingMode
+STRICT：必须命中配置路由。
+LENIENT：可使用 providerHint / name 兜底。
+end note
+@enduml

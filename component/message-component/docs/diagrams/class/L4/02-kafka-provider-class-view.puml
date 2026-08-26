@@ -1,0 +1,39 @@
+@startuml
+!include ../../_common/style.puml
+
+title L4：Kafka Provider 类图
+left to right direction
+
+package "SPI\nmessage-spi" #ECEFF1 {
+  interface MessageProvider
+  class ProviderSendRequest
+  class ProviderSendResult
+  class ProviderSubscriptionRequest
+  class ProviderInboundMessage
+  interface ProviderSubscription
+}
+
+package "Kafka Provider\nmessage-integration-kafka" #FFEBEE {
+  class KafkaMessageProvider
+  class KafkaMessageProviderConfig
+  class KafkaMessageProperties
+  class KafkaMetadataKeys
+}
+
+package "Kafka Native" #FFFDE7 {
+  class KafkaProducer
+  class KafkaConsumer
+}
+
+KafkaMessageProvider ..|> MessageProvider
+KafkaMessageProvider --> KafkaMessageProviderConfig
+KafkaMessageProvider --> KafkaMessageProperties
+KafkaMessageProvider --> KafkaMetadataKeys
+KafkaMessageProvider --> KafkaProducer
+KafkaMessageProvider --> KafkaConsumer
+KafkaMessageProvider --> ProviderSendRequest
+KafkaMessageProvider --> ProviderSendResult
+KafkaMessageProvider --> ProviderSubscriptionRequest
+KafkaMessageProvider --> ProviderInboundMessage
+KafkaMessageProvider --> ProviderSubscription
+@enduml

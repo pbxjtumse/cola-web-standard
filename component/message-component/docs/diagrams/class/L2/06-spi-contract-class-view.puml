@@ -1,0 +1,38 @@
+@startuml
+!include ../../_common/style.puml
+
+title L2：SPI 契约完整类图
+left to right direction
+
+package "SPI\nmessage-spi" #ECEFF1 {
+  interface MessageProvider
+  enum MessageCapability
+  class ProviderDestination
+  class ProviderSendRequest
+  class ProviderSendResult
+  class ProviderInboundMessage
+  interface ProviderMessageListener
+  interface ProviderSubscription
+  class ProviderSubscriptionRequest
+}
+
+package "API\nmessage-api" #E3F2FD {
+  class SendStatus
+  class SendFailureType
+  class MessageDestination
+}
+
+MessageProvider --> MessageCapability
+MessageProvider --> ProviderSendRequest
+MessageProvider --> ProviderSendResult
+MessageProvider --> ProviderSubscriptionRequest
+MessageProvider --> ProviderSubscription
+ProviderSendRequest --> ProviderDestination
+ProviderSendResult --> SendStatus
+ProviderSendResult --> SendFailureType
+ProviderInboundMessage --> ProviderDestination
+ProviderMessageListener --> ProviderInboundMessage
+ProviderSubscriptionRequest --> ProviderDestination
+ProviderSubscriptionRequest --> ProviderMessageListener
+ProviderDestination --> MessageDestination
+@enduml

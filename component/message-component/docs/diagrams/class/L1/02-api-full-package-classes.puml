@@ -1,0 +1,69 @@
+@startuml
+!include ../../_common/style.puml
+
+title L1：API 全量类图（message-api 分包）
+left to right direction
+
+package "API Model\napi.model" #E3F2FD {
+  class MessageEnvelope
+  class MessageMetadata
+  class MessageHeaders
+  class MessageHeaderNames
+  class MessageContext
+  class MessageDestination
+}
+
+package "API Publish\napi.publish" #E3F2FD {
+  interface MessagePublisher
+  class SendOptions
+  class SendResult
+  enum SendStatus
+  enum SendStage
+  enum SendFailureType
+  class SendReliabilityInfo
+}
+
+package "API Consume\napi.consume" #E3F2FD {
+  class ConsumerDefinition
+  interface MessageHandler
+  class ConsumeContext
+  enum ConsumeDecision
+  interface MessageConsumerRegistrar
+  interface MessageSubscription
+}
+
+package "API Codec\napi.codec" #E3F2FD {
+  interface MessageSerializer
+}
+
+package "API Exception\napi.exception" #E3F2FD {
+  class MessageException
+}
+
+package "API Annotation\napi.annotation" #E3F2FD {
+  annotation MessageListener
+}
+
+MessageEnvelope --> MessageMetadata
+MessageEnvelope --> MessageHeaders
+MessageEnvelope --> MessageContext
+MessageEnvelope --> MessageDestination
+MessageHeaders --> MessageHeaderNames
+MessagePublisher --> MessageDestination
+MessagePublisher --> MessageEnvelope
+MessagePublisher --> SendOptions
+MessagePublisher --> SendResult
+SendResult --> SendStatus
+SendResult --> SendStage
+SendResult --> SendFailureType
+SendResult --> SendReliabilityInfo
+ConsumerDefinition --> MessageDestination
+ConsumerDefinition --> MessageHandler
+MessageHandler --> MessageEnvelope
+MessageHandler --> ConsumeContext
+MessageHandler --> ConsumeDecision
+MessageConsumerRegistrar --> ConsumerDefinition
+MessageConsumerRegistrar --> MessageSubscription
+MessageListener ..> ConsumerDefinition
+MessageException ..> SendFailureType
+@enduml
