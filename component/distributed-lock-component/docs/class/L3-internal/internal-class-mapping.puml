@@ -7,12 +7,21 @@ class LockRuntimeState
 class LockAcquireContext
 class LockWaitContext
 class LockAcquireOutcomeHandler
-class LockProviderRegistry
+class FencingTokenCoordinator
+interface FencingTokenProviderRegistry
+class DefaultFencingTokenProviderRegistry
 }
 
 package "distributed-lock-spi" {
 interface LockProvider
+interface LockProviderRegistry
 interface FencingTokenProvider
+class LockProviderCapabilities
 }
+
+LockAcquireContext --> LockProvider
+FencingTokenCoordinator --> FencingTokenProviderRegistry
+DefaultFencingTokenProviderRegistry ..|> FencingTokenProviderRegistry
+FencingTokenProviderRegistry --> FencingTokenProvider
 
 @enduml

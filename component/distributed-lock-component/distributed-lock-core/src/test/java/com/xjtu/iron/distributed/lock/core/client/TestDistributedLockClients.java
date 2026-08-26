@@ -11,9 +11,9 @@ import com.xjtu.iron.distributed.lock.core.acquire.ProviderErrorLockAcquireOutco
 import com.xjtu.iron.distributed.lock.core.observability.LockEventFactory;
 import com.xjtu.iron.distributed.lock.core.observability.NoOpLockEventPublisher;
 import com.xjtu.iron.distributed.lock.core.execute.LockExecutionTemplate;
-import com.xjtu.iron.distributed.lock.core.fencing.DefaultFencingTokenProviderRegistry;
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenCoordinator;
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenProvider;
+import com.xjtu.iron.distributed.lock.core.fencing.registry.DefaultFencingTokenProviderRegistry;
+import com.xjtu.iron.distributed.lock.core.fencing.coordinator.FencingTokenCoordinator;
+import com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider;
 import com.xjtu.iron.distributed.lock.core.fencing.flow.DefaultFencingTokenFlowRegistry;
 import com.xjtu.iron.distributed.lock.core.fencing.flow.ExternalFencingTokenFlow;
 import com.xjtu.iron.distributed.lock.core.fencing.flow.FencingTokenFlow;

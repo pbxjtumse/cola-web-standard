@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.core.fencing;
+package com.xjtu.iron.distributed.lock.spi.fencing;
 
 /**
  * 独立 fencing token Provider 的执行状态。

@@ -17,7 +17,7 @@ package "distributed-lock-core" {
  class LockAcquisitionService
  class DefaultLockHandle
  class FencingTokenCoordinator
- class LockWatchDog
+ class LockWatchdog
 }
 
 package "distributed-lock-provider" {

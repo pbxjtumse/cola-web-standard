@@ -23,6 +23,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -212,47 +214,68 @@ public final class KafkaMessageProvider implements MessageProvider {
      * 分类 Kafka 发送异常。
      */
     private static ProviderSendResult classifySendFailure(Exception exception) {
+        Map<String, String> metadata = Map.of(
+                "exceptionType", exception.getClass().getName());
         // 认证失败属于明确拒绝。
         if (exception instanceof AuthenticationException) {
-            // 返回认证错误。
             return ProviderSendResult.failed(
                     SendStatus.REJECTED,
                     SendFailureType.AUTHENTICATION_ERROR,
-                    exception.getMessage());
+                    exception.getMessage(),
+                    metadata);
         }
         // 授权失败属于明确拒绝。
         if (exception instanceof AuthorizationException) {
-            // 返回权限错误。
             return ProviderSendResult.failed(
                     SendStatus.REJECTED,
                     SendFailureType.AUTHORIZATION_ERROR,
-                    exception.getMessage());
+                    exception.getMessage(),
+                    metadata);
         }
-        // 非法 Topic 和超大记录属于明确拒绝。
-        if (exception instanceof InvalidTopicException
-                || exception instanceof RecordTooLargeException) {
-            // Broker 或客户端已经明确拒绝请求。
+        // 序列化异常、非法 Topic、超大记录都不是重试能够修复的问题。
+        if (exception instanceof SerializationException) {
+            return ProviderSendResult.failed(
+                    SendStatus.REJECTED,
+                    SendFailureType.SERIALIZATION_ERROR,
+                    exception.getMessage(),
+                    metadata);
+        }
+        if (exception instanceof InvalidTopicException) {
+            return ProviderSendResult.failed(
+                    SendStatus.REJECTED,
+                    SendFailureType.ROUTING_ERROR,
+                    exception.getMessage(),
+                    metadata);
+        }
+        if (exception instanceof RecordTooLargeException) {
             return ProviderSendResult.failed(
                     SendStatus.REJECTED,
                     SendFailureType.BROKER_REJECTED,
-                    exception.getMessage());
+                    exception.getMessage(),
+                    metadata);
         }
-        // 超时或可重试异常无法可靠证明 Broker 未写入。
-        if (exception instanceof TimeoutException
-                || exception instanceof RetriableException) {
-            // 使用 UNKNOWN 防止上层无条件重发。
+        // Kafka TimeoutException 很可能已经进入发送流程但没有拿到确认，保守标记 UNKNOWN。
+        if (exception instanceof TimeoutException) {
             return ProviderSendResult.failed(
                     SendStatus.UNKNOWN,
-                    exception instanceof TimeoutException
-                            ? SendFailureType.TIMEOUT
-                            : SendFailureType.NETWORK_ERROR,
-                    exception.getMessage());
+                    SendFailureType.TIMEOUT,
+                    exception.getMessage(),
+                    metadata);
+        }
+        // 连接类、网络类可重试异常按明确临时失败处理，让可靠发送层触发 retry。
+        if (exception instanceof NetworkException || exception instanceof RetriableException) {
+            return ProviderSendResult.failed(
+                    SendStatus.FAILED,
+                    SendFailureType.NETWORK_ERROR,
+                    exception.getMessage(),
+                    metadata);
         }
         // 其他异常按明确客户端失败处理。
         return ProviderSendResult.failed(
                 SendStatus.FAILED,
                 SendFailureType.CLIENT_ERROR,
-                exception.getMessage());
+                exception.getMessage(),
+                metadata);
     }
 
     /**

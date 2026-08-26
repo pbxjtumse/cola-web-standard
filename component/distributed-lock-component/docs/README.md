@@ -1,16 +1,25 @@
 # Distributed Lock Component 文档与图表
 
+本文档目录对应当前最终收口版代码结构：
+
+```text
+distributed-lock-api
+distributed-lock-spi
+distributed-lock-core
+distributed-lock-provider
+  ├── distributed-lock-provider-redis
+  ├── distributed-lock-provider-redisson
+  └── distributed-lock-fencing-provider-jdbc
+distributed-lock-starter
+distributed-lock-demo
+```
+
 ## 核心文档
 
-- `configuration.md`：连接、锁语义和 JDBC fencing 配置。
+- `configuration.md`：锁语义、Provider、watchdog 与 JDBC fencing 配置。
 - `metrics.md`：Micrometer 指标与告警建议。
-- `phase2-fencing-token.md`：二期完整设计、失败语义和业务防旧写模板。
-- `v24-balanced-client-refactor.md`：Client、acquire、execute 的平衡拆分与合并说明。
-- `redisson-integration-design.md`：Redisson Provider 的 owner/watchdog/fencing 语义适配。
-- `redisson-provider-contract-matrix.md`：Redis Lua 与 Redisson Provider 统一契约。
-- `pom-governance.md`：组件 BOM、Provider 聚合器与子模块依赖规则。
-- `provider-migration-safety.md`：redis/redisson Provider 切换的协调域风险。
-- `v26-change-log.md`：本版真实基线合入与修复清单。
+- `FAQ.md`：常见问题与边界说明。
+- `sequence/sequence-final-review.md`：时序图最终边界检查说明。
 
 ## Component Diagrams
 
@@ -27,11 +36,35 @@ component/
     └── lock-options-structure.puml
 ```
 
-## Phase 2 Sequence Diagrams
+## Sequence Diagrams
 
-- `sequence/L1-main-flow/external-jdbc-fencing-sequence.puml`
-- `sequence/L2-scenario-flow/fencing-provider-error-sequence.puml`
-- `sequence/L2-scenario-flow/fencing-rejected-sequence.puml`
-- `state/L3-mapping/fencing-status-mapping.puml`
+```text
+sequence/
+├── L0-overview
+├── L1-main-flow
+├── L2-scenario-flow
+└── L3-internal-flow
+```
 
-图表保持自然曲线布局，不在主架构图中堆积所有 DTO、Lua 文件和状态细节。
+统一调用方向：
+
+```text
+API -> Core -> SPI -> Provider -> Resource
+```
+
+## State Diagrams
+
+```text
+state/
+├── L0-vocabulary
+├── L1-lifecycle
+└── L3-mapping
+```
+
+## 维护原则
+
+- API 只暴露业务入口和模型。
+- Core 只做编排，不绑定具体 Redis/Redisson/JDBC 实现。
+- SPI 只放 Provider 契约和协议对象。
+- Provider 只实现 SPI，不反向依赖 Core。
+- Starter 当前是 all-in-one starter，负责装配 Core 与已内置 Provider。

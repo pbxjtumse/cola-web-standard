@@ -1,6 +1,7 @@
-package com.xjtu.iron.distributed.lock.core.fencing;
+package com.xjtu.iron.distributed.lock.core.fencing.coordinator;
 
 import com.xjtu.iron.distributed.lock.api.model.LockOptions;
+import com.xjtu.iron.distributed.lock.core.fencing.registry.FencingTokenProviderRegistry;
 import com.xjtu.iron.distributed.lock.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.spi.protocol.common.LockLease;
 
@@ -51,21 +52,21 @@ public final class FencingTokenCoordinator {
     /**
      * 调用 external fencing provider 发号。这里只做适配和异常捕获，真正发号语义由 Provider 实现，例如 JDBC sequence。
      */
-    public FencingTokenResponse issueExternal(FencingTokenPlan plan, LockLease lease, LockOptions options) {
+    public com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenResponse issueExternal(FencingTokenPlan plan, LockLease lease, LockOptions options) {
         if (!plan.isExternal()) {
             throw new IllegalArgumentException("plan must be EXTERNAL");
         }
-        FencingTokenProvider provider = plan.externalProvider().orElseThrow();
-        FencingTokenRequest request = FencingTokenRequest.builder().namespace(lease.getNamespace()).lockName(lease.getLockName())
+        com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider provider = plan.externalProvider().orElseThrow();
+        com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenRequest request = com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenRequest.builder().namespace(lease.getNamespace()).lockName(lease.getLockName())
                 .ownerToken(lease.getOwnerToken()).options(options).build();
         if (!provider.supports(request)) {
-            return FencingTokenResponse.notSupported("fencing token provider does not support request: " + provider.providerName());
+            return com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenResponse.notSupported("fencing token provider does not support request: " + provider.providerName());
         }
         try {
-            FencingTokenResponse response = provider.nextToken(request);
-            return response == null ? FencingTokenResponse.failed(new IllegalStateException("fencing token provider returned null response: " + provider.providerName())) : response;
+            com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenResponse response = provider.nextToken(request);
+            return response == null ? com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenResponse.failed(new IllegalStateException("fencing token provider returned null response: " + provider.providerName())) : response;
         } catch (Throwable error) {
-            return FencingTokenResponse.failed(error);
+            return com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenResponse.failed(error);
         }
     }
 

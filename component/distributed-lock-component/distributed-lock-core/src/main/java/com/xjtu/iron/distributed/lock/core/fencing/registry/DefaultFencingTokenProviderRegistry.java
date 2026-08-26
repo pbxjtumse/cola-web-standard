@@ -1,4 +1,6 @@
-package com.xjtu.iron.distributed.lock.core.fencing;
+package com.xjtu.iron.distributed.lock.core.fencing.registry;
+
+import com.xjtu.iron.distributed.lock.core.fencing.coordinator.FencingTokenCoordinator;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -18,15 +20,15 @@ import java.util.Set;
  */
 public final class DefaultFencingTokenProviderRegistry implements FencingTokenProviderRegistry {
 
-    private final Map<String, FencingTokenProvider> providers;
+    private final Map<String, com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider> providers;
 
-    public DefaultFencingTokenProviderRegistry(Collection<? extends FencingTokenProvider> providers) {
-        Map<String, FencingTokenProvider> mapped = new LinkedHashMap<>();
+    public DefaultFencingTokenProviderRegistry(Collection<? extends com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider> providers) {
+        Map<String, com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider> mapped = new LinkedHashMap<>();
         if (providers != null) {
-            for (FencingTokenProvider provider : providers) {
+            for (com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider provider : providers) {
                 Objects.requireNonNull(provider, "fencing token provider must not be null");
                 String name = normalize(provider.providerName());
-                FencingTokenProvider previous = mapped.putIfAbsent(name, provider);
+                com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider previous = mapped.putIfAbsent(name, provider);
                 if (previous != null) {
                     throw new IllegalArgumentException("duplicate fencing token provider: " + name);
                 }
@@ -36,7 +38,7 @@ public final class DefaultFencingTokenProviderRegistry implements FencingTokenPr
     }
 
     @Override
-    public Optional<FencingTokenProvider> findProvider(String providerName) {
+    public Optional<com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider> findProvider(String providerName) {
         String normalized = normalizeNullable(providerName);
         if (normalized == null) {
             return Optional.empty();

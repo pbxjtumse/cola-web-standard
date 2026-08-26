@@ -1,6 +1,10 @@
 package com.xjtu.iron.distributed.lock.core.fencing;
 
 import com.xjtu.iron.distributed.lock.api.model.LockOptions;
+import com.xjtu.iron.distributed.lock.core.fencing.coordinator.FencingTokenCoordinator;
+import com.xjtu.iron.distributed.lock.core.fencing.coordinator.FencingTokenMode;
+import com.xjtu.iron.distributed.lock.core.fencing.coordinator.FencingTokenPlan;
+import com.xjtu.iron.distributed.lock.core.fencing.registry.DefaultFencingTokenProviderRegistry;
 import com.xjtu.iron.distributed.lock.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.spi.LockProviderCapabilities;
 import com.xjtu.iron.distributed.lock.spi.protocol.acquire.LockAcquireRequest;
@@ -37,7 +41,7 @@ class FencingTokenCoordinatorTest {
 
     @Test
     void explicitExternalProviderShouldOverrideNativeSupport() {
-        FencingTokenProvider external = provider("jdbc-sequence", 10L);
+        com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider external = provider("jdbc-sequence", 10L);
         FencingTokenCoordinator coordinator = new FencingTokenCoordinator(new DefaultFencingTokenProviderRegistry(List.of(external)));
         FencingTokenPlan plan = coordinator.plan(lockProvider(true),
                 LockOptions.builder().fencingRequired(true) .fencingTokenProviderName("jdbc-sequence").build());
@@ -56,7 +60,7 @@ class FencingTokenCoordinatorTest {
 
     @Test
     void shouldNotGuessDefaultExternalProviderWhenProviderNameIsMissing() {
-        FencingTokenProvider external = provider("jdbc-sequence", 10L);
+        com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider external = provider("jdbc-sequence", 10L);
         FencingTokenCoordinator coordinator = new FencingTokenCoordinator(new DefaultFencingTokenProviderRegistry(List.of(external)));
 
         assertThatThrownBy(() -> coordinator.plan(lockProvider(false),
@@ -65,12 +69,12 @@ class FencingTokenCoordinatorTest {
                 .hasMessageContaining("configure fencingTokenProviderName explicitly");
     }
 
-    private FencingTokenProvider provider(String name, long token) {
-        return new FencingTokenProvider() {
+    private com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider provider(String name, long token) {
+        return new com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider() {
             @Override public String providerName() { return name; }
-            @Override public boolean supports(FencingTokenRequest request) { return true; }
-            @Override public FencingTokenResponse nextToken(FencingTokenRequest request) {
-                return FencingTokenResponse.issued(token);
+            @Override public boolean supports(com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenRequest request) { return true; }
+            @Override public com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenResponse nextToken(com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenRequest request) {
+                return com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenResponse.issued(token);
             }
         };
     }

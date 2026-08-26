@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.core.fencing.flow;
 
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenMode;
+import com.xjtu.iron.distributed.lock.core.fencing.coordinator.FencingTokenMode;
 
 /**
  * fencing token 执行流程策略。

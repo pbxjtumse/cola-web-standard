@@ -2,7 +2,7 @@
 allowmixing
 !include ../../_common/style.puml
 
-title Fencing Token 二期扩展组件图
+title Fencing Token Extension Components
 
 left to right direction
 skinparam classAttributeIconSize 0
@@ -15,7 +15,7 @@ package "API" {
   class FencingTokenGuard
 }
 
-package "Core Fencing" {
+package "Core" {
   class FencingTokenCoordinator
   class FencingTokenPlan
   enum FencingTokenMode {
@@ -23,16 +23,20 @@ package "Core Fencing" {
     NATIVE
     EXTERNAL
   }
-  interface FencingTokenProvider
   interface FencingTokenProviderRegistry
   class DefaultFencingTokenProviderRegistry
+}
+
+package "SPI" {
+  interface LockProvider
+  interface FencingTokenProvider
   class FencingTokenRequest
   class FencingTokenResponse
 }
 
 package "Lock Provider" {
-  interface LockProvider
   class RedisLockProvider
+  class RedissonLockProvider
 }
 
 package "External Fencing Provider" {
@@ -45,15 +49,18 @@ package "Business Resource" {
   database BusinessDB
 }
 
-LockOptions --> FencingTokenCoordinator : fencingRequired\nproviderName
+LockOptions --> FencingTokenCoordinator : fencingRequired / providerName
 FencingTokenCoordinator --> FencingTokenPlan : select
 FencingTokenPlan --> FencingTokenMode
-FencingTokenCoordinator --> LockProvider : inspect capabilities
-FencingTokenCoordinator --> FencingTokenProviderRegistry : select external
+FencingTokenCoordinator --> LockProvider : inspect native fencing capability
+FencingTokenCoordinator --> FencingTokenProviderRegistry : select external provider
 DefaultFencingTokenProviderRegistry ..|> FencingTokenProviderRegistry
 FencingTokenProviderRegistry o-- FencingTokenProvider
-JdbcSequenceFencingTokenProvider ..|> FencingTokenProvider
+
 RedisLockProvider ..|> LockProvider
+RedissonLockProvider ..|> LockProvider
+JdbcSequenceFencingTokenProvider ..|> FencingTokenProvider
+
 JdbcFencingTokenSchemaInitializer --> BusinessDB : create token table
 JdbcSequenceFencingTokenProvider --> BusinessDB : increment token row
 LockHandle --> FencingTokenGuard : token
@@ -64,10 +71,9 @@ LockResult --> LockHandle
 note bottom of FencingTokenCoordinator
   选择顺序：
   1. 未要求 -> NONE
-  2. 显式 redis -> NATIVE
-  3. 显式 jdbc-sequence -> EXTERNAL
-  4. 未显式时优先锁 Provider 原生能力
-  5. 无原生能力时使用唯一外部 Provider
+  2. 锁 Provider 支持原生 fencing -> NATIVE
+  3. 指定或唯一外部 Provider -> EXTERNAL
+  4. 无可用能力 -> INVALID_OPTIONS
 end note
 
 note bottom of FencedRepository

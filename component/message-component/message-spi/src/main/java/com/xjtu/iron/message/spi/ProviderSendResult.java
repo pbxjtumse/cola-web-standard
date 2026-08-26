@@ -116,13 +116,37 @@ public final class ProviderSendResult {
             SendStatus status,
             SendFailureType failureType,
             String description) {
-        // 非成功工厂不设置原生消息 ID 和额外元数据。
+        // 非成功工厂默认不设置原生消息 ID 和额外元数据。
+        return failed(status, failureType, description, Map.of());
+    }
+
+    /**
+     * 创建带 Provider 原生诊断元数据的非成功结果。
+     *
+     * <p>
+     * 二期可靠发送会根据 status 和 failureType 决定是否重试，
+     * 但排障时仍然需要保留 RocketMQ sendStatus、Kafka errorType、
+     * Pulsar exceptionType 等原生信息。
+     * </p>
+     *
+     * @param status 状态
+     * @param failureType 失败类型
+     * @param description 诊断描述
+     * @param metadata Provider 原生诊断元数据
+     * @return 非成功结果
+     */
+    public static ProviderSendResult failed(
+            SendStatus status,
+            SendFailureType failureType,
+            String description,
+            Map<String, String> metadata) {
+        // 非成功工厂不设置原生消息 ID。
         return new ProviderSendResult(
                 status,
                 failureType,
                 null,
                 description,
-                Map.of());
+                metadata);
     }
     /**
      * 返回Provider 能够确认的发送状态。

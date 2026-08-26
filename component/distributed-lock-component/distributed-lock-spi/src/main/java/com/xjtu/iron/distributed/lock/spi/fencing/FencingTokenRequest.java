@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.core.fencing;
+package com.xjtu.iron.distributed.lock.spi.fencing;
 
 import com.xjtu.iron.distributed.lock.api.model.LockOptions;
 

@@ -1,4 +1,6 @@
-package com.xjtu.iron.distributed.lock.core.fencing;
+package com.xjtu.iron.distributed.lock.core.fencing.registry;
+
+import com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider;
 
 import java.util.Optional;
 import java.util.Set;

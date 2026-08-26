@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.starter.observability;
 
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenProviderRegistry;
+import com.xjtu.iron.distributed.lock.core.fencing.registry.FencingTokenProviderRegistry;
 import com.xjtu.iron.distributed.lock.spi.LockProvider;
 import com.xjtu.iron.distributed.lock.spi.LockProviderCapabilities;
 import com.xjtu.iron.distributed.lock.spi.LockProviderRegistry;

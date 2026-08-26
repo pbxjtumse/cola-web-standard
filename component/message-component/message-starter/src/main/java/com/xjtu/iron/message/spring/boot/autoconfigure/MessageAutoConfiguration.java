@@ -11,14 +11,16 @@ import com.xjtu.iron.message.core.provider.MessageProviderRegistry;
 import com.xjtu.iron.message.core.send.MessageSendExecutor;
 import com.xjtu.iron.message.core.send.MessageSendReliabilityOptions;
 import com.xjtu.iron.message.core.MessageTemplate;
-import com.xjtu.iron.message.core.id.UuidMessageIdGenerator;
+import com.xjtu.iron.message.core.id.FoundationMessageIdGenerator;
 import com.xjtu.iron.message.core.id.MessageIdGenerator;
+import com.xjtu.iron.message.core.id.UuidMessageIdGenerator;
 import com.xjtu.iron.message.spi.MessageProvider;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageProperties;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageRouteProperties;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageSendReliabilityProperties;
 import com.xjtu.iron.retry.api.execution.RetryExecutor;
 import com.xjtu.iron.retry.api.policy.RetryPolicyRegistry;
+import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -27,10 +29,14 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.concurrent.ForkJoinPool;
 
 /**
@@ -175,8 +181,92 @@ public class MessageAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public MessageIdGenerator messageIdGenerator() {
+    public MessageIdGenerator messageIdGenerator(ListableBeanFactory beanFactory) {
+        Optional<Supplier<String>> foundationIdSupplier = detectFoundationIdSupplier(beanFactory);
+        if (foundationIdSupplier.isPresent()) {
+            return FoundationMessageIdGenerator.from(foundationIdSupplier.get());
+        }
         return new UuidMessageIdGenerator();
+    }
+
+    /**
+     * 尝试自动发现 foundation-component 提供的字符串 ID 生成器。
+     *
+     * <p>
+     * message-starter 不直接依赖 foundation-id 的具体 API，避免基础组件接口
+     * 重构时强制修改 message-core。这里采用保守的反射适配：只识别
+     * 包名或接口名明显属于 foundation-id 的 Bean，并且只调用无参的
+     * nextId / nextStringId / generateId / next 方法。
+     * </p>
+     */
+    private static Optional<Supplier<String>> detectFoundationIdSupplier(ListableBeanFactory beanFactory) {
+        String[] beanNames = beanFactory.getBeanNamesForType(Object.class, false, false);
+        for (String beanName : beanNames) {
+            Class<?> beanType = beanFactory.getType(beanName, false);
+            if (!looksLikeFoundationIdGenerator(beanType)) {
+                continue;
+            }
+            Method method = findIdMethod(beanType);
+            if (method == null) {
+                continue;
+            }
+            return Optional.of(() -> invokeIdMethod(beanFactory.getBean(beanName), method));
+        }
+        return Optional.empty();
+    }
+
+    private static boolean looksLikeFoundationIdGenerator(Class<?> beanType) {
+        if (beanType == null) {
+            return false;
+        }
+        String className = beanType.getName();
+        if (className.startsWith("com.xjtu.iron.foundation.id.")) {
+            return true;
+        }
+        if (className.contains(".foundation.id.")) {
+            return true;
+        }
+        for (Class<?> interfaceType : beanType.getInterfaces()) {
+            String interfaceName = interfaceType.getName();
+            if (interfaceName.startsWith("com.xjtu.iron.foundation.id.")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Method findIdMethod(Class<?> beanType) {
+        String[] methodNames = {"nextId", "nextStringId", "generateId", "next"};
+        for (String methodName : methodNames) {
+            try {
+                Method method = beanType.getMethod(methodName);
+                if (method.getParameterCount() == 0) {
+                    return method;
+                }
+            } catch (NoSuchMethodException ignored) {
+                // 尝试下一个候选方法名。
+            }
+        }
+        return null;
+    }
+
+    private static String invokeIdMethod(Object bean, Method method) {
+        try {
+            Object id = method.invoke(bean);
+            if (id == null) {
+                throw new IllegalStateException("foundation id generator returned null id");
+            }
+            String value = id.toString().trim();
+            if (value.isEmpty()) {
+                throw new IllegalStateException("foundation id generator returned blank id");
+            }
+            return value;
+        } catch (IllegalAccessException exception) {
+            throw new IllegalStateException("cannot access foundation id generator method", exception);
+        } catch (InvocationTargetException exception) {
+            Throwable cause = exception.getCause() == null ? exception : exception.getCause();
+            throw new IllegalStateException("foundation id generator invocation failed", cause);
+        }
     }
 
     /**

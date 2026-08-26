@@ -14,7 +14,7 @@ class LockExecutionTemplate
 class LockAcquisitionService
 class DefaultLockHandle
 class FencingTokenCoordinator
-class LockWatchDog
+class LockWatchdog
 }
 
 package "distributed-lock-spi" {
@@ -33,7 +33,7 @@ LockAcquisitionService --> LockProvider
 LockAcquisitionService --> FencingTokenCoordinator
 LockAcquisitionService --> DefaultLockHandle
 DefaultLockHandle ..|> LockHandle
-DefaultLockHandle --> LockWatchDog
+DefaultLockHandle --> LockWatchdog
 LockProvider <|.. RedisLockProvider
 FencingTokenCoordinator --> FencingTokenProvider
 

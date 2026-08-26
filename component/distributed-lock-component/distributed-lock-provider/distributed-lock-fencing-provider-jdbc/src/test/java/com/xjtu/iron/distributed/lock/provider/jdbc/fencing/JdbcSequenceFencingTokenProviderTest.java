@@ -1,8 +1,8 @@
 package com.xjtu.iron.distributed.lock.provider.jdbc.fencing;
 
 import com.xjtu.iron.distributed.lock.api.model.LockOptions;
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenRequest;
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenResponse;
+import com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenRequest;
+import com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenResponse;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

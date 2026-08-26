@@ -1,8 +1,8 @@
 package com.xjtu.iron.distributed.lock.provider.jdbc.fencing;
 
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenProvider;
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenRequest;
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenResponse;
+import com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider;
+import com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenRequest;
+import com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenResponse;
 
 import javax.sql.DataSource;
 import java.sql.Connection;

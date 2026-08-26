@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.core.fencing.flow;
 
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenMode;
+import com.xjtu.iron.distributed.lock.core.fencing.coordinator.FencingTokenMode;
 
 import java.util.Optional;
 import java.util.Set;

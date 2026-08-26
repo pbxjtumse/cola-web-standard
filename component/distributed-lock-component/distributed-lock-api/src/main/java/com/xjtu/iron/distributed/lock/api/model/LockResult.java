@@ -228,14 +228,6 @@ public final class LockResult<T> {
     }
 
     /**
-     * @deprecated 请使用带 LockStage 参数的 notAcquired 方法，避免把 NO_WAIT 场景误标为 WAIT 阶段。
-     */
-    @Deprecated
-    public static <T> LockResult<T> notAcquired(String lockName, String lockKey, Duration waitDuration) {
-        return notAcquired(lockName, lockKey, LockStage.WAIT, waitDuration);
-    }
-
-    /**
      * 创建失败结果。
      */
     public static <T> LockResult<T> failure(LockStatus status, LockStage stage, boolean acquired, Throwable error) {

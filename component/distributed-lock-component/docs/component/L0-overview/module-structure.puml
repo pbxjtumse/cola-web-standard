@@ -1,10 +1,14 @@
 @startuml
-title Distributed Lock Component - Maven Module Structure
-skinparam shadowing false
+!include ../../_common/style.puml
+
+title Distributed Lock Component - Maven Module Structure Final
+
+left to right direction
 skinparam packageStyle rectangle
 
 package "distributed-lock-component" {
   folder "distributed-lock-api" as api
+  folder "distributed-lock-spi" as spi
   folder "distributed-lock-core" as core
   folder "distributed-lock-provider" as provider {
     folder "distributed-lock-provider-redis" as redis
@@ -14,21 +18,37 @@ package "distributed-lock-component" {
   folder "distributed-lock-starter" as starter
   folder "distributed-lock-demo" as demo
   folder "docs" as docs
-  folder "uml" as uml
 }
+
+core --> api : public model
+core --> spi : LockProvider / fencing SPI
+
+redis --> api : LockOptions
+redis --> spi : implements LockProvider
+redisson --> api : LockOptions
+redisson --> spi : implements LockProvider
+jdbc --> spi : implements FencingTokenProvider
 
 starter --> core : assemble core beans
 starter --> redis : register Redis provider
 starter --> redisson : register Redisson provider
 starter --> jdbc : register JDBC fencing provider
-core --> api : public model
-redis --> core : LockProvider SPI
-redisson --> core : LockProvider SPI
-jdbc --> core : FencingTokenProvider SPI
 demo --> starter : use auto configuration
 
-note right of core
-SPI 目前位于 core.spi。
-等 ZK/Etcd Provider 真正落地后，再评估是否拆出 distributed-lock-spi Maven Module。
+note right of spi
+SPI 已独立为 Maven module。
+只放 Provider 契约与协议对象：
+- LockProvider
+- LockProviderRegistry
+- LockProviderCapabilities
+- acquire / renew / release / check protocol
+- FencingTokenProvider
+- FencingTokenRequest / Response / Status
 end note
+
+note bottom of provider
+Provider module 只放具体实现。
+Provider 不反向依赖 core。
+end note
+
 @enduml

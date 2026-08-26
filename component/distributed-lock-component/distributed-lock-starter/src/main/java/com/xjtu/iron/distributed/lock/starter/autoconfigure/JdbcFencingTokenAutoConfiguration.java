@@ -1,6 +1,6 @@
 package com.xjtu.iron.distributed.lock.starter.autoconfigure;
 
-import com.xjtu.iron.distributed.lock.core.fencing.FencingTokenProvider;
+import com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider;
 import com.xjtu.iron.distributed.lock.provider.jdbc.fencing.JdbcFencingTokenSchemaInitializer;
 import com.xjtu.iron.distributed.lock.provider.jdbc.fencing.JdbcSequenceFencingTokenProvider;
 import com.xjtu.iron.distributed.lock.starter.properties.JdbcFencingTokenProperties;

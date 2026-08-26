@@ -1,4 +1,4 @@
-package com.xjtu.iron.distributed.lock.core.fencing;
+package com.xjtu.iron.distributed.lock.core.fencing.coordinator;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -12,9 +12,9 @@ public final class FencingTokenPlan {
     private static final FencingTokenPlan NATIVE = new FencingTokenPlan(FencingTokenMode.NATIVE, null);
 
     private final FencingTokenMode mode;
-    private final FencingTokenProvider externalProvider;
+    private final com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider externalProvider;
 
-    private FencingTokenPlan(FencingTokenMode mode, FencingTokenProvider externalProvider) {
+    private FencingTokenPlan(FencingTokenMode mode, com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider externalProvider) {
         this.mode = Objects.requireNonNull(mode, "mode must not be null");
         this.externalProvider = externalProvider;
         if (mode == FencingTokenMode.EXTERNAL && externalProvider == null) {
@@ -33,7 +33,7 @@ public final class FencingTokenPlan {
         return NATIVE;
     }
 
-    public static FencingTokenPlan external(FencingTokenProvider provider) {
+    public static FencingTokenPlan external(com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider provider) {
         return new FencingTokenPlan(FencingTokenMode.EXTERNAL, Objects.requireNonNull(provider, "provider must not be null"));
     }
 
@@ -53,7 +53,7 @@ public final class FencingTokenPlan {
         return mode == FencingTokenMode.EXTERNAL;
     }
 
-    public Optional<FencingTokenProvider> externalProvider() {
+    public Optional<com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider> externalProvider() {
         return Optional.ofNullable(externalProvider);
     }
 

@@ -1,5 +1,6 @@
 package com.xjtu.iron.distributed.lock.core.fencing;
 
+import com.xjtu.iron.distributed.lock.core.fencing.registry.DefaultFencingTokenProviderRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -11,7 +12,7 @@ class DefaultFencingTokenProviderRegistryTest {
 
     @Test
     void shouldFindProviderOnlyByExplicitName() {
-        FencingTokenProvider jdbc = provider("jdbc-sequence");
+        com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider jdbc = provider("jdbc-sequence");
         DefaultFencingTokenProviderRegistry registry =
                 new DefaultFencingTokenProviderRegistry(List.of(jdbc));
 
@@ -37,12 +38,12 @@ class DefaultFencingTokenProviderRegistryTest {
                 .hasMessageContaining("duplicate fencing token provider");
     }
 
-    private FencingTokenProvider provider(String name) {
-        return new FencingTokenProvider() {
+    private com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider provider(String name) {
+        return new com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenProvider() {
             @Override public String providerName() { return name; }
-            @Override public boolean supports(FencingTokenRequest request) { return true; }
-            @Override public FencingTokenResponse nextToken(FencingTokenRequest request) {
-                return FencingTokenResponse.issued(1L);
+            @Override public boolean supports(com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenRequest request) { return true; }
+            @Override public com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenResponse nextToken(com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenRequest request) {
+                return com.xjtu.iron.distributed.lock.spi.fencing.FencingTokenResponse.issued(1L);
             }
         };
     }
