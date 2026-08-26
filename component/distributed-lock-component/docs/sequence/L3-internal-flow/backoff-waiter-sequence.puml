@@ -1,42 +1,25 @@
 @startuml
 !include ../../_common/style.puml
-title BackoffLockWaiter 等待重试内部时序图
 
+title Backoff Waiter Internal Flow - Core Only
+autonumber
+skinparam shadowing false
 
-box "API Module" #D9EAF7
-participant Client as "DefaultDistributedLockClient"
+box "distributed-lock-core" #DFF2BF
+participant "LockAcquisitionService" as Acquire
+participant "BackoffLockWaiter" as Waiter
+participant "RetryBackoffSpec" as BackoffSpec
 end box
 
-box "Core Module" #DFF2BF
-participant Waiter as "BackoffLockWaiter"
-participant Sleeper as "Sleeper"
-end box
+Acquire -> Waiter : waitBeforeRetry(context)
+Waiter -> BackoffSpec : calculateDelay(attempt)
+BackoffSpec --> Waiter : delay
+Waiter -> Waiter : sleep(delay)
+Waiter --> Acquire : continue acquire loop / timeout
 
-box "Provider Module" #FFE6CC
-participant Provider as "LockProvider"
-database Redis
-end box
-
-
-Client -> Waiter : waitForLock(request, provider)
-Waiter -> Waiter : deadline = now + waitTime
-loop until deadline
-    Waiter -> Provider : acquire(request)
-    Provider -> Redis : EVAL acquire.lua
-    Redis --> Provider : ACQUIRED / NOT_ACQUIRED / error
-    Provider --> Waiter : response
-    alt ACQUIRED
-        Waiter --> Client : ACQUIRED
-    else PROVIDER_ERROR
-        Waiter --> Client : PROVIDER_ERROR
-    else NOT_ACQUIRED
-        Waiter -> Waiter : compute delay\nbackoff + jitter
-        alt delay exceed deadline
-            Waiter --> Client : NOT_ACQUIRED
-        else still have time
-            Waiter -> Sleeper : sleep(delay)
-        end
-    end
-end
+note right of Waiter
+  This diagram describes wait calculation only.
+  The next acquire attempt is shown in trylock-main-sequence.
+end note
 
 @enduml

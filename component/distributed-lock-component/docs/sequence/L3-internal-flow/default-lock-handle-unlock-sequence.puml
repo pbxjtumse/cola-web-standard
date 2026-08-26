@@ -1,48 +1,45 @@
 @startuml
 !include ../../_common/style.puml
-title DefaultLockHandle.unlock() 内部时序图
 
+title DefaultLockHandle Unlock Internal Flow
+autonumber
+skinparam shadowing false
 
-box "API Module" #D9EAF7
-participant Handle as "DefaultLockHandle"
+box "distributed-lock-core" #DFF2BF
+participant "DefaultLockHandle" as Handle
+participant "LockRuntimeState" as RuntimeState
+participant "LockEventPublisher" as Events
 end box
 
-box "Core Module" #DFF2BF
-actor Caller
-participant Runtime as "LockRuntimeState"
-participant Event as "LockEventPublisher"
+box "distributed-lock-spi" #FFF2CC
+participant "LockProvider" as LockProvider
 end box
 
-box "Provider Module" #FFE6CC
-participant Provider as "LockProvider"
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as RedisProvider
+end box
+
 database Redis
-end box
 
-
-Caller -> Handle : unlock()
-Handle -> Runtime : markReleasedOnce()\ncompareAndSet(false, true)
+Handle -> RuntimeState : compareAndMarkReleasing()
 alt already released
-    Runtime --> Handle : false
-    Handle --> Caller : false / no-op
+  RuntimeState --> Handle : skip
 else first release
-    Runtime --> Handle : true
-    Handle -> Provider : release(request)
-    Provider -> Redis : EVAL release.lua
-    Redis --> Provider : 1 / 0 / -1 / error
-    alt RELEASED
-        Provider --> Handle : RELEASED
-        Handle -> Event : publish RELEASED
-        Handle --> Caller : true
-    else NOT_FOUND or NOT_OWNER
-        Provider --> Handle : NOT_FOUND / NOT_OWNER
-        Handle -> Runtime : markLostOnce()
-        Handle -> Event : publish LOCK_LOST(stage=RELEASE)
-        Handle --> Caller : false
-    else PROVIDER_ERROR
-        Provider --> Handle : PROVIDER_ERROR
-        Handle -> Event : publish RELEASE_FAILED
-        Handle --> Caller : false
-    end
+  Handle -> LockProvider : release(request)
+  LockProvider -> RedisProvider : release(request)
+  RedisProvider -> Redis : Lua release(ownerToken)
+  Redis --> RedisProvider : released / not owner / not found / error
+  RedisProvider --> LockProvider : LockReleaseResponse
+  LockProvider --> Handle : release result
+  alt RELEASED
+    Handle -> RuntimeState : markReleased()
+    Handle -> Events : RELEASED
+  else NOT_OWNER / NOT_FOUND
+    Handle -> RuntimeState : markLost()
+    Handle -> Events : LOCK_LOST(stage=RELEASE)
+  else PROVIDER_ERROR
+    Handle -> Events : RELEASE_FAILED
+  end
 end
 
 @enduml

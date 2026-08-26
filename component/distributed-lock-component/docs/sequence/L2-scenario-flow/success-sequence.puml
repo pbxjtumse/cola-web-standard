@@ -1,46 +1,58 @@
 @startuml
 !include ../../_common/style.puml
-title SUCCESS 成功路径时序图
 
+title Success Scenario - Acquire Execute Release
+autonumber
+skinparam shadowing false
 
-box "API Module" #D9EAF7
-participant Client as "DistributedLockClient"
-participant DefaultClient as "DefaultDistributedLockClient"
-participant Handle as "DefaultLockHandle"
-participant Callback as "LockCallback"
+actor Caller
+
+box "distributed-lock-api" #D9EAF7
+participant "DistributedLockClient" as Client
+participant "LockCallback" as Callback
 end box
 
-box "Core Module" #DFF2BF
-actor Biz
-participant Watchdog as "LockWatchdog"
+box "distributed-lock-core" #DFF2BF
+participant "DefaultDistributedLockClient" as DefaultClient
+participant "LockExecutionTemplate" as Template
+participant "LockAcquisitionService" as Acquire
+participant "DefaultLockHandle" as Handle
 end box
 
-box "Provider Module" #FFE6CC
-participant Provider as "LockProvider"
+box "distributed-lock-spi" #FFF2CC
+participant "LockProvider" as LockProvider
+end box
+
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as RedisProvider
+end box
+
 database Redis
-end box
 
+Caller -> Client : execute()
+Client -> DefaultClient : delegate
+DefaultClient -> Template : execute()
+Template -> Acquire : acquire()
+Acquire -> LockProvider : acquire(request)
+LockProvider -> RedisProvider : acquire(request)
+RedisProvider -> Redis : Lua acquire
+Redis --> RedisProvider : acquired
+RedisProvider --> LockProvider : ACQUIRED
+LockProvider --> Acquire : lease
+Acquire --> Template : handle
 
-Biz -> Client : execute(lockName, options, callback)
-Client -> DefaultClient : execute(...)
-DefaultClient -> Provider : acquire(request)
-Provider -> Redis : EVAL acquire.lua
-Redis --> Provider : acquired
-Provider --> DefaultClient : ACQUIRED + LockLease
-DefaultClient -> Handle : create handle
-alt autoRenew=true
-    DefaultClient -> Watchdog : start(handle)
-end
-DefaultClient -> Callback : doWithLock(handle)
-Callback --> DefaultClient : value
-DefaultClient -> DefaultClient : runtimeState.lost == false
-DefaultClient -> Handle : unlock()
-Handle -> Provider : release(request)
-Provider -> Redis : EVAL release.lua
-Redis --> Provider : 1
-Provider --> Handle : RELEASED
-Handle --> DefaultClient : release success
-DefaultClient -> Watchdog : stop(handle)
-DefaultClient --> Biz : LockResult(SUCCESS, stage=EXECUTE, acquired=true, value)
+Template -> Callback : execute(handle)
+Callback --> Template : value
+
+Template -> Handle : close()
+Handle -> LockProvider : release(request)
+LockProvider -> RedisProvider : release(request)
+RedisProvider -> Redis : Lua release
+Redis --> RedisProvider : released
+RedisProvider --> LockProvider : RELEASED
+LockProvider --> Handle : RELEASED
+Template --> DefaultClient : LockResult(SUCCESS)
+DefaultClient --> Client : LockResult(SUCCESS)
+Client --> Caller : value/result
 
 @enduml

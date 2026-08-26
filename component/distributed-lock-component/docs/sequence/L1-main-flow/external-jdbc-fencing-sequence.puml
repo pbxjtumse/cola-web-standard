@@ -1,40 +1,65 @@
 @startuml
-title External JDBC Fencing Flow - Acquire Lock / Issue DB Token / Re-check Ownership
+!include ../../_common/style.puml
+
+title External JDBC Fencing Flow - Lock Provider and Token Provider
 autonumber
 skinparam shadowing false
 
-box "API Module" #D9EAF7
+actor Caller
+
+box "distributed-lock-api" #D9EAF7
+participant "DistributedLockClient" as Client
+end box
+
+box "distributed-lock-core" #DFF2BF
+participant "DefaultDistributedLockClient" as DefaultClient
+participant "LockExecutionTemplate" as Template
+participant "LockAcquisitionService" as Acquire
+participant "FencingTokenCoordinator" as Coordinator
+participant "ExternalFencingTokenFlow" as ExternalFlow
+participant "FencingTokenProvider" as TokenProvider
 participant "LockHandleFactory" as Factory
 end box
 
-box "Core Module" #DFF2BF
-participant "LockAcquisitionService" as Acquire
-participant "ExternalFencingTokenFlow" as Flow
+box "distributed-lock-spi" #FFF2CC
+participant "LockProvider" as LockProvider
 end box
 
-box "Provider Module" #FFE6CC
-participant "LockProvider" as Provider
-participant "JdbcSequenceFencingTokenProvider" as JdbcToken
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as RedisProvider
 end box
 
+box "distributed-lock-fencing-provider-jdbc" #FFE6CC
+participant "JdbcSequenceFencingTokenProvider" as JdbcProvider
+database "FencingDB" as FencingDB
+end box
 
-Acquire -> Provider : acquire(nativeFencingRequired=false)
-Provider --> Acquire : LockAcquireResponse(lease without token)
-Acquire -> Flow : complete(context)
-Flow -> JdbcToken : nextToken(namespace, lockName, ownerToken)
-JdbcToken --> Flow : token=N
-Flow -> Flow : lease.withFencingToken(N, "jdbc-sequence")
-Flow -> Provider : check(ownerToken)
-alt still HELD
-  Provider --> Flow : HELD
-  Flow --> Acquire : FencingCompletion.success(fencedLease)
-  Acquire -> Factory : create handle
-else NOT_FOUND or NOT_OWNER
-  Provider --> Flow : lock lost
-  Flow --> Acquire : LockResult(LOCK_LOST, CHECK)
-else PROVIDER_ERROR
-  Provider --> Flow : error
-  Flow -> Provider : best-effort release
-  Flow --> Acquire : LockResult(PROVIDER_ERROR, CHECK)
-end
+Caller -> Client : tryLock/execute(fencingRequired=true)
+Client -> DefaultClient : delegate
+DefaultClient -> Template : execute()
+Template -> Acquire : acquire()
+
+Acquire -> LockProvider : acquire(request)
+LockProvider -> RedisProvider : acquire(request without fencing token)
+RedisProvider --> LockProvider : ACQUIRED lease
+LockProvider --> Acquire : lease
+
+Acquire -> Coordinator : applyFencing(lease, options)
+Coordinator -> ExternalFlow : issueToken(context)
+ExternalFlow -> TokenProvider : nextToken(namespace, lockName, ownerToken)
+TokenProvider -> JdbcProvider : nextToken(request)
+JdbcProvider -> FencingDB : select/update sequence
+FencingDB --> JdbcProvider : token=N
+JdbcProvider --> TokenProvider : FencingTokenResponse(ISSUED, N)
+TokenProvider --> ExternalFlow : token=N
+ExternalFlow --> Coordinator : lease.withFencingToken(N)
+Coordinator --> Acquire : fenced lease
+
+Acquire -> Factory : create(fenced lease)
+Factory --> Acquire : LockHandle
+Acquire --> Template : LockHandle
+Template --> DefaultClient : LockResult(ACQUIRED)
+DefaultClient --> Client : result
+Client --> Caller : result
+
 @enduml

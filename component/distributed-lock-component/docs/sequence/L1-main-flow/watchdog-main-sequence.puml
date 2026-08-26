@@ -1,43 +1,51 @@
 @startuml
-title Watchdog Main Flow - Core Managed vs Provider Managed
+!include ../../_common/style.puml
+
+title Watchdog Main Flow - Core Managed Summary
 autonumber
 skinparam shadowing false
 
-box "API Module" #D9EAF7
+box "distributed-lock-core" #DFF2BF
 participant "LockHandleFactory" as Factory
 participant "DefaultLockHandle" as Handle
-end box
-
-box "Core Module" #DFF2BF
 participant "ScheduledLockWatchdog" as Watchdog
 end box
 
-box "Provider Module" #FFE6CC
-participant "LockProvider" as Provider
+box "distributed-lock-spi" #FFF2CC
+participant "LockProvider" as LockProvider
 end box
 
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as RedisProvider
+end box
 
-Factory -> Watchdog : start(handle, options) when autoRenew=true
-Watchdog -> Watchdog : schedule tick by renewInterval
+database Redis
 
-loop each tick until release/lost/maxRenewTime
-  alt maxRenewTime exceeded
-    Watchdog -> Handle : markLostByWatchdog("maxRenewTime exceeded")
-    alt PROVIDER_MANAGED
-      Watchdog -> Handle : unlock()
-      Handle -> Provider : release(ownerToken)
-    end
+Factory -> Watchdog : start(handle, options) when autoRenewMode=CORE_MANAGED
+Watchdog -> Watchdog : schedule renew tick
+
+loop each renew tick
+  Watchdog -> Handle : renew()
+  Handle -> LockProvider : renew(LockRenewRequest)
+  LockProvider -> RedisProvider : renew(request)
+  RedisProvider -> Redis : Lua renew(ownerToken, leaseTime)
+  Redis --> RedisProvider : renewed / not owner / not found / error
+  RedisProvider --> LockProvider : LockRenewResponse
+  LockProvider --> Handle : renew result
+
+  alt RENEWED
+    Handle --> Watchdog : keep running
+  else NOT_OWNER / NOT_FOUND
+    Handle --> Watchdog : lock lost
+    Watchdog -> Handle : markLostByWatchdog(...)
     Watchdog -> Watchdog : stop(handle)
-  else CORE_MANAGED
-    Watchdog -> Handle : renew()
-    Handle -> Provider : renew(ownerToken, leaseTime)
-    Provider --> Handle : RENEWED / NOT_OWNER / NOT_FOUND / ERROR
-  else PROVIDER_MANAGED
-    Watchdog -> Handle : checkHeld()
-    Handle -> Provider : check(ownerToken)
-    Provider --> Handle : HELD / NOT_OWNER / NOT_FOUND / ERROR
+  else PROVIDER_ERROR
+    Handle --> Watchdog : provider error
+    Watchdog -> Handle : markLostByWatchdog(...)
+    Watchdog -> Watchdog : stop(handle)
   end
 end
 
-Handle -> Watchdog : stop(handle) in release finally
+Handle -> Watchdog : stop(handle) on release/finally
+
 @enduml

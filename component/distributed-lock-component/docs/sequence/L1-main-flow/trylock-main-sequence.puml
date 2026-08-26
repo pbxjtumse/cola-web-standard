@@ -1,56 +1,60 @@
 @startuml
-title tryLock Main Flow - Acquire / Wait / Fencing / Handle
+!include ../../_common/style.puml
+
+title TryLock Main Flow - API to Core to SPI to Provider
 autonumber
 skinparam shadowing false
 
-box "API Module" #D9EAF7
-participant "DefaultDistributedLockClient" as Client
-participant "AcquireOutcomeHandlerRegistry" as Outcome
+actor Caller
+
+box "distributed-lock-api" #D9EAF7
+participant "DistributedLockClient" as Client
+participant "LockOptions" as Options
+end box
+
+box "distributed-lock-core" #DFF2BF
+participant "DefaultDistributedLockClient" as DefaultClient
+participant "LockExecutionTemplate" as Template
+participant "LockAcquisitionService" as Acquire
+participant "DefaultLockProviderRegistry" as Registry
 participant "LockHandleFactory" as Factory
 end box
 
-box "Core Module" #DFF2BF
-actor Caller
-participant "LockAcquisitionService" as Acquire
-participant "FencingTokenCoordinator" as Coordinator
-participant "LockWaiter" as Waiter
-participant "FencingTokenFlow" as Flow
-participant "LockWatchdog" as Watchdog
+box "distributed-lock-spi" #FFF2CC
+participant "LockProvider" as LockProvider
 end box
 
-box "Provider Module" #FFE6CC
-participant "LockProviderRegistry" as Registry
-participant "LockProvider" as Provider
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as RedisProvider
 end box
 
+database Redis
 
-Caller -> Client : tryLock(lockName, options)
-Client -> Acquire : tryLock(lockName, options)
-Acquire -> Acquire : validate lockName/options
-Acquire -> Registry : getProvider(options.providerName)
-Registry --> Acquire : provider
-Acquire -> Coordinator : plan(provider, options)
-Coordinator --> Acquire : FencingTokenPlan
-Acquire -> Acquire : generate ownerToken
-Acquire -> Waiter : waitForLock(request, provider)
-Waiter -> Provider : acquire(request)
-Provider --> Waiter : LockAcquireResponse
-Waiter --> Acquire : response
-Acquire -> Outcome : handle(context)
+Caller -> Client : tryLock(lockName, Options)
+Client -> DefaultClient : tryLock(...)
+DefaultClient -> Template : tryLock(...)
+Template -> Acquire : acquire(lockName, options)
+Acquire -> Registry : select(options.providerName)
+Registry --> Acquire : LockProvider
+Acquire -> LockProvider : acquire(LockAcquireRequest)
+LockProvider -> RedisProvider : acquire(request)
+RedisProvider -> Redis : Lua acquire(lockKey, ownerToken, leaseTime)
+Redis --> RedisProvider : 1 / 0 / error
+RedisProvider --> LockProvider : LockAcquireResponse
+LockProvider --> Acquire : response
 
 alt ACQUIRED
-  Outcome -> Flow : complete(fencing context)
-  Flow --> Outcome : FencingCompletion(success lease)
-  Outcome -> Factory : create(provider, lease, options)
-  Factory -> Watchdog : start(handle, options) if autoRenew
-  Factory --> Outcome : DefaultLockHandle
-  Outcome --> Acquire : LockResult(ACQUIRED, handle)
+  Acquire -> Factory : create(lease, options)
+  Factory --> Acquire : DefaultLockHandle
+  Acquire --> Template : acquired handle
+  Template --> DefaultClient : LockResult(ACQUIRED)
 else NOT_ACQUIRED
-  Outcome --> Acquire : LockResult(NOT_ACQUIRED)
+  Acquire --> Template : LockResult(NOT_ACQUIRED)
 else PROVIDER_ERROR
-  Outcome --> Acquire : LockResult(PROVIDER_ERROR)
+  Acquire --> Template : LockResult(PROVIDER_ERROR, ACQUIRE)
 end
 
-Acquire --> Client : LockResult
+DefaultClient --> Client : LockResult
 Client --> Caller : LockResult
+
 @enduml

@@ -1,40 +1,28 @@
 @startuml
 !include ../../_common/style.puml
-title RedisLockProvider.acquire() 内部时序图
 
+title RedisLockProvider Acquire Internal Flow
+autonumber
+skinparam shadowing false
 
-box "Core Module" #DFF2BF
-participant Caller as "LockWaiter / DefaultClient"
-participant KeyBuilder as "RedisLockKeyBuilder"
-participant Executor as "RedisLockScriptExecutor"
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as Provider
+participant "RedisLockKeyBuilder" as KeyBuilder
+participant "RedisLockScriptExecutor" as ScriptExecutor
 end box
 
-box "Provider Module" #FFE6CC
-participant Provider as "RedisLockProvider"
 database Redis
-end box
 
-
-Caller -> Provider : acquire(request)
 Provider -> KeyBuilder : buildLockKey(namespace, lockName)
-KeyBuilder --> Provider : iron:lock:{namespace:lockName}:lock
-Provider -> KeyBuilder : buildFencingKey(namespace, lockName)
-KeyBuilder --> Provider : iron:lock:{namespace:lockName}:fence
-Provider -> Executor : execute acquire.lua\nKEYS[lockKey,fencingKey]\nARGV[ownerToken,leaseMillis,fencingRequired]
-Executor -> Redis : EVAL acquire.lua
-alt key not exists
-    Redis --> Executor : {1, optionalFence}
-    Executor --> Provider : success
-    Provider -> Provider : build LockLease
-    Provider --> Caller : LockAcquireResponse(ACQUIRED, lease)
-else key exists
-    Redis --> Executor : {0, pttl}
-    Executor --> Provider : not acquired
-    Provider --> Caller : LockAcquireResponse(NOT_ACQUIRED, pttl)
-else redis error
-    Redis --> Executor : error
-    Executor --> Provider : exception
-    Provider --> Caller : LockAcquireResponse(PROVIDER_ERROR)
+KeyBuilder --> Provider : lockKey
+Provider -> ScriptExecutor : executeAcquire(lockKey, ownerToken, leaseTime)
+ScriptExecutor -> Redis : EVAL acquire.lua
+Redis --> ScriptExecutor : 1 / 0
+ScriptExecutor --> Provider : raw result
+alt acquired
+  Provider --> Provider : build LockAcquireResponse(ACQUIRED, lease)
+else not acquired
+  Provider --> Provider : build LockAcquireResponse(NOT_ACQUIRED)
 end
 
 @enduml

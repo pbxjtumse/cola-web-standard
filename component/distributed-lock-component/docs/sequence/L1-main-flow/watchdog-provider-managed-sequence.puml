@@ -1,7 +1,7 @@
 @startuml
 !include ../../_common/style.puml
 
-title Redisson Provider Managed Watchdog Scenario
+title Watchdog Provider Managed Flow - Redisson Provider
 autonumber
 skinparam shadowing false
 
@@ -23,12 +23,17 @@ database Redis
 
 Acquire -> LockProvider : acquire(request)
 LockProvider -> RedissonProvider : acquire(request)
-RedissonProvider -> Redis : acquire lock
-Redis --> RedissonProvider : locked
-RedissonProvider -> RedissonWatchdog : maintain TTL internally
-RedissonWatchdog -> Redis : renew TTL
-RedissonProvider --> LockProvider : ACQUIRED lease(PROVIDER_MANAGED)
+RedissonProvider -> Redis : acquire lock via Redisson
+RedissonProvider -> RedissonWatchdog : start provider-managed renewal
+RedissonWatchdog -> Redis : renew TTL internally
+RedissonProvider --> LockProvider : ACQUIRED lease(autoRenewMode=PROVIDER_MANAGED)
 LockProvider --> Acquire : lease
-Acquire --> Handle : handle with provider-managed renew mode
+Acquire --> Handle : create handle
+
+note right of RedissonWatchdog
+  The provider implementation owns TTL renewal.
+  Core does not schedule ScheduledLockWatchdog renew ticks
+  for this provider-managed mode.
+end note
 
 @enduml

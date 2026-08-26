@@ -1,86 +1,66 @@
 @startuml
+!include ../../_common/style.puml
 
-title Distributed Lock Main Sequence
+title Distributed Lock Sequence L0 - Overall Flow
+autonumber
+skinparam shadowing false
 
 actor BusinessService
 
-box "API Module" #D9EAF7
-
-participant DistributedLockClient
-participant LockHandle
-
+box "distributed-lock-api" #D9EAF7
+participant "DistributedLockClient" as Client
+participant "LockHandle" as Handle
 end box
 
-
-box "Core Module" #DFF2BF
-
-participant LockExecutionTemplate
-participant LockAcquisitionService
-participant FencingTokenCoordinator
-participant LockWatchDog
-
+box "distributed-lock-core" #DFF2BF
+participant "DefaultDistributedLockClient" as DefaultClient
+participant "LockExecutionTemplate" as Template
+participant "LockAcquisitionService" as Acquire
+participant "FencingTokenCoordinator" as Fencing
+participant "LockWatchdog" as Watchdog
 end box
 
-
-box "Provider Module" #FFE6CC
-
-participant LockProvider
-participant RedisLockProvider
-
+box "distributed-lock-spi" #FFF2CC
+participant "LockProvider" as LockProvider
 end box
 
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as RedisProvider
+end box
 
 box "Business Resource" #EEEEEE
-
-participant Repository
-database DB
-
+participant "Repository" as Repository
+database "BusinessDB" as DB
 end box
 
+BusinessService -> Client : execute(lockName, options, callback)
+Client -> DefaultClient : delegate
+DefaultClient -> Template : execute(callback, options)
+Template -> Acquire : acquire(options)
+Acquire -> LockProvider : acquire(request)
+LockProvider -> RedisProvider : acquire(request)
+RedisProvider --> LockProvider : LockAcquireResponse(ACQUIRED)
+LockProvider --> Acquire : ACQUIRED lease
 
+opt options.fencingRequired
+  Acquire -> Fencing : issueToken(lease, options)
+  Fencing --> Acquire : lease with fencingToken
+end
 
-BusinessService -> DistributedLockClient : execute(lockKey)
-
-DistributedLockClient -> LockExecutionTemplate : execute()
-
-LockExecutionTemplate -> LockAcquisitionService : acquire(lockKey)
-
-LockAcquisitionService -> LockProvider : acquire()
-
-LockProvider -> RedisLockProvider : tryLock()
-
-RedisLockProvider --> LockProvider : lockSuccess
-
-LockProvider --> LockAcquisitionService : LockHandle
-
-LockAcquisitionService --> LockExecutionTemplate : acquired
-
-
-LockExecutionTemplate -> FencingTokenCoordinator : nextToken()
-
-FencingTokenCoordinator --> LockExecutionTemplate : fencingToken
-
-
-LockExecutionTemplate -> BusinessService : execute business logic
-
-
-BusinessService -> Repository : update(data,fencingToken)
-
-Repository -> DB : update with token
-
-DB --> Repository : success
-
-
-LockExecutionTemplate -> LockWatchDog : startRenew()
-
-LockWatchDog -> RedisLockProvider : renew()
-
-
-LockExecutionTemplate -> LockProvider : release()
-
-LockProvider -> RedisLockProvider : unlock()
-
-RedisLockProvider --> LockProvider : released
-
+Acquire --> Template : LockHandle
+Template -> Watchdog : start(handle) when CORE_MANAGED
+Template -> BusinessService : callback(handle)
+BusinessService -> Repository : update(..., handle.fencingToken)
+Repository -> DB : compare fencing token and update
+DB --> Repository : accepted / rejected
+BusinessService --> Template : callback result
+Template -> Handle : close()
+Handle -> LockProvider : release(request)
+LockProvider -> RedisProvider : release(request)
+RedisProvider --> LockProvider : LockReleaseResponse
+LockProvider --> Handle : release result
+Template --> DefaultClient : LockResult
+DefaultClient --> Client : LockResult / value
+Client --> BusinessService : result
 
 @enduml

@@ -1,52 +1,68 @@
 @startuml
 !include ../../_common/style.puml
 
-title 外部 Fencing Provider 异常时序
+title Fencing Provider Error Scenario - Release After Token Failure
+autonumber
+skinparam shadowing false
 
+actor Caller
 
-box "API Module" #D9EAF7
-participant Client as DefaultDistributedLockClient
+box "distributed-lock-api" #D9EAF7
+participant "DistributedLockClient" as Client
 end box
 
-box "Core Module" #DFF2BF
-participant Events
-participant Metrics
+box "distributed-lock-core" #DFF2BF
+participant "DefaultDistributedLockClient" as DefaultClient
+participant "LockExecutionTemplate" as Template
+participant "LockAcquisitionService" as Acquire
+participant "FencingTokenCoordinator" as Coordinator
+participant "FencingTokenProvider" as TokenProvider
+participant "LockMetricsFacade" as Metrics
+participant "LockEventPublisher" as Events
 end box
 
-box "Provider Module" #FFE6CC
-participant LockProvider
-participant FencingProvider
+box "distributed-lock-spi" #FFF2CC
+participant "LockProvider" as LockProvider
 end box
 
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as RedisProvider
+end box
 
-Client -> LockProvider : acquire()
-LockProvider --> Client : ACQUIRED lease
-Client -> FencingProvider : nextToken()
-FencingProvider --> Client : PROVIDER_ERROR
+box "distributed-lock-fencing-provider-jdbc" #FFE6CC
+participant "JdbcSequenceFencingTokenProvider" as JdbcProvider
+database "FencingDB" as DB
+end box
 
-Client -> LockProvider : release(lease)
-alt released
-  LockProvider --> Client : RELEASED
-  Client -> Metrics : recordRelease(success=true)
-  Client -> Events : RELEASED
-else lock lost
-  LockProvider --> Client : NOT_FOUND / NOT_OWNER
-  Client -> Metrics : recordRelease(false), recordLost
-  Client -> Events : LOCK_LOST(stage=RELEASE)
-else release error
-  LockProvider --> Client : PROVIDER_ERROR
-  Client -> Client : addSuppressed(releaseError)
-  Client -> Events : RELEASE_FAILED
-end
+Caller -> Client : execute(fencingRequired=true)
+Client -> DefaultClient : delegate
+DefaultClient -> Template : execute()
+Template -> Acquire : acquire()
 
-Client -> Metrics : recordFencing(success=false)
-Client -> Events : FENCING_TOKEN_FAILED
-Client --> Client : LockResult(PROVIDER_ERROR, FENCING, acquired=true)
+Acquire -> LockProvider : acquire(request)
+LockProvider -> RedisProvider : acquire(request)
+RedisProvider --> LockProvider : ACQUIRED lease
+LockProvider --> Acquire : lease
 
-note right of Client
-  acquired=true 表示曾经拿到锁。
-  因 token 未生成，不返回可用 LockHandle，
-  callback 不会执行。
-end note
+Acquire -> Coordinator : issue token
+Coordinator -> TokenProvider : nextToken(request)
+TokenProvider -> JdbcProvider : nextToken(request)
+JdbcProvider -> DB : select/update sequence
+DB --> JdbcProvider : error
+JdbcProvider --> TokenProvider : PROVIDER_ERROR
+TokenProvider --> Coordinator : PROVIDER_ERROR
+Coordinator --> Acquire : fencing failed
+
+Acquire -> LockProvider : release(lease) as compensation
+LockProvider -> RedisProvider : release(request)
+RedisProvider --> LockProvider : RELEASED / NOT_OWNER / ERROR
+LockProvider --> Acquire : release result
+
+Acquire -> Metrics : recordFencing(success=false)
+Acquire -> Events : publish FENCING_TOKEN_FAILED
+Acquire --> Template : LockResult(PROVIDER_ERROR, FENCING)
+Template --> DefaultClient : result
+DefaultClient --> Client : result
+Client --> Caller : token failure
 
 @enduml

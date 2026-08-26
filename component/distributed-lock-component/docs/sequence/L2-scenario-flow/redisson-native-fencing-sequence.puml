@@ -1,48 +1,53 @@
 @startuml
 !include ../../_common/style.puml
 
-title Redisson Native Fencing（RFencedLock）
+title Redisson Native Fencing Scenario - Provider Capability
+autonumber
+skinparam shadowing false
 
+actor Caller
 
-box "API Module" #D9EAF7
-participant DistributedLockClient as Client
+box "distributed-lock-api" #D9EAF7
+participant "DistributedLockClient" as Client
 end box
 
-box "Core Module" #DFF2BF
-actor Biz
-participant LockAcquisitionService as Acquire
-participant FencingTokenCoordinator as Fencing
-participant RFencedLock as RFenced
+box "distributed-lock-core" #DFF2BF
+participant "DefaultDistributedLockClient" as DefaultClient
+participant "LockExecutionTemplate" as Template
+participant "LockAcquisitionService" as Acquire
+participant "LockHandleFactory" as Factory
 end box
 
-box "Provider Module" #FFE6CC
-participant ProviderNativeLockWaiter as Waiter
-participant RedissonLockProvider as Provider
-participant RedissonOwnershipRegistry as Ownership
-participant Redis
+box "distributed-lock-spi" #FFF2CC
+participant "LockProvider" as LockProvider
+participant "LockProviderCapabilities" as Capabilities
 end box
 
+box "distributed-lock-provider-redisson" #FFE6CC
+participant "RedissonLockProvider" as RedissonProvider
+end box
 
-Biz -> Client : execute(lockName, options)
-Client -> Acquire : acquire
-Acquire -> Fencing : plan(provider=redisson)
-Fencing --> Acquire : NATIVE
-Acquire -> Waiter : waitForLock
-Waiter -> Provider : acquire(nativeFencingRequired=true)
-Provider -> Ownership : reserve(ownerToken, lockKey, currentThreadId)
-Ownership --> Provider : ownership reserved
-Provider -> RFenced : tryLockAndGetToken(wait, lease)
-RFenced -> Redis : atomic acquire + fencing token increment
-Redis --> RFenced : token=N / not acquired
-RFenced --> Provider : token=N
-Provider --> Waiter : ACQUIRED(LockLease token=N)
-Waiter --> Acquire : ACQUIRED
-Acquire --> Client : LockHandle
-Client --> Biz : callback(handle, fencingToken=N)
+database Redis
 
-note right of Provider
-  不采用 tryLock() 后再 getToken()：
-  两次调用之间存在 lease 过期并被其他 owner
-  再次获取的竞态，会导致 token 错配。
-end note
+Caller -> Client : tryLock(fencingRequired=true)
+Client -> DefaultClient : delegate
+DefaultClient -> Template : tryLock()
+Template -> Acquire : acquire()
+Acquire -> LockProvider : capabilities()
+LockProvider -> RedissonProvider : capabilities()
+RedissonProvider --> LockProvider : fencingTokenSupported=true
+LockProvider --> Acquire : Capabilities
+Acquire -> LockProvider : acquire(request)
+LockProvider -> RedissonProvider : acquire(request)
+RedissonProvider -> Redis : acquire native lock/token
+Redis --> RedissonProvider : lock + native token
+RedissonProvider --> LockProvider : ACQUIRED lease with token
+LockProvider --> Acquire : lease
+Acquire -> Factory : create(lease)
+Factory --> Acquire : LockHandle
+Acquire --> Template : LockResult(ACQUIRED)
+Template --> DefaultClient : result
+DefaultClient --> Client : result
+Client --> Caller : result
+
 @enduml

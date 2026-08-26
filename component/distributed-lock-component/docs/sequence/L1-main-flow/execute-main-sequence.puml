@@ -1,53 +1,74 @@
 @startuml
-title execute Main Flow - Acquire / Callback / Release / Resolve
+!include ../../_common/style.puml
+
+title Execute Main Flow - Acquire Callback Release Resolve
 autonumber
 skinparam shadowing false
 
-box "API Module" #D9EAF7
-participant "DefaultDistributedLockClient" as Client
+actor Caller
+
+box "distributed-lock-api" #D9EAF7
+participant "DistributedLockClient" as Client
 participant "LockCallback" as Callback
+end box
+
+box "distributed-lock-core" #DFF2BF
+participant "DefaultDistributedLockClient" as DefaultClient
+participant "LockExecutionTemplate" as Template
+participant "LockAcquisitionService" as Acquire
+participant "LockWatchdog" as Watchdog
 participant "DefaultLockHandle" as Handle
 participant "LockResultResolver" as Resolver
-end box
-
-box "Core Module" #DFF2BF
-actor Caller
-participant "LockExecutionTemplate" as Execute
-participant "LockAcquisitionService" as Acquire
 participant "LockMetricsFacade" as Metrics
+participant "LockEventPublisher" as Events
 end box
 
+box "distributed-lock-spi" #FFF2CC
+participant "LockProvider" as LockProvider
+end box
+
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as RedisProvider
+end box
+
+database Redis
 
 Caller -> Client : execute(lockName, options, callback)
-Client -> Execute : execute(lockName, options, callback)
-Execute -> Acquire : acquire(lockName, options)
-Acquire --> Execute : AcquireAttempt
+Client -> DefaultClient : execute(...)
+DefaultClient -> Template : execute(...)
+Template -> Acquire : acquire(...)
+Acquire -> LockProvider : acquire(request)
+LockProvider -> RedisProvider : acquire(request)
+RedisProvider -> Redis : Lua acquire
+Redis --> RedisProvider : acquired
+RedisProvider --> LockProvider : ACQUIRED
+LockProvider --> Acquire : ACQUIRED lease
+Acquire --> Template : DefaultLockHandle
+Template -> Watchdog : start(handle) when CORE_MANAGED
 
-alt acquire not ACQUIRED
-  Execute -> Execute : copyAcquireFailure(acquireResult)
-  Execute --> Client : LockResult(status from acquire)
-else acquire ACQUIRED
-  Execute -> Callback : doWithLock(handle)
-  alt callback success and handle not lost
-    Callback --> Execute : value
-    Execute -> Execute : ExecutionOutcome.success(value)
-  else callback throws FencingTokenRejectedException
-    Callback --> Execute : error
-    Execute -> Execute : ExecutionOutcome(FENCING_REJECTED)
-  else callback throws LockLostException or handle lost
-    Callback --> Execute : error / handle.isLost
-    Execute -> Execute : ExecutionOutcome(LOCK_LOST)
-  else callback throws other Throwable
-    Callback --> Execute : error
-    Execute -> Execute : ExecutionOutcome(EXECUTION_FAILED)
-  end
-  Execute -> Handle : releaseWithOutcome()
-  Handle --> Execute : LockReleaseOutcome
-  Execute -> Resolver : resolve(executionOutcome, releaseOutcome, handle)
-  Resolver --> Execute : LockResult
-  Execute -> Metrics : recordHold(lease, status, holdDuration)
-  Execute --> Client : LockResult
+Template -> Callback : execute(handle)
+alt callback success
+  Callback --> Template : value
+  Template -> Metrics : recordExecution(success=true)
+else callback failed
+  Callback --> Template : exception
+  Template -> Metrics : recordExecution(success=false)
 end
 
-Client --> Caller : LockResult
+Template -> Handle : close()
+Handle -> LockProvider : release(request)
+LockProvider -> RedisProvider : release(request)
+RedisProvider -> Redis : Lua release(ownerToken)
+Redis --> RedisProvider : released / not owner / error
+RedisProvider --> LockProvider : LockReleaseResponse
+LockProvider --> Handle : release result
+Handle --> Template : released / lost / error
+
+Template -> Events : publish final event
+Template -> Resolver : resolve(value, exception, releaseResult)
+Resolver --> Template : LockResult
+Template --> DefaultClient : LockResult
+DefaultClient --> Client : LockResult
+Client --> Caller : result
+
 @enduml

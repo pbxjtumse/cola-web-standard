@@ -1,0 +1,28 @@
+@startuml
+!include ../../_common/style.puml
+
+title Provider Selection Internal Flow
+autonumber
+skinparam shadowing false
+
+box "distributed-lock-core" #DFF2BF
+participant "LockAcquisitionService" as Acquire
+participant "DefaultLockProviderRegistry" as Registry
+end box
+
+box "distributed-lock-spi" #FFF2CC
+participant "LockProvider" as LockProvider
+end box
+
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as RedisProvider
+end box
+
+Acquire -> Registry : getProvider(options.providerName)
+Registry --> Acquire : LockProvider
+Acquire -> LockProvider : capabilities()
+LockProvider -> RedisProvider : capabilities()
+RedisProvider --> LockProvider : LockProviderCapabilities
+LockProvider --> Acquire : capabilities
+
+@enduml

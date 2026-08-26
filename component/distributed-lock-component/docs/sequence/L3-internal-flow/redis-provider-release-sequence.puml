@@ -1,41 +1,27 @@
 @startuml
 !include ../../_common/style.puml
-title RedisLockProvider.release() 内部时序图
 
+title RedisLockProvider Release Internal Flow
+autonumber
+skinparam shadowing false
 
-box "API Module" #D9EAF7
-participant Handle as "DefaultLockHandle"
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as Provider
+participant "RedisLockScriptExecutor" as ScriptExecutor
 end box
 
-box "Core Module" #DFF2BF
-participant Executor as "RedisLockScriptExecutor"
-end box
-
-box "Provider Module" #FFE6CC
-participant Provider as "RedisLockProvider"
 database Redis
-end box
 
-
-Handle -> Provider : release(request)
-Provider -> Executor : execute release.lua\nKEYS[lockKey]\nARGV[ownerToken]
-Executor -> Redis : EVAL release.lua
-alt owner matched
-    Redis --> Executor : 1
-    Executor --> Provider : RELEASED
-    Provider --> Handle : LockReleaseResponse(RELEASED)
-else key not found
-    Redis --> Executor : -1
-    Executor --> Provider : NOT_FOUND
-    Provider --> Handle : LockReleaseResponse(NOT_FOUND)
-else owner not matched
-    Redis --> Executor : 0
-    Executor --> Provider : NOT_OWNER
-    Provider --> Handle : LockReleaseResponse(NOT_OWNER)
-else redis error
-    Redis --> Executor : error
-    Executor --> Provider : PROVIDER_ERROR
-    Provider --> Handle : LockReleaseResponse(PROVIDER_ERROR)
+Provider -> ScriptExecutor : executeRelease(lockKey, ownerToken)
+ScriptExecutor -> Redis : EVAL release.lua
+Redis --> ScriptExecutor : released / not owner / not found
+ScriptExecutor --> Provider : raw result
+alt released
+  Provider --> Provider : LockReleaseResponse(RELEASED)
+else not owner / not found
+  Provider --> Provider : LockReleaseResponse(NOT_OWNER or NOT_FOUND)
+else error
+  Provider --> Provider : LockReleaseResponse(PROVIDER_ERROR)
 end
 
 @enduml

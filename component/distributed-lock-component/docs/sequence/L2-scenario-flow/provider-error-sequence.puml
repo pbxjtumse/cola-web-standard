@@ -1,46 +1,49 @@
 @startuml
 !include ../../_common/style.puml
-title PROVIDER_ERROR 路径时序图
 
+title Provider Error Scenario - Acquire Stage
+autonumber
+skinparam shadowing false
 
-alt acquire 阶段 Redis 异常
-box "API Module" #D9EAF7
-participant DefaultClient as "DefaultDistributedLockClient"
-participant Handle as "DefaultLockHandle"
+actor Caller
+
+box "distributed-lock-api" #D9EAF7
+participant "DistributedLockClient" as Client
 end box
 
-box "Core Module" #DFF2BF
-actor Biz
-participant Watchdog as "LockWatchdog"
+box "distributed-lock-core" #DFF2BF
+participant "DefaultDistributedLockClient" as DefaultClient
+participant "LockExecutionTemplate" as Template
+participant "LockAcquisitionService" as Acquire
+participant "LockMetricsFacade" as Metrics
+participant "LockEventPublisher" as Events
 end box
 
-box "Provider Module" #FFE6CC
-participant Provider as "LockProvider"
+box "distributed-lock-spi" #FFF2CC
+participant "LockProvider" as LockProvider
+end box
+
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as RedisProvider
+end box
+
 database Redis
-end box
 
-
-    Biz -> DefaultClient : execute(...)
-    DefaultClient -> Provider : acquire(request)
-    Provider -> Redis : EVAL acquire.lua
-    Redis --> Provider : error
-    Provider --> DefaultClient : PROVIDER_ERROR
-    DefaultClient --> Biz : LockResult(PROVIDER_ERROR, stage=ACQUIRE, acquired=false)
-else renew 阶段 Redis 异常
-    Watchdog -> Handle : renew()
-    Handle -> Provider : renew(request)
-    Provider -> Redis : EVAL renew.lua
-    Redis --> Provider : error
-    Provider --> Handle : PROVIDER_ERROR
-    Handle --> Watchdog : false
-    Watchdog -> Watchdog : publish PROVIDER_ERROR(stage=RENEW), 不确定是否失锁
-else release 阶段 Redis 异常
-    DefaultClient -> Handle : unlock()
-    Handle -> Provider : release(request)
-    Provider -> Redis : EVAL release.lua
-    Redis --> Provider : error
-    Provider --> Handle : PROVIDER_ERROR
-    DefaultClient --> Biz : LockResult(RELEASE_FAILED, stage=RELEASE, acquired=true)
-end
+Caller -> Client : tryLock/execute()
+Client -> DefaultClient : delegate
+DefaultClient -> Template : execute()
+Template -> Acquire : acquire()
+Acquire -> LockProvider : acquire(request)
+LockProvider -> RedisProvider : acquire(request)
+RedisProvider -> Redis : Lua acquire / Redis command
+Redis --> RedisProvider : timeout / connection error
+RedisProvider --> LockProvider : LockAcquireResponse(PROVIDER_ERROR)
+LockProvider --> Acquire : PROVIDER_ERROR
+Acquire -> Metrics : recordAcquire(success=false)
+Acquire -> Events : publish PROVIDER_ERROR
+Acquire --> Template : LockResult(PROVIDER_ERROR, ACQUIRE)
+Template --> DefaultClient : result
+DefaultClient --> Client : result
+Client --> Caller : provider error
 
 @enduml

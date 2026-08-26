@@ -1,45 +1,39 @@
 @startuml
 !include ../../_common/style.puml
-title DefaultLockHandle.checkHeld() / assertHeld() 内部时序图
 
+title DefaultLockHandle CheckHeld Internal Flow
+autonumber
+skinparam shadowing false
 
-box "API Module" #D9EAF7
-participant Handle as "DefaultLockHandle"
+box "distributed-lock-core" #DFF2BF
+participant "DefaultLockHandle" as Handle
+participant "LockRuntimeState" as RuntimeState
 end box
 
-box "Core Module" #DFF2BF
-actor Caller
-participant Runtime as "LockRuntimeState"
-participant Event as "LockEventPublisher"
+box "distributed-lock-spi" #FFF2CC
+participant "LockProvider" as LockProvider
 end box
 
-box "Provider Module" #FFE6CC
-participant Provider as "LockProvider"
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as RedisProvider
+end box
+
 database Redis
-end box
 
-
-Caller -> Handle : checkHeld() / assertHeld()
-Handle -> Runtime : isReleased() / isLost()
-alt local released or lost
-    Handle --> Caller : false or throw LockLostException
-else active
-    Handle -> Provider : check(request)
-    Provider -> Redis : EVAL check.lua
-    Redis --> Provider : 1 / 0 / -1 / error
-    alt HELD
-        Provider --> Handle : HELD
-        Handle --> Caller : true
-    else NOT_FOUND or NOT_OWNER
-        Provider --> Handle : NOT_FOUND / NOT_OWNER
-        Handle -> Runtime : markLostOnce()
-        Handle -> Event : publish LOCK_LOST(stage=CHECK)
-        Handle --> Caller : false or throw LockLostException
-    else PROVIDER_ERROR
-        Provider --> Handle : PROVIDER_ERROR
-        Handle -> Event : publish PROVIDER_ERROR(stage=CHECK)
-        Handle --> Caller : false or throw ProviderException
-    end
+Handle -> RuntimeState : ensureNotReleased()
+RuntimeState --> Handle : ok
+Handle -> LockProvider : check(request)
+LockProvider -> RedisProvider : check(request)
+RedisProvider -> Redis : check ownerToken
+Redis --> RedisProvider : held / not owner / not found / error
+RedisProvider --> LockProvider : LockCheckResponse
+LockProvider --> Handle : check result
+alt HELD
+  Handle --> Handle : return true
+else NOT_OWNER / NOT_FOUND
+  Handle -> RuntimeState : markLost()
+else PROVIDER_ERROR
+  Handle --> Handle : return false / provider error
 end
 
 @enduml

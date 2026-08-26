@@ -1,38 +1,27 @@
 @startuml
 !include ../../_common/style.puml
-title RedisLockProvider.renew() 内部时序图
 
+title RedisLockProvider Renew Internal Flow
+autonumber
+skinparam shadowing false
 
-box "Core Module" #DFF2BF
-participant Watchdog as "Watchdog / Handle"
-participant Executor as "RedisLockScriptExecutor"
+box "distributed-lock-provider-redis" #FFE6CC
+participant "RedisLockProvider" as Provider
+participant "RedisLockScriptExecutor" as ScriptExecutor
 end box
 
-box "Provider Module" #FFE6CC
-participant Provider as "RedisLockProvider"
 database Redis
-end box
 
-
-Watchdog -> Provider : renew(request)
-Provider -> Executor : execute renew.lua\nKEYS[lockKey]\nARGV[ownerToken, leaseMillis]
-Executor -> Redis : EVAL renew.lua
-alt owner matched
-    Redis --> Executor : 1
-    Executor --> Provider : RENEWED
-    Provider --> Watchdog : LockRenewResponse(RENEWED)
-else key not found
-    Redis --> Executor : -1
-    Executor --> Provider : NOT_FOUND
-    Provider --> Watchdog : LockRenewResponse(NOT_FOUND)
-else owner not matched
-    Redis --> Executor : 0
-    Executor --> Provider : NOT_OWNER
-    Provider --> Watchdog : LockRenewResponse(NOT_OWNER)
-else redis error
-    Redis --> Executor : error
-    Executor --> Provider : PROVIDER_ERROR
-    Provider --> Watchdog : LockRenewResponse(PROVIDER_ERROR)
+Provider -> ScriptExecutor : executeRenew(lockKey, ownerToken, leaseTime)
+ScriptExecutor -> Redis : EVAL renew.lua
+Redis --> ScriptExecutor : renewed / not owner / not found
+ScriptExecutor --> Provider : raw result
+alt renewed
+  Provider --> Provider : LockRenewResponse(RENEWED)
+else not owner / not found
+  Provider --> Provider : LockRenewResponse(NOT_OWNER or NOT_FOUND)
+else error
+  Provider --> Provider : LockRenewResponse(PROVIDER_ERROR)
 end
 
 @enduml
