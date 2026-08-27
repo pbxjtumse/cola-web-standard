@@ -17,6 +17,7 @@ import com.xjtu.iron.retry.api.policy.RetryFailureCategory;
 import com.xjtu.iron.retry.api.policy.RetryPolicy;
 import com.xjtu.iron.retry.api.policy.RetryPolicyRegistry;
 
+import java.io.IOException;
 import java.time.Clock;
 import java.util.Map;
 import java.util.Objects;
@@ -65,8 +66,12 @@ public final class DefaultReliableMessageSender implements MessageSendExecutor {
             Clock clock,
             Executor asyncExecutor) {
         this.retryExecutor = Objects.requireNonNull(retryExecutor, "retryExecutor must not be null");
-        this.retryPolicyRegistry = Objects.requireNonNull(retryPolicyRegistry, "retryPolicyRegistry must not be null");
-        this.reliabilityOptions = Objects.requireNonNull(reliabilityOptions, "reliabilityOptions must not be null");
+        this.retryPolicyRegistry = Objects.requireNonNull(
+                retryPolicyRegistry,
+                "retryPolicyRegistry must not be null");
+        this.reliabilityOptions = Objects.requireNonNull(
+                reliabilityOptions,
+                "reliabilityOptions must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.asyncExecutor = Objects.requireNonNull(asyncExecutor, "asyncExecutor must not be null");
     }
@@ -111,16 +116,22 @@ public final class DefaultReliableMessageSender implements MessageSendExecutor {
                     prepared.confirmTimeout().toMillis(),
                     TimeUnit.MILLISECONDS);
             if (providerResult == null) {
-                return ProviderSendResult.failed(SendStatus.FAILED, SendFailureType.CLIENT_ERROR,
+                return ProviderSendResult.failed(
+                        SendStatus.FAILED,
+                        SendFailureType.CLIENT_ERROR,
                         "provider returned null send result");
             }
             return providerResult;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            return ProviderSendResult.failed(SendStatus.UNKNOWN, SendFailureType.INTERRUPTED,
+            return ProviderSendResult.failed(
+                    SendStatus.UNKNOWN,
+                    SendFailureType.INTERRUPTED,
                     "thread interrupted while waiting for send confirmation");
         } catch (TimeoutException exception) {
-            return ProviderSendResult.failed(SendStatus.UNKNOWN, SendFailureType.TIMEOUT,
+            return ProviderSendResult.failed(
+                    SendStatus.UNKNOWN,
+                    SendFailureType.TIMEOUT,
                     "send confirmation timeout after " + prepared.confirmTimeout());
         } catch (ExecutionException exception) {
             return classifyProviderThrowable(unwrap(exception));
@@ -133,8 +144,24 @@ public final class DefaultReliableMessageSender implements MessageSendExecutor {
      * 将 Provider 抛出的异常转换为标准 ProviderSendResult。
      */
     private ProviderSendResult classifyProviderThrowable(Throwable throwable) {
+        if (throwable instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+            return ProviderSendResult.failed(
+                    SendStatus.UNKNOWN,
+                    SendFailureType.INTERRUPTED,
+                    throwable.getMessage());
+        }
         if (throwable instanceof TimeoutException) {
-            return ProviderSendResult.failed(SendStatus.UNKNOWN, SendFailureType.TIMEOUT, throwable.getMessage());
+            return ProviderSendResult.failed(
+                    SendStatus.UNKNOWN,
+                    SendFailureType.TIMEOUT,
+                    throwable.getMessage());
+        }
+        if (throwable instanceof IOException) {
+            return ProviderSendResult.failed(
+                    SendStatus.FAILED,
+                    SendFailureType.NETWORK_ERROR,
+                    throwable.getMessage());
         }
         return ProviderSendResult.failed(
                 SendStatus.UNKNOWN,
@@ -187,14 +214,15 @@ public final class DefaultReliableMessageSender implements MessageSendExecutor {
         if (!reliabilityOptions.includeReliabilityInfo()) {
             return SendReliabilityInfo.disabled();
         }
-        RetryFailureCategory failureCategory = retryResult.getFailureCategory();
+        boolean success = retryResult.getStatus() == com.xjtu.iron.retry.api.execution.RetryStatus.SUCCESS;
+        RetryFailureCategory failureCategory = success ? null : retryResult.getFailureCategory();
         return SendReliabilityInfo.enabled(
                 retryResult.getRetryId(),
                 retryResult.getPolicyName(),
                 retryResult.getStatus().name(),
                 retryResult.getAttempts(),
-                retryResult.getFailureCode(),
-                failureCategory == null ? null : failureCategory.name());
+                success ? "" : retryResult.getFailureCode(),
+                failureCategory == null ? "" : failureCategory.name());
     }
 
     private SendResult retryExhaustedResult(

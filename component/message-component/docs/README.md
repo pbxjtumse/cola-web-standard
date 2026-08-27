@@ -24,8 +24,9 @@
 | 10 | `10-tri-provider-parallel-demo.md` | Kafka / Pulsar / RocketMQ 三 Provider 并行验证 |
 | 11 | `11-phase2-send-reliability.md` | 二期可靠发送设计、状态语义、类职责 |
 | 12 | `12-current-progress-and-next-steps.md` | 当前进度、前置验收点、下一步动作 |
-| 13 | `13-diagram-method-level-convention.md` | 时序图方法级表达约定，与分布式锁组件风格对齐 |
-| 14 | `diagrams/README.md` | PlantUML 图层规范、颜色规范、推荐图阅读顺序 |
+| 13 | `13-code-and-diagram-style.md` | 代码注释、换行风格、时序图方法级表达约定 |
+| 14 | `14-phase2-reliable-send-test-guide.md` | 二期可靠发送测试范围、FakeProvider 异常场景、Starter 保护 |
+| 15 | `diagrams/README.md` | PlantUML 图层规范、颜色规范、推荐图阅读顺序 |
 
 ---
 
@@ -33,7 +34,7 @@
 
 ### 2.1 保留
 
-保留上面 13 份文档，原因是它们都仍然和当前代码对应。
+保留上面 14 份设计与验证文档，原因是它们都仍然和当前代码对应。
 
 ### 2.2 删除 / 不再保留的类型
 
@@ -52,7 +53,7 @@
 
 1. **颜色与 distributed-lock-component 对齐**：API、Core、SPI、Provider、Retry、Foundation 等模块保持固定配色。
 2. **增加 class 图**：不再只有时序图和状态图，补充关键 class 视图，阅读结构更清晰。
-3. **时序图参与者保留类级别，箭头保留关键真实方法名**：箭头文字表达“协作语义”，不再写 `类.方法名`，避免图太碎。
+3. **时序图参与者保留类级别，箭头保留关键真实方法名**：箭头文字表达真实关键方法，例如 `send(...)`、`execute(...)`、`classify(...)`，对齐 distributed-lock-component 的方法级图风格。
 
 ---
 
@@ -88,3 +89,8 @@ V10 补全了 class 图体系。之前的 class 图主要是主干视图，本�
 类图：说明模块、分包、接口和实现之间的静态关系。
 ```
 
+
+
+## 5. V12 可靠发送测试补强
+
+V12 补齐了 message-core 的 FakeProvider 异常路径测试，并补充 starter 自动装配保护测试。当前二期可靠发送冻结前的关键验证点已经覆盖：正常三 MQ 联调、可重试失败、重试耗尽、UNKNOWN 默认不重试、REJECTED 不重试、Provider IOException 映射、可靠性字段语义以及缺少 retry Bean 时启动失败。

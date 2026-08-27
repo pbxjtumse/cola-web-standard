@@ -25,12 +25,13 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 /**
- * 基于 Pulsar 稳定 Java Client 的一期普通消息 Provider。
+ * Pulsar Provider 实现，负责把统一消息 SPI 映射到 Pulsar Client 的 Producer 和 Consumer。
  *
- * <p>一期固定使用 Shared Subscription 表达消费组内负载均衡。
- * Key_Shared、Reader、事务和延时发送留到三期专属能力。</p>
+ * <p>Pulsar 发送成功时会返回 MessageId，Provider 将其作为 providerMessageId 带回 core。
+ * 发送超时、连接异常、权限异常等需要被映射为统一的 {@code ProviderSendResult}，由可靠发送层继续决定是否重试。</p>
+ *
+ * <p>消费侧使用 subscriptionName 对应 consumerGroup，并根据业务返回的 ConsumeDecision 决定 ack 或 negativeAck。</p>
  */
 public final class PulsarMessageProvider implements MessageProvider {
 
