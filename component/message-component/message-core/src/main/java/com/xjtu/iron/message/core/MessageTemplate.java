@@ -44,14 +44,23 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-
 /**
- * 统一编排普通消息发送和消费生命周期的核心入口。
+ * message-component 的核心门面，统一承接业务侧的发送和订阅调用。
  *
- * <p>
- * 二期开始 MessageTemplate 不再直接调用 Provider.send。
- * 它只负责准备发送快照，真正发送由 MessageSendExecutor 执行。
- * </p>
+ * <p>这个类的定位类似“组件编排器”：它不直接理解 Kafka、Pulsar、RocketMQ 的客户端细节，
+ * 也不直接处理 retry-component 的内部算法，而是负责把一次业务调用拆成几个稳定阶段：</p>
+ *
+ * <ol>
+ *   <li>校验逻辑目的地、消息信封和发送选项；</li>
+ *   <li>通过 {@code MessageEnvelopeEnricher} 补齐 messageId、时间、上下文等公共元数据；</li>
+ *   <li>通过 {@code DestinationResolver} 把逻辑目的地解析为 Provider 和物理 Topic；</li>
+ *   <li>通过 {@code MessageProviderRegistry} 获取目标 Provider，并检查其发布/消费能力；</li>
+ *   <li>通过 {@code MessageWireCodec} 把统一消息模型转换成 Provider 请求；</li>
+ *   <li>把已经准备好的 {@code PreparedMessageSend} 交给 {@code MessageSendExecutor} 执行。</li>
+ * </ol>
+ *
+ * <p>二期可靠发送之后，{@code MessageTemplate} 不再直接等待 Provider 的发送结果，
+ * 这样可以保证主流程职责稳定：Template 只负责“准备发送”，可靠发送、重试、UNKNOWN 语义由 send 包处理。</p>
  */
 public final class MessageTemplate
         implements MessagePublisher, MessageConsumerRegistrar, AutoCloseable {
@@ -192,13 +201,16 @@ public final class MessageTemplate
             MessageDestination destination,
             MessageEnvelope<?> message,
             SendOptions options) {
+        // 发送结果需要记录开始和结束时间，所以入口处先固定 startedAt，避免后续异常分支丢失时间信息。
         Instant startedAt = this.options.clock().instant();
         PreparedMessageSend prepared;
         try {
+            // prepare 阶段只做发送前置工作：校验、补齐、路由、Provider 选择和编码，不真正触发中间件发送。
             prepared = prepare(destination, message, options, startedAt);
         } catch (PreparationException exception) {
             return preparationFailure(destination, message, startedAt, exception);
         }
+        // 真正的发送交给 MessageSendExecutor。这里可能是 DirectMessageSender，也可能是可靠发送实现。
         return sendExecutor.send(prepared);
     }
 
@@ -207,9 +219,11 @@ public final class MessageTemplate
             MessageDestination destination,
             MessageEnvelope<?> message,
             SendOptions options) {
+        // 发送结果需要记录开始和结束时间，所以入口处先固定 startedAt，避免后续异常分支丢失时间信息。
         Instant startedAt = this.options.clock().instant();
         PreparedMessageSend prepared;
         try {
+            // prepare 阶段只做发送前置工作：校验、补齐、路由、Provider 选择和编码，不真正触发中间件发送。
             prepared = prepare(destination, message, options, startedAt);
         } catch (PreparationException exception) {
             return CompletableFuture.completedFuture(
@@ -269,14 +283,15 @@ public final class MessageTemplate
                     null,
                     null);
         }
-        SendOptions actualOptions = sendOptions == null
-                ? SendOptions.defaults()
-                : sendOptions;
+        // 业务可以不传 SendOptions，此时使用组件默认确认超时和默认发送语义。
+        SendOptions actualOptions = sendOptions == null ? SendOptions.defaults() : sendOptions;
+        // confirmTimeout 是“单次 Provider 发送等待确认”的超时，不是整个 retry 的最大时长。
         Duration confirmTimeout = actualOptions.confirmTimeout() == null
                 ? options.defaultConfirmTimeout()
                 : actualOptions.confirmTimeout();
         MessageEnvelope<?> enrichedMessage;
         try {
+            // 补齐 messageId、createdAt、source、correlationId 等公共元数据，保证后续 Provider 不再处理这些公共字段。
             enrichedMessage = envelopeEnricher.enrich(message);
         } catch (RuntimeException exception) {
             throw new PreparationException(
@@ -289,6 +304,7 @@ public final class MessageTemplate
         }
         ProviderDestination providerDestination;
         try {
+            // 将 API 层逻辑目的地解析为 SPI 层物理目的地，例如 demo:message -> message-demo-topic。
             providerDestination = destinationResolver.resolve(destination);
         } catch (RuntimeException exception) {
             throw new PreparationException(
@@ -322,6 +338,7 @@ public final class MessageTemplate
         }
         ProviderSendRequest request;
         try {
+            // wire codec 把统一消息模型转换为 Provider 请求，payload 序列化和系统 header 都在这里完成。
             request = wireCodec.encode(destination, providerDestination, enrichedMessage);
         } catch (RuntimeException exception) {
             throw new PreparationException(

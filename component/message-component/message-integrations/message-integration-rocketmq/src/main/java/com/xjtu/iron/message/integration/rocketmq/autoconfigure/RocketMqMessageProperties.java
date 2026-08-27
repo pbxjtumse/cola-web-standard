@@ -13,6 +13,12 @@ import java.util.List;
  * 这与 RocketMQ 5.x gRPC Proxy 模式不同，不能把 9876 NameServer 当成 gRPC endpoint 使用。</p>
  */
 @ConfigurationProperties(prefix = "xjtu.iron.message.rocketmq")
+/**
+ * RocketMQ4 Provider 的配置属性模型。
+ *
+ * <p>这里保存 RocketMQ Remoting 客户端所需参数，例如 NameServer 地址、生产者组、消费者组、topic 列表和发送超时。
+ * 它不表达 RocketMQ5 gRPC 语义。</p>
+ */
 public class RocketMqMessageProperties {
 
     /** 是否启用 RocketMQ Provider 自动配置。 */

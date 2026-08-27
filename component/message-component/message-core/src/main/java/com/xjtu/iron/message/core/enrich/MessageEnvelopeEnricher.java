@@ -11,8 +11,16 @@ import com.xjtu.iron.message.api.model.MessageMetadata;
 
 import java.time.Instant;
 import java.util.Objects;
-
-/** 发送前补齐消息 ID、版本、时间和关联上下文。 */
+/**
+ * 发送前的消息信封补齐器。
+ *
+ * <p>业务方构造 {@code MessageEnvelope} 时，通常只关心 payload、messageType、messageKey 等业务字段。
+ * 组件在真正发送前需要补齐 messageId、createdAt、occurredAt、source、correlationId、causationId 等公共信息。
+ * 这些补齐动作集中放在本类，避免散落在 MessageTemplate 或各 Provider 中。</p>
+ *
+ * <p>messageId 的生成通过 {@code MessageIdGenerator} 完成。默认可以使用 UUID fallback，
+ * 在完整技术组件体系中应优先适配 foundation-component 的统一 ID 生成能力。</p>
+ */
 public final class MessageEnvelopeEnricher {
 
     private final MessageComponentOptions options;

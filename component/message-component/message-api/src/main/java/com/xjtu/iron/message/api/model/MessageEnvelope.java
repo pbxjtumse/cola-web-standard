@@ -3,14 +3,15 @@ package com.xjtu.iron.message.api.model;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
-
 /**
- * 表示业务发布和消费的统一不可变消息信封。
+ * message-component 对外暴露的统一消息信封。
  *
- * <p>Envelope 是聚合根：metadata 描述消息自身，context 描述传播链路，headers 保存开放扩展，
- * payload 保存业务数据。Kafka partition、RocketMQ message group、Pulsar subscription 等原生字段不进入该模型。</p>
+ * <p>业务真正关心的是 payload，但一个可治理的消息组件还必须携带 metadata、context 和 headers。
+ * metadata 表达消息自身身份，例如 messageId、messageType、messageKey、schemaVersion；
+ * context 表达调用链路，例如 source、correlationId、causationId、tenantId；headers 则用于扩展治理字段。</p>
  *
- * @param <T> 业务消息体类型
+ * <p>所有 Provider 都应该围绕 {@code MessageEnvelope} 进行适配，而不是让业务代码直接接触 Kafka Record、
+ * Pulsar Message 或 RocketMQ Message。这样后续可靠发送、消费幂等、Outbox 和观测指标才能复用统一模型。</p>
  */
 public final class MessageEnvelope<T> {
 

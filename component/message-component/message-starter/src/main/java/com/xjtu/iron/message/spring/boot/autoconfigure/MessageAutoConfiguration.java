@@ -45,6 +45,16 @@ import java.util.concurrent.ForkJoinPool;
 @AutoConfiguration
 @EnableConfigurationProperties(MessageProperties.class)
 @ConditionalOnProperty(prefix = "xjtu.iron.message", name = "enabled", havingValue = "true", matchIfMissing = true)
+/**
+ * message-component 的 Spring Boot 自动装配入口。
+ *
+ * <p>它负责把业务 yml 配置转换为核心组件对象，包括路由注册表、Provider 注册表、序列化器、messageId 生成器、
+ * MessageTemplate 以及发送执行器。业务系统只需要引入 starter 并配置 {@code xjtu.iron.message.*} 即可获得组件能力。</p>
+ *
+ * <p>二期可靠发送的关键装配规则也在这里：如果关闭可靠发送，则装配 {@code DirectMessageSender}；
+ * 如果开启可靠发送，则必须存在 retry-component 的 {@code RetryExecutor} 和 {@code RetryPolicyRegistry}，
+ * 否则启动失败，避免配置上声称开启可靠发送、实际却静默直发。</p>
+ */
 public class MessageAutoConfiguration {
 
     /**

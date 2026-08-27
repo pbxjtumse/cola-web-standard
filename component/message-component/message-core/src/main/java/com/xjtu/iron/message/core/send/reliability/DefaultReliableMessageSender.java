@@ -28,14 +28,18 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
 /**
- * 基于 retry-component 的可靠发送执行器。
+ * 基于 retry-component 的可靠发送执行器，是 message-component 二期发送可靠性的核心类。
  *
- * <p>
- * 这个类负责包装 Provider.send，并把 ProviderSendResult 交给 retry-component 判定。
- * retry-component 仍然只处理通用重试流程，不理解 Kafka/Pulsar/RocketMQ 的业务含义。
- * </p>
+ * <p>它只处理“进程内、当前调用维度”的可靠发送增强，不负责 Outbox、事务消息、宕机补偿或消费端幂等。
+ * 它会把一次 Provider 发送包装成 retry-component 可执行的 {@code RetryExecution}，并在每次 attempt 中调用 Provider。</p>
+ *
+ * <p>这里最重要的设计边界是：retry-component 只负责通用重试编排，message-component 负责解释消息发送语义。
+ * 因此 {@code DefaultReliableMessageSender} 会把 {@code ProviderSendResult} 交给
+ * {@code MessageSendRetryClassifier} 判断是否继续重试，再把最终 {@code RetryResult} 转换成对外的 {@code SendResult}。</p>
+ *
+ * <p>UNKNOWN 结果默认不重试。因为 UNKNOWN 表示 Broker 可能已经收到消息，只是客户端没有拿到确认。
+ * 在 Outbox 和消费幂等没有接入之前，盲目重试可能制造重复消息。</p>
  */
 public final class DefaultReliableMessageSender implements MessageSendExecutor {
 
@@ -61,12 +65,8 @@ public final class DefaultReliableMessageSender implements MessageSendExecutor {
             Clock clock,
             Executor asyncExecutor) {
         this.retryExecutor = Objects.requireNonNull(retryExecutor, "retryExecutor must not be null");
-        this.retryPolicyRegistry = Objects.requireNonNull(
-                retryPolicyRegistry,
-                "retryPolicyRegistry must not be null");
-        this.reliabilityOptions = Objects.requireNonNull(
-                reliabilityOptions,
-                "reliabilityOptions must not be null");
+        this.retryPolicyRegistry = Objects.requireNonNull(retryPolicyRegistry, "retryPolicyRegistry must not be null");
+        this.reliabilityOptions = Objects.requireNonNull(reliabilityOptions, "reliabilityOptions must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.asyncExecutor = Objects.requireNonNull(asyncExecutor, "asyncExecutor must not be null");
     }
@@ -74,9 +74,12 @@ public final class DefaultReliableMessageSender implements MessageSendExecutor {
     @Override
     public SendResult send(PreparedMessageSend prepared) {
         Objects.requireNonNull(prepared, "prepared must not be null");
+        // 每一次业务发送调用都生成独立 retryId，用于日志、指标和最终 SendReliabilityInfo 追踪。
         String retryId = createRetryId(prepared);
+        // 复用 retry-component 中名为 message-send 的基础策略，但替换为消息发送专用分类器。
         RetryPolicy retryPolicy = createMessageSendPolicy();
         RetryExecution<ProviderSendResult> execution = RetryExecution
+                // retry-component 只看到一次“发送操作”，真正的 Provider 发送细节仍由 message-component 封装。
                 .builder("message-send", context -> doProviderSendAttempt(prepared), retryPolicy)
                 .retryId(retryId)
                 .attributes(retryAttributes(prepared))
@@ -95,6 +98,7 @@ public final class DefaultReliableMessageSender implements MessageSendExecutor {
      */
     private ProviderSendResult doProviderSendAttempt(PreparedMessageSend prepared) {
         try {
+            // 每个 attempt 只调用一次 Provider。Provider 内部负责和 Kafka/Pulsar/RocketMQ 客户端交互。
             CompletionStage<ProviderSendResult> providerStage = prepared.provider().send(prepared.request());
             if (providerStage == null) {
                 return ProviderSendResult.failed(
@@ -102,26 +106,21 @@ public final class DefaultReliableMessageSender implements MessageSendExecutor {
                         SendFailureType.CLIENT_ERROR,
                         "provider returned null completion stage");
             }
+            // confirmTimeout 控制单次 attempt 等待 Broker 确认的最长时间；超时后返回 UNKNOWN，默认不继续重试。
             ProviderSendResult providerResult = providerStage.toCompletableFuture().get(
                     prepared.confirmTimeout().toMillis(),
                     TimeUnit.MILLISECONDS);
             if (providerResult == null) {
-                return ProviderSendResult.failed(
-                        SendStatus.FAILED,
-                        SendFailureType.CLIENT_ERROR,
+                return ProviderSendResult.failed(SendStatus.FAILED, SendFailureType.CLIENT_ERROR,
                         "provider returned null send result");
             }
             return providerResult;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            return ProviderSendResult.failed(
-                    SendStatus.UNKNOWN,
-                    SendFailureType.INTERRUPTED,
+            return ProviderSendResult.failed(SendStatus.UNKNOWN, SendFailureType.INTERRUPTED,
                     "thread interrupted while waiting for send confirmation");
         } catch (TimeoutException exception) {
-            return ProviderSendResult.failed(
-                    SendStatus.UNKNOWN,
-                    SendFailureType.TIMEOUT,
+            return ProviderSendResult.failed(SendStatus.UNKNOWN, SendFailureType.TIMEOUT,
                     "send confirmation timeout after " + prepared.confirmTimeout());
         } catch (ExecutionException exception) {
             return classifyProviderThrowable(unwrap(exception));
@@ -135,10 +134,7 @@ public final class DefaultReliableMessageSender implements MessageSendExecutor {
      */
     private ProviderSendResult classifyProviderThrowable(Throwable throwable) {
         if (throwable instanceof TimeoutException) {
-            return ProviderSendResult.failed(
-                    SendStatus.UNKNOWN,
-                    SendFailureType.TIMEOUT,
-                    throwable.getMessage());
+            return ProviderSendResult.failed(SendStatus.UNKNOWN, SendFailureType.TIMEOUT, throwable.getMessage());
         }
         return ProviderSendResult.failed(
                 SendStatus.UNKNOWN,
@@ -206,6 +202,7 @@ public final class DefaultReliableMessageSender implements MessageSendExecutor {
             RetryResult<ProviderSendResult> retryResult,
             SendReliabilityInfo reliabilityInfo) {
         ProviderSendResult lastProviderResult = lastProviderResult(retryResult);
+        // 如果最后一次结果是 UNKNOWN，即使 retry 耗尽，也不能改写成 FAILED，否则会误导业务立即重发。
         if (lastProviderResult != null && lastProviderResult.status() == SendStatus.UNKNOWN) {
             return failureResult(prepared, SendStatus.UNKNOWN, SendStage.RETRY,
                     SendFailureType.RETRY_EXHAUSTED,

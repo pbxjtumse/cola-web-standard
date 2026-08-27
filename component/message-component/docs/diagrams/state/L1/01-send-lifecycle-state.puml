@@ -4,13 +4,13 @@
 title L1：发送生命周期状态图
 
 [*] --> PREPARE
-state "PREPARE\n校验 / enrich / route / encode" as PREPARE #EDE7F6
-state "DISPATCH\n选择 direct / reliable" as DISPATCH #FFF3E0
-state "PROVIDER_SEND\n调用 MessageProvider" as PROVIDER_SEND #ECEFF1
-state "CONFIRMED" as CONFIRMED #DCFCE7
-state "FAILED" as FAILED #FEE2E2
-state "REJECTED" as REJECTED #FFE4E6
-state "UNKNOWN" as UNKNOWN #FEF3C7
+state "PREPARE\n校验 / enrich / route / encode" as PREPARE
+state "DISPATCH\n选择 direct / reliable" as DISPATCH
+state "PROVIDER_SEND\n调用 MessageProvider" as PROVIDER_SEND
+state "CONFIRMED" as CONFIRMED
+state "FAILED" as FAILED
+state "REJECTED" as REJECTED
+state "UNKNOWN" as UNKNOWN
 
 PREPARE --> REJECTED : 参数 / 路由 / 编解码拒绝
 PREPARE --> DISPATCH : 准备完成

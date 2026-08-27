@@ -11,6 +11,12 @@ import java.time.Duration;
  * {@code xjtu.iron.message} 对应的 MessageProperties 中。</p>
  */
 @ConfigurationProperties(prefix = "xjtu.iron.message.pulsar")
+/**
+ * Pulsar Provider 的配置属性模型。
+ *
+ * <p>该类只描述 Pulsar 客户端参数，不包含消息组件的通用路由和可靠发送配置。
+ * 通用配置仍然放在 {@code MessageProperties} 中。</p>
+ */
 public class PulsarMessageProperties {
 
     /**

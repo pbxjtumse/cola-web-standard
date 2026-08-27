@@ -7,14 +7,18 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-
 /**
- * 表示统一的消息发送结果。
+ * 业务发送调用最终拿到的统一结果对象。
  *
- * <p>
- * 二期开始 SendResult 除了 Provider 返回状态，还携带可靠发送执行信息。
- * 这样业务方能够看到是否发生过重试、最终 retry 状态和最后失败分类。
- * </p>
+ * <p>{@code SendResult} 不只是简单成功或失败。二期可靠发送之后，它需要同时表达四类信息：</p>
+ * <ol>
+ *   <li>消息身份：messageId、destination、providerName、providerMessageId；</li>
+ *   <li>发送结论：CONFIRMED、FAILED、REJECTED、UNKNOWN；</li>
+ *   <li>失败语义：失败阶段、失败类型、描述、Provider 元数据；</li>
+ *   <li>可靠性信息：retryId、retryPolicy、retryStatus、attempts、lastFailureCode。</li>
+ * </ol>
+ *
+ * <p>特别注意 UNKNOWN：它表示组件无法确认 Broker 是否已经收到消息，不能被业务简单当成 FAILED 立即重发。</p>
  */
 public final class SendResult {
 

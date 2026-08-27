@@ -21,6 +21,12 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnClass(PulsarMessageProvider.class)
 @EnableConfigurationProperties(PulsarMessageProperties.class)
 @ConditionalOnProperty(prefix = "xjtu.iron.message.pulsar", name = "enabled", havingValue = "true", matchIfMissing = true)
+/**
+ * Pulsar Provider 的 Spring Boot 自动装配类。
+ *
+ * <p>它负责读取 Pulsar serviceUrl、listenerThreads、operationTimeout 等配置，并创建 Pulsar Provider Bean。
+ * Provider 创建完成后由 message-starter 统一注册到 ProviderRegistry。</p>
+ */
 public class PulsarMessageAutoConfiguration {
 
     /**

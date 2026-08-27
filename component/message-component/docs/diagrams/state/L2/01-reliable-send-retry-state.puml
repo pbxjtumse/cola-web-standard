@@ -4,14 +4,14 @@
 title L2：可靠发送重试状态图
 
 [*] --> READY
-state "READY\n待发送上下文已准备" as READY #FFF3E0
-state "ATTEMPT\n一次 Provider 发送" as ATTEMPT #ECEFF1
-state "CLASSIFY\n重试分类" as CLASSIFY #FFF3E0
-state "BACKOFF\n等待下一次尝试" as BACKOFF #FCE4EC
-state "CONFIRMED" as CONFIRMED #DCFCE7
-state "FAILED" as FAILED #FEE2E2
-state "UNKNOWN" as UNKNOWN #FEF3C7
-state "REJECTED" as REJECTED #FFE4E6
+state "READY\n待发送上下文已准备" as READY
+state "ATTEMPT\n一次 Provider 发送" as ATTEMPT
+state "CLASSIFY\n重试分类" as CLASSIFY
+state "BACKOFF\n等待下一次尝试" as BACKOFF
+state "CONFIRMED" as CONFIRMED
+state "FAILED" as FAILED
+state "UNKNOWN" as UNKNOWN
+state "REJECTED" as REJECTED
 
 READY --> ATTEMPT
 ATTEMPT --> CLASSIFY

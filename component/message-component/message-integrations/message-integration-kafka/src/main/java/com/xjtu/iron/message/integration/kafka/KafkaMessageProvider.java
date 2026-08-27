@@ -48,12 +48,15 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 /**
- * 基于 Kafka 原生 Java Client 的一期普通消息 Provider。
+ * Kafka Provider 实现，负责把 message-component 的统一 SPI 请求适配到 Kafka Producer/Consumer。
  *
- * <p>Consumer 关闭自动提交，只有 core 返回 SUCCESS 后才提交当前记录的下一个 offset。
- * RETRY 时 seek 回当前 offset 并执行固定退避。</p>
+ * <p>发送侧会把 {@code ProviderSendRequest} 转换为 Kafka {@code ProducerRecord}，等待 Kafka 返回 RecordMetadata，
+ * 再映射为 {@code ProviderSendResult}。消费侧会把 Kafka ConsumerRecord 还原为 {@code ProviderInboundMessage}，
+ * 再交给 core 的 wire codec 解码。</p>
+ *
+ * <p>二期可靠发送要求 Provider 尽量准确地区分 CONFIRMED、FAILED、REJECTED、UNKNOWN。
+ * Kafka 发送确认超时不等价于明确失败，因此应优先映射为 UNKNOWN，避免盲目重试导致重复消息。</p>
  */
 public final class KafkaMessageProvider implements MessageProvider {
 

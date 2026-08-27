@@ -9,14 +9,20 @@ import com.xjtu.iron.retry.api.policy.RetryDecision;
 import com.xjtu.iron.retry.api.policy.RetryFailureCategory;
 
 import java.util.Objects;
-
 /**
- * 消息发送专用重试分类器。
+ * 消息发送专用的重试分类器，用来把 Provider 层结果转换成 retry-component 能理解的动作。
  *
- * <p>
- * retry-component 不理解 MQ 语义。
- * 这里由 message-component 把 ProviderSendResult 转换为 RetryDecision。
- * </p>
+ * <p>这个类是“消息语义”和“通用重试语义”的分界点。Provider 会返回统一的 {@code ProviderSendResult}，
+ * 但 retry-component 不应该知道 Kafka offset、Pulsar messageId、RocketMQ SEND_OK 等细节。
+ * 所以这里把结果归纳成 SUCCESS、RETRY、STOP 或 ABORT。</p>
+ *
+ * <p>分类原则：</p>
+ * <ul>
+ *   <li>CONFIRMED：明确成功，返回 SUCCESS；</li>
+ *   <li>REJECTED：参数、路由、权限、序列化等明确不可重试，返回 STOP；</li>
+ *   <li>UNKNOWN：默认 STOP，避免重复消息；</li>
+ *   <li>FAILED + NETWORK_ERROR / CLIENT_ERROR：认为是短暂失败，允许有限重试。</li>
+ * </ul>
  */
 public final class MessageSendRetryClassifier implements RetryClassifier {
 
@@ -53,6 +59,7 @@ public final class MessageSendRetryClassifier implements RetryClassifier {
                     RetryFailureCategory.NON_RETRYABLE);
         }
         if (result.status() == SendStatus.UNKNOWN) {
+            // UNKNOWN 表示 Broker 状态不确定。V1 默认停止，只有显式打开 retryWhenUnknown 才冒重复风险继续重试。
             if (retryWhenUnknown) {
                 return RetryDecision.retry(
                         "message send outcome is unknown but retryWhenUnknown is enabled",
@@ -64,6 +71,7 @@ public final class MessageSendRetryClassifier implements RetryClassifier {
                     failureCode(result),
                     RetryFailureCategory.UNKNOWN);
         }
+        // 只有“明确失败且失败类型可重试”的结果才进入 retry，状态不确定的 UNKNOWN 不走这里。
         if (isRetryableFailure(result.failureType())) {
             return RetryDecision.retry(
                     "message send failed with retryable failure type",

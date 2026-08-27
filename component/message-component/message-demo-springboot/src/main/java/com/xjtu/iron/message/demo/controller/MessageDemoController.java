@@ -36,6 +36,13 @@ import java.util.concurrent.CompletableFuture;
  */
 @RestController
 @RequestMapping("/demo/messages")
+/**
+ * message-component 演示工程的 HTTP 入口。
+ *
+ * <p>这个 Controller 不代表生产业务接口，它用于验证组件能力：单 Provider 发送、三 Provider 并行发送、
+ * 消费结果查询、内存接收记录清理等。二期可靠发送接入后，响应中会额外展示 retryStatus、attempts、retryId 等信息，
+ * 方便直接判断当前请求是否真的走到了可靠发送链路。</p>
+ */
 public class MessageDemoController {
 
     /** 消息发送入口。 */

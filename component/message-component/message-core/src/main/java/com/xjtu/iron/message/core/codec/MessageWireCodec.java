@@ -18,21 +18,15 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-
 /**
- * 在统一 Java 消息模型与 Broker 线级格式之间编码和解码。
+ * 统一消息线级协议编解码器，负责在 message-api 模型和 Provider SPI 请求之间转换。
  *
- * <p>这里的“线级格式”指真正交给 Kafka、RocketMQ、Pulsar 的结构：</p>
- * <ul>
- *     <li>物理目的地</li>
- *     <li>messageKey</li>
- *     <li>系统消息头和用户消息头</li>
- *     <li>已经序列化完成的 payload 字节数组</li>
- * </ul>
+ * <p>注意它不是普通 JSON 序列化器。{@code MessageSerializer} 只负责 payload 对象和 byte[] 的转换，
+ * 而 {@code MessageWireCodec} 负责把 messageId、messageType、messageKey、context、headers、destination 等
+ * 统一消息语义放入 Provider 请求或从 Provider 入站消息中还原出来。</p>
  *
- * <p>MessageSerializer 只负责 payload 对象与字节数组之间的转换；
- * MessageWireCodec 负责消息协议字段，例如 messageId、correlationId、causationId、
- * logical destination 和 content-type 的编码、校验和重建。</p>
+ * <p>因此即使 Jackson 序列化实现迁移到 core，wire codec 这个边界也不能删除。
+ * 它是 message-component 统一 Kafka、Pulsar、RocketMQ 线级协议的核心入口。</p>
  */
 public final class MessageWireCodec {
 

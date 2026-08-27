@@ -10,13 +10,15 @@ import com.xjtu.iron.message.spi.ProviderSendRequest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
-
 /**
- * 表示已经完成发送准备的不可变快照。
+ * 一次发送在进入执行器之前的不可变快照。
  *
- * <p>
- * MessageTemplate 只负责构建这个快照，后续直发或可靠发送都基于它执行。
- * </p>
+ * <p>{@code MessageTemplate} 完成校验、消息补齐、目的地解析、Provider 选择、wire codec 编码之后，
+ * 会把所有结果封装到这个对象里。后续不管走 {@code DirectMessageSender} 还是
+ * {@code DefaultReliableMessageSender}，都只依赖这个快照，不再重复做前置准备。</p>
+ *
+ * <p>这个设计的好处是把“准备发送”和“执行发送”拆开：准备阶段的失败可以直接映射为 REJECTED 或 FAILED，
+ * 执行阶段的失败则由 direct/reliable sender 负责映射为 CONFIRMED、FAILED、UNKNOWN 或 RETRY_EXHAUSTED。</p>
  */
 public final class PreparedMessageSend {
 

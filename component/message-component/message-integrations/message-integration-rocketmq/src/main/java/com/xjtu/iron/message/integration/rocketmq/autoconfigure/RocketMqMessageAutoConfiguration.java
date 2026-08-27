@@ -23,6 +23,12 @@ import java.util.Set;
 @ConditionalOnClass(RocketMqMessageProvider.class)
 @EnableConfigurationProperties(RocketMqMessageProperties.class)
 @ConditionalOnProperty(prefix = "xjtu.iron.message.rocketmq", name = "enabled", havingValue = "true")
+/**
+ * RocketMQ4 Provider 的 Spring Boot 自动装配类。
+ *
+ * <p>当前实现面向 RocketMQ 4.x Remoting 客户端，读取 nameServer、producerGroup、consumerGroup、vipChannel 等配置，
+ * 创建 {@code RocketMqMessageProvider} 并交给统一 ProviderRegistry 管理。</p>
+ */
 public class RocketMqMessageAutoConfiguration {
 
     /**

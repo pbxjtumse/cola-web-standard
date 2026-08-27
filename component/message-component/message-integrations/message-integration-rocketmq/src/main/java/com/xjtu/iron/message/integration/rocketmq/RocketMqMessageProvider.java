@@ -33,13 +33,14 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 /**
- * 基于 RocketMQ 4.x Remoting Java Client 的一期普通消息 Provider。
+ * RocketMQ4 Remoting Provider 实现。
  *
- * <p>当前 KubeBlocks RocketMQ 为 4.9.6 NameServer + Broker 直连模式，
- * 因此这里使用 {@code rocketmq-client} 中的 DefaultMQProducer 和 DefaultMQPushConsumer。
- * RocketMQ 5.x gRPC Client 需要 Proxy 组件，不能直接连接 9876 NameServer。</p>
+ * <p>当前组件验证的是 RocketMQ 4.x Remoting 协议，使用 DefaultMQProducer 和 DefaultMQPushConsumer，
+ * 不是 RocketMQ 5.x gRPC client。这个 Provider 负责把统一请求转换成 RocketMQ Message，
+ * 并把 SEND_OK、FLUSH_DISK_TIMEOUT、FLUSH_SLAVE_TIMEOUT、SLAVE_NOT_AVAILABLE 等原生状态映射为统一结果。</p>
+ *
+ * <p>RocketMQ 的部分非 SEND_OK 状态并不代表消息一定没有进入 Broker，因此更偏 UNKNOWN，而不是简单 FAILED。</p>
  */
 public final class RocketMqMessageProvider implements MessageProvider {
 

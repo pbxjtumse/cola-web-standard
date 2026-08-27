@@ -2,12 +2,15 @@ package com.xjtu.iron.message.spi;
 
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
-
 /**
- * 定义 Kafka、RocketMQ、Pulsar 等基础 Provider 的最小 SPI。
+ * 具体消息中间件适配层必须实现的 Provider SPI。
  *
- * <p>该接口是一期稳定 Provider 边界，Provider 只负责普通消息发送、普通消息订阅和资源释放。
- * Producer、Consumer、ListenerContainer 等更细粒度对象不进入一期 SPI，避免把 Spring 或特定客户端模型泄露给 core。</p>
+ * <p>message-core 只面向这个接口编程，不直接依赖 Kafka、Pulsar、RocketMQ 客户端。
+ * Provider 的职责是把统一的 {@code ProviderSendRequest} 转换成原生消息发送，
+ * 并把原生发送结果、异常、订阅回调统一映射回 SPI 模型。</p>
+ *
+ * <p>Provider 不负责业务幂等、Outbox、通用重试策略选择，也不应该绕过 message-core 自己生成业务结果。
+ * 它只负责“和某一个中间件打交道”。</p>
  */
 public interface MessageProvider extends AutoCloseable {
 

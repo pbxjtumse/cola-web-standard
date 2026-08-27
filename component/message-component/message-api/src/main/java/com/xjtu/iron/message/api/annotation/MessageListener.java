@@ -6,6 +6,12 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+/**
+ * 声明式消息监听注解，预留给后续 Spring Boot Starter 扫描和自动订阅使用。
+ *
+ * <p>当前组件的一期和二期主要使用显式 {@code MessageTemplate.subscribe} 完成订阅，
+ * 这个注解用于后续把消费端写法简化成类似 {@code @MessageListener} 的形式。</p>
+ */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented

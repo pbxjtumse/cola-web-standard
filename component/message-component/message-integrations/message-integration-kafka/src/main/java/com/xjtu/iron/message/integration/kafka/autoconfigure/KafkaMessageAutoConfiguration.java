@@ -21,6 +21,12 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnClass(KafkaMessageProvider.class)
 @EnableConfigurationProperties(KafkaMessageProperties.class)
 @ConditionalOnProperty(prefix = "xjtu.iron.message.kafka", name = "enabled", havingValue = "true", matchIfMissing = true)
+/**
+ * Kafka Provider 的 Spring Boot 自动装配类。
+ *
+ * <p>它读取 {@code xjtu.iron.message.kafka.*} 配置，创建 Kafka Provider 所需的配置对象和 Provider Bean，
+ * 再交给 message-starter 的 Provider 注册表统一管理。</p>
+ */
 public class KafkaMessageAutoConfiguration {
 
     /**

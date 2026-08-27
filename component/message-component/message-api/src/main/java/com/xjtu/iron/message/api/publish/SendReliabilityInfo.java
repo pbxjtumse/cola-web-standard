@@ -1,14 +1,14 @@
 package com.xjtu.iron.message.api.publish;
 
 import java.util.Objects;
-
 /**
- * 描述一次发送结果关联的可靠性执行信息。
+ * 发送可靠性执行信息，用来承载 retry-component 的执行摘要。
  *
- * <p>
- * message-api 不直接依赖 retry-api。
- * 因此 retry 状态、失败码和失败分类在这里使用稳定字符串表达。
- * </p>
+ * <p>message-api 不直接暴露 retry-api 类型，避免对外 API 和 retry-component 形成强耦合。
+ * 因此这里用字符串保存 retryStatus、lastFailureCode、lastFailureCategory 等信息。
+ * 业务方只需要知道是否启用了可靠发送、实际尝试了几次、最终 retry 状态是什么。</p>
+ *
+ * <p>当可靠发送关闭或不需要暴露可靠性细节时，可以使用 {@code disabled()} 返回空信息。</p>
  */
 public final class SendReliabilityInfo {
 

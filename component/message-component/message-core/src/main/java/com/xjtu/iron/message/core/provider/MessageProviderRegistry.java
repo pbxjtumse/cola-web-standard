@@ -7,9 +7,14 @@ import java.util.Collections;
 import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 /**
- * 保存并选择已经创建的 MessageProvider。
+ * MessageProvider 注册表，统一管理 Kafka、Pulsar、RocketMQ 等 Provider 实例。
+ *
+ * <p>message-core 不直接依赖任何具体中间件客户端，只通过 {@code MessageProvider} SPI 发送和订阅。
+ * 注册表负责按照 providerName 找到对应 Provider，并在组件关闭时统一释放 Provider 资源。</p>
+ *
+ * <p>如果业务指定的 providerName 没有注册，本类会直接抛出异常，后续由 MessageTemplate 映射为
+ * {@code PROVIDER_NOT_FOUND}。这样可以尽早暴露配置错误，而不是运行时静默丢消息。</p>
  */
 public final class MessageProviderRegistry implements AutoCloseable {
 

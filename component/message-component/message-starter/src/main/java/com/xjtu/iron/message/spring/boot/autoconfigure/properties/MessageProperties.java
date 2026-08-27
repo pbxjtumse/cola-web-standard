@@ -14,6 +14,12 @@ import java.util.List;
  * Provider 专属参数由对应 integration 模块自己的 Properties 类绑定。</p>
  */
 @ConfigurationProperties(prefix = "xjtu.iron.message")
+/**
+ * message-component 的 Spring Boot 根配置属性。
+ *
+ * <p>该类承接 {@code xjtu.iron.message.*} 下的公共配置，包括默认 Provider、路由列表、序列化配置、
+ * demo 配置以及二期发送可靠性配置。各中间件自身参数则放在各自 integration 的 properties 中。</p>
+ */
 public class MessageProperties {
 
     /**

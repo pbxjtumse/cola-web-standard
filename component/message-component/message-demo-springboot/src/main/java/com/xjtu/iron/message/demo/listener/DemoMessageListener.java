@@ -12,6 +12,12 @@ import org.springframework.stereotype.Component;
  * 后续二期 Spring Boot Starter 稳定后再接入 @MessageListener 扫描。</p>
  */
 @Component
+/**
+ * Demo 消费监听器，负责把消费到的统一消息写入内存存储，便于通过 HTTP 接口观察消费结果。
+ *
+ * <p>它的职责不是执行业务逻辑，而是帮助验证 Provider 入站消息是否能被 core 正确解码，
+ * 并确认 Kafka、Pulsar、RocketMQ 三个 Provider 的消费链路都能回到统一模型。</p>
+ */
 public class DemoMessageListener {
 
     /** 接收消息观察仓库。 */

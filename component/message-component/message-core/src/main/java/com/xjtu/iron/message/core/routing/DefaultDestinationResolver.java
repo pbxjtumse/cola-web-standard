@@ -6,9 +6,15 @@ import com.xjtu.iron.message.spi.ProviderDestination;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-
 /**
- * 基于精确路由表、providerHint 和默认 Provider 的目的地解析器。
+ * 默认逻辑目的地解析器，把 API 层的 {@code MessageDestination} 转换为 SPI 层的 {@code ProviderDestination}。
+ *
+ * <p>message-component 对业务暴露的是 namespace/name/providerHint 这类稳定逻辑目的地，
+ * 具体写入哪个 Kafka Topic、Pulsar Topic 或 RocketMQ Topic，由路由表和默认 Provider 决定。
+ * 这个解析动作集中在 resolver 中，避免业务代码、MessageTemplate 和 Provider 实现互相耦合。</p>
+ *
+ * <p>严格路由模式下，必须存在显式路由；宽松模式下，可以根据逻辑目的地推导物理目的地。
+ * 后续生产级组件一般推荐严格模式，减少因配置缺失导致的误投递。</p>
  */
 public final class DefaultDestinationResolver implements DestinationResolver {
 

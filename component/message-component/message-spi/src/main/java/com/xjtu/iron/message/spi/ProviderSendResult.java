@@ -16,6 +16,11 @@ import java.util.Objects;
  * <p>{@code providerMessageId}：Broker 或 Provider 原生消息 ID</p>
  * <p>{@code description}：诊断描述</p>
  * <p>{@code metadata}：原生诊断元数据</p>
+ * Provider 层发送结果，承接原生中间件结果到 message-core 统一语义的第一次映射。
+ *
+ * <p>Kafka、Pulsar、RocketMQ 的原生结果差异很大：有的返回 offset，有的返回 MessageId，有的返回 SendStatus。
+ * Provider 必须先把这些差异压缩成 {@code SendStatus}、{@code SendFailureType}、providerMessageId 和 metadata，
+ * 可靠发送层才能统一判断是否重试、是否 UNKNOWN、是否返回 CONFIRMED。</p>
  */
 public final class ProviderSendResult {
     /** Provider 能够确认的发送状态。 */

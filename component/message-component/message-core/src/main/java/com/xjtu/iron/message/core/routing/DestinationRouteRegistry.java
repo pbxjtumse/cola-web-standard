@@ -11,8 +11,15 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Objects;
-
-/** 保存逻辑目的地到多个 Provider 的精确路由。 */
+/**
+ * 目的地路由注册表，保存逻辑目的地到物理目的地的静态映射。
+ *
+ * <p>它是 Spring Boot 配置、手工注册和运行时解析之间的桥梁。starter 会把 yml 中的 routes 转换成
+ * {@code DestinationRoute} 后放入该注册表，发送和订阅时再由 {@code DestinationResolver} 查询。</p>
+ *
+ * <p>注册表只负责保存和查询路由，不负责选择 Provider、检查能力或执行发送。
+ * 这些职责分别由 resolver、provider registry 和 sender 承担。</p>
+ */
 public final class DestinationRouteRegistry {
 
     private final Map<RouteKey, Map<String, DestinationRoute>> routes;

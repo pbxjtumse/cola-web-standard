@@ -25,6 +25,12 @@ import java.util.Set;
  * 因此 Demo 先通过 MessageTemplate 显式订阅，便于验证多 Provider 的基础消费闭环。</p>
  */
 @Component
+/**
+ * Demo 自动订阅启动器。
+ *
+ * <p>应用启动后，如果配置开启 auto-subscribe，它会按照 demo 配置为指定 Provider 建立订阅，
+ * 这样发送接口调用后可以立刻在内存 received store 中看到消费结果。</p>
+ */
 public class DemoSubscriptionRunner implements ApplicationRunner, AutoCloseable {
 
     /** 消息模板，负责统一订阅生命周期。 */

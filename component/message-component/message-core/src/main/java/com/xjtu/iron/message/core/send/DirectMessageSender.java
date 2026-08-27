@@ -16,14 +16,14 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
 /**
- * 一期直发执行器。
+ * 一期直发执行器，在发送可靠性关闭时使用。
  *
- * <p>
- * 当发送可靠性关闭时使用。
- * 它不做 retry，只调用一次 Provider.send。
- * </p>
+ * <p>它只做一次 Provider 发送和一次确认等待，不进入 retry-component，也不会生成 retryId、attempts 等可靠性信息。
+ * 这个类保留的目的有两个：第一，兼容一期的简单发送路径；第二，作为可靠发送关闭时的明确降级实现。</p>
+ *
+ * <p>即使不做重试，它仍然会保留 UNKNOWN 语义：如果等待 Provider 确认超时或者线程被中断，
+ * 组件不能确认 Broker 是否已经收到消息，所以返回 {@code SendStatus.UNKNOWN}，而不是简单返回 FAILED。</p>
  */
 public final class DirectMessageSender implements MessageSendExecutor {
 
