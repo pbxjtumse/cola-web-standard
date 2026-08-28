@@ -1,0 +1,35 @@
+@startuml
+!include ../../../_common/style.puml
+title L1：父子消息上下文传递（方法级）
+
+actor ConsumerCode as "消费业务代码"
+
+box "API 模块\nmessage-api" #E3F2FD
+participant "MessageEnvelope\napi.model" as Envelope
+participant "MessageContext\napi.model" as MessageContext
+participant "MessagePublisher\napi.publish" as Publisher
+end box
+
+box "Core 模块\nmessage-core" #EDE7F6
+participant "MessageTemplate\ncore" as Template
+participant "MessageContextAccessor\ncore.context" as ContextAccessor
+participant "CurrentMessage\ncore.context" as Current
+participant "MessageEnvelopeEnricher\ncore.enrich" as Enricher
+participant "MessageIdGenerator\ncore.id" as IdGenerator
+end box
+
+ConsumerCode -> ContextAccessor: current()
+ContextAccessor --> ConsumerCode: Optional<CurrentMessage>
+ConsumerCode -> Publisher: send(childDestination, childEnvelope, options)
+Publisher -> Template: send(...)
+Template -> Enricher: enrich(childEnvelope)
+Enricher -> ContextAccessor: current()
+ContextAccessor --> Enricher: parent CurrentMessage
+Enricher -> IdGenerator: nextId()
+IdGenerator --> Enricher: child messageId
+Enricher -> MessageContext: new MessageContext(source, correlationId, causationId, tenantId)
+MessageContext --> Enricher: child context
+Enricher -> Envelope: toBuilder().context(...).build()
+Envelope --> Enricher: enriched child envelope
+Enricher --> Template: enriched child envelope
+@enduml

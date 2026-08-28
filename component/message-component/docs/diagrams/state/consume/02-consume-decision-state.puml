@@ -1,0 +1,146 @@
+@startuml
+title Consume Decision State - Visible Code Enum And Runtime Cause From Code
+
+' 状态图保持默认黑白，不引入模块颜色。
+
+legend right
+  代码枚举节点直接显示真实来源：枚举类.枚举值
+  示例：ConsumeDecision.ACK / SendFailureType.VALIDATION_ERROR
+  LOGICAL = 查询、时间、次数、配置推导，代码枚举中不存在
+  RUNTIME = 执行过程节点，代码枚举中不存在
+  ACTION = repository / adapter 动作，不是状态枚举
+  PROVIDER ACTION = Kafka / Pulsar / RocketMQ 原生确认动作
+  PROVIDER CAUSE = Provider 原生返回或异常，不是统一状态枚举
+  MESSAGE SEMANTIC = message-component 语义，目前不是持久化枚举
+endlegend
+
+state "DECISION_PENDING\n[CAUSE]\nwaiting for handler/idempotency/template result" as C_PENDING
+
+state "ACK\nConsumeDecision.ACK" as D_ACK
+state "RETRY\nConsumeDecision.RETRY" as D_RETRY
+state "DISCARD\nConsumeDecision.DISCARD" as D_DISCARD
+state "DEAD_LETTER\nConsumeDecision.DEAD_LETTER" as D_DEAD_LETTER
+
+state "NONE\nConsumeFailureType.NONE" as F_NONE
+state "DECODE_ERROR\nConsumeFailureType.DECODE_ERROR" as F_DECODE_ERROR
+state "CONSUMER_NOT_FOUND\nConsumeFailureType.CONSUMER_NOT_FOUND" as F_CONSUMER_NOT_FOUND
+state "HANDLER_ERROR\nConsumeFailureType.HANDLER_ERROR" as F_HANDLER_ERROR
+state "IDEMPOTENCY_CONFLICT\nConsumeFailureType.IDEMPOTENCY_CONFLICT" as F_IDEMPOTENCY_CONFLICT
+state "IDEMPOTENCY_STORAGE_ERROR\nConsumeFailureType.IDEMPOTENCY_STORAGE_ERROR" as F_IDEMPOTENCY_STORAGE
+state "TRANSACTION_ERROR\nConsumeFailureType.TRANSACTION_ERROR" as F_TRANSACTION_ERROR
+state "ACK_ERROR\nConsumeFailureType.ACK_ERROR" as F_ACK_ERROR
+state "PROVIDER_ERROR\nConsumeFailureType.PROVIDER_ERROR" as F_PROVIDER_ERROR
+state "UNKNOWN_ERROR\nConsumeFailureType.UNKNOWN_ERROR" as F_UNKNOWN_ERROR
+
+state "ACQUIRED\nIdempotentAcquireStatus.ACQUIRED" as A_ACQUIRED
+state "DUPLICATE_SUCCESS\nIdempotentAcquireStatus.DUPLICATE_SUCCESS" as A_DUP_SUCCESS
+state "DUPLICATE_DISCARDED\nIdempotentAcquireStatus.DUPLICATE_DISCARDED" as A_DUP_DISCARDED
+state "PROCESSING\nIdempotentAcquireStatus.PROCESSING" as A_PROCESSING
+state "REJECTED\nIdempotentAcquireStatus.REJECTED" as A_REJECTED
+state "STORAGE_ERROR\nIdempotentAcquireStatus.STORAGE_ERROR" as A_STORAGE_ERROR
+
+state "RETRY\nMessageIdempotencyFailurePolicy.RETRY" as P_RETRY
+state "DISCARD\nMessageIdempotencyFailurePolicy.DISCARD" as P_DISCARD
+state "DEAD_LETTER\nMessageIdempotencyFailurePolicy.DEAD_LETTER" as P_DEAD_LETTER
+
+state "HANDLER_RETURNS_ACK\n[CAUSE]\nhandler returns ACK" as C_HANDLER_ACK
+state "HANDLER_RETURNS_RETRY\n[CAUSE]\nhandler returns RETRY/null" as C_HANDLER_RETRY
+state "HANDLER_RETURNS_DISCARD\n[CAUSE]\nhandler returns DISCARD" as C_HANDLER_DISCARD
+state "HANDLER_THROWS\n[CAUSE]\nhandler throws exception" as C_HANDLER_EXCEPTION
+state "MISSING_CONSUMER\n[CAUSE]\nConsumerDefinition not found" as C_MISSING_CONSUMER
+state "DECODE_FAILURE\n[CAUSE]\nwire decode failed" as C_DECODE_FAILURE
+state "MARK_SUCCESS_FAILED\n[CAUSE]\nmarkSuccess failed or ownerToken mismatch" as C_MARK_SUCCESS_FAILED
+state "MARK_DISCARDED_FAILED\n[CAUSE]\nmarkDiscarded failed" as C_MARK_DISCARDED_FAILED
+state "TRANSACTION_ROLLBACK\n[CAUSE]\ntransaction rollback" as C_TX_ROLLBACK
+
+state "KAFKA_COMMIT_NEXT_OFFSET\nKafkaConsumeAction.COMMIT_NEXT_OFFSET" as P_KAFKA_COMMIT
+state "KAFKA_RETRY_WITHOUT_COMMIT\nKafkaConsumeAction.RETRY_WITHOUT_COMMIT" as P_KAFKA_RETRY
+state "PULSAR_ACKNOWLEDGE\nPulsarConsumeAction.ACKNOWLEDGE" as P_PULSAR_ACK
+state "PULSAR_NEGATIVE_ACKNOWLEDGE\nPulsarConsumeAction.NEGATIVE_ACKNOWLEDGE" as P_PULSAR_NEG
+state "ROCKETMQ_CONSUME_SUCCESS\nRocketMqConsumeAction.CONSUME_SUCCESS" as P_ROCKET_SUCCESS
+state "ROCKETMQ_RECONSUME_LATER\nRocketMqConsumeAction.RECONSUME_LATER" as P_ROCKET_RETRY
+
+[*] --> C_PENDING
+
+C_PENDING --> A_ACQUIRED : idempotency acquire result
+A_ACQUIRED --> C_HANDLER_ACK
+A_ACQUIRED --> C_HANDLER_RETRY
+A_ACQUIRED --> C_HANDLER_DISCARD
+A_ACQUIRED --> C_HANDLER_EXCEPTION
+
+C_HANDLER_ACK --> F_NONE
+F_NONE --> D_ACK
+C_HANDLER_RETRY --> F_HANDLER_ERROR
+F_HANDLER_ERROR --> D_RETRY
+C_HANDLER_DISCARD --> D_DISCARD
+C_HANDLER_EXCEPTION --> F_HANDLER_ERROR
+F_HANDLER_ERROR --> D_RETRY
+
+C_PENDING --> A_DUP_SUCCESS
+A_DUP_SUCCESS --> D_ACK : skip handler
+C_PENDING --> A_DUP_DISCARDED
+A_DUP_DISCARDED --> D_ACK : skip handler
+C_PENDING --> A_PROCESSING
+A_PROCESSING --> F_IDEMPOTENCY_CONFLICT
+F_IDEMPOTENCY_CONFLICT --> D_RETRY
+C_PENDING --> A_STORAGE_ERROR
+A_STORAGE_ERROR --> F_IDEMPOTENCY_STORAGE
+F_IDEMPOTENCY_STORAGE --> D_RETRY
+C_PENDING --> A_REJECTED
+A_REJECTED --> P_RETRY
+A_REJECTED --> P_DISCARD
+A_REJECTED --> P_DEAD_LETTER
+P_RETRY --> D_RETRY
+P_DISCARD --> D_DISCARD
+P_DEAD_LETTER --> D_DEAD_LETTER
+
+C_PENDING --> C_MISSING_CONSUMER
+C_MISSING_CONSUMER --> F_CONSUMER_NOT_FOUND
+F_CONSUMER_NOT_FOUND --> D_RETRY : configured RETRY
+F_CONSUMER_NOT_FOUND --> D_DISCARD : configured DISCARD
+
+C_PENDING --> C_DECODE_FAILURE
+C_DECODE_FAILURE --> F_DECODE_ERROR
+F_DECODE_ERROR --> D_RETRY : configured RETRY
+F_DECODE_ERROR --> D_DISCARD : configured DISCARD
+
+C_PENDING --> C_MARK_SUCCESS_FAILED
+C_MARK_SUCCESS_FAILED --> F_IDEMPOTENCY_STORAGE
+C_MARK_SUCCESS_FAILED --> D_RETRY : cannot ack without SUCCESS
+
+C_PENDING --> C_MARK_DISCARDED_FAILED
+C_MARK_DISCARDED_FAILED --> F_IDEMPOTENCY_STORAGE
+C_MARK_DISCARDED_FAILED --> D_RETRY
+
+C_PENDING --> C_TX_ROLLBACK
+C_TX_ROLLBACK --> F_TRANSACTION_ERROR
+F_TRANSACTION_ERROR --> D_RETRY
+
+D_ACK --> P_KAFKA_COMMIT
+D_ACK --> P_PULSAR_ACK
+D_ACK --> P_ROCKET_SUCCESS
+D_DISCARD --> P_KAFKA_COMMIT
+D_DISCARD --> P_PULSAR_ACK
+D_DISCARD --> P_ROCKET_SUCCESS
+D_RETRY --> P_KAFKA_RETRY
+D_RETRY --> P_PULSAR_NEG
+D_RETRY --> P_ROCKET_RETRY
+D_DEAD_LETTER --> [*] : v13 reserved, full DLQ later
+
+P_KAFKA_COMMIT --> [*]
+P_PULSAR_ACK --> [*]
+P_ROCKET_SUCCESS --> [*]
+P_KAFKA_RETRY --> [*]
+P_PULSAR_NEG --> [*]
+P_ROCKET_RETRY --> [*]
+
+note right of D_ACK
+  ConsumeDecision.ACK 代表“Provider 可以确认消息”。
+  它可能来自业务成功，也可能来自 DUPLICATE_SUCCESS / DUPLICATE_DISCARDED。
+end note
+
+note right of D_DISCARD
+  DISCARD 是 ConsumeDecision 枚举。
+  Provider 侧通常与 ACK 一样确认消息，但业务语义是明确忽略。
+end note
+@enduml

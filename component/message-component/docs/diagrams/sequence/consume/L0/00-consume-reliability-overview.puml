@@ -1,0 +1,55 @@
+@startuml
+!include ../../../_common/style.puml
+
+title Consume L0 - Reliable Consume Overview
+left to right direction
+
+package "Broker" #FFFDE7 {
+  [Kafka]
+  [Pulsar]
+  [RocketMQ]
+}
+package "Provider" #FFEBEE {
+  [KafkaMessageProvider]
+  [PulsarMessageProvider]
+  [RocketMqMessageProvider]
+  [ProviderInboundMessage]
+}
+package "SPI" #ECEFF1 {
+  [ProviderMessageListener]
+  [ProviderConsumeResult]
+}
+package "Core Consume" #FFF3E0 {
+  [MessageConsumeDispatcher]
+  [ConsumeExecutionTemplate]
+  [MessageIdempotencyExecutor]
+  [MessageConsumeTransactionExecutor]
+}
+package "Business" #E8F5E9 {
+  [MessageHandler]
+}
+package "Idempotent Component" #FCE4EC {
+  [IdempotentExecutor]
+  [IdempotentStorage]
+}
+package "Transaction Component" #E0F2F1 {
+  [TransactionTemplate]
+}
+
+[Kafka] --> [KafkaMessageProvider]
+[Pulsar] --> [PulsarMessageProvider]
+[RocketMQ] --> [RocketMqMessageProvider]
+[KafkaMessageProvider] --> [ProviderInboundMessage]
+[PulsarMessageProvider] --> [ProviderInboundMessage]
+[RocketMqMessageProvider] --> [ProviderInboundMessage]
+[ProviderInboundMessage] --> [ProviderMessageListener]
+[ProviderMessageListener] --> [MessageConsumeDispatcher]
+[MessageConsumeDispatcher] --> [ConsumeExecutionTemplate]
+[ConsumeExecutionTemplate] --> [MessageIdempotencyExecutor]
+[MessageIdempotencyExecutor] --> [IdempotentExecutor]
+[MessageIdempotencyExecutor] --> [MessageConsumeTransactionExecutor]
+[MessageConsumeTransactionExecutor] --> [TransactionTemplate]
+[MessageIdempotencyExecutor] --> [MessageHandler]
+[IdempotentExecutor] --> [IdempotentStorage]
+[MessageConsumeDispatcher] --> [ProviderConsumeResult]
+@enduml

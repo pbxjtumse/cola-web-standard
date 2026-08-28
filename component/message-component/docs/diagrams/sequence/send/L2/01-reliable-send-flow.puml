@@ -1,0 +1,30 @@
+@startuml
+!include ../../../_common/style.puml
+
+title Send L2 - Reliable Send With Retry Component
+
+box "Core Send" #FFF3E0
+participant MessageSendExecutor
+participant DefaultReliableMessageSender
+participant MessageSendRetryClassifier
+end box
+box "Retry Component" #FCE4EC
+participant RetryExecutor
+participant RetryPolicyRegistry
+end box
+box "SPI" #ECEFF1
+participant MessageProvider
+end box
+
+MessageSendExecutor -> DefaultReliableMessageSender: send(prepared)
+DefaultReliableMessageSender -> RetryPolicyRegistry: get("message-send")
+DefaultReliableMessageSender -> RetryExecutor: execute(retryCommand)
+loop attempts
+  RetryExecutor -> MessageProvider: send(request)
+  MessageProvider --> RetryExecutor: ProviderSendResult
+  RetryExecutor -> MessageSendRetryClassifier: classify(result, exception)
+  MessageSendRetryClassifier --> RetryExecutor: retry / stop / success
+end
+RetryExecutor --> DefaultReliableMessageSender: RetryResult
+DefaultReliableMessageSender --> MessageSendExecutor: SendResult
+@enduml

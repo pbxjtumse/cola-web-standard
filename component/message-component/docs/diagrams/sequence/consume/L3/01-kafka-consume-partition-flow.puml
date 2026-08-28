@@ -1,0 +1,30 @@
+@startuml
+!include ../../../_common/style.puml
+
+title Consume L3 - Kafka Partition Ordered Consume
+
+box "Provider" #FFEBEE
+participant KafkaConsumer
+participant KafkaConsumerDispatcherAdapter
+participant KafkaConsumeDecisionMapper
+end box
+box "Core Consume" #FFF3E0
+participant ProviderMessageListener
+end box
+
+KafkaConsumer -> KafkaConsumer: poll(records)
+KafkaConsumer -> KafkaConsumerDispatcherAdapter: dispatch(records)
+KafkaConsumerDispatcherAdapter -> KafkaConsumerDispatcherAdapter: groupByTopicPartition(records)
+loop each partition, offset order
+  KafkaConsumerDispatcherAdapter -> ProviderMessageListener: onMessage(inbound)
+  ProviderMessageListener --> KafkaConsumerDispatcherAdapter: ProviderConsumeResult
+  alt ACK / DISCARD
+    KafkaConsumerDispatcherAdapter -> KafkaConsumeDecisionMapper: map(result, position)
+    KafkaConsumeDecisionMapper --> KafkaConsumerDispatcherAdapter: commit offset + 1
+  else RETRY
+    KafkaConsumerDispatcherAdapter -> KafkaConsumeDecisionMapper: map(result, position)
+    KafkaConsumeDecisionMapper --> KafkaConsumerDispatcherAdapter: no commit / seek current
+    KafkaConsumerDispatcherAdapter -> KafkaConsumerDispatcherAdapter: stop current partition
+  end
+end
+@enduml

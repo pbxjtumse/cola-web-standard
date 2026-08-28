@@ -1,0 +1,42 @@
+@startuml
+!include ../../../_common/style.puml
+
+title Send L1 - Core Send Flow
+
+actor BusinessService
+box "API" #E3F2FD
+participant MessagePublisher
+participant SendOptions
+end box
+box "Core Send" #FFF3E0
+participant MessageTemplate
+participant MessageEnvelopeEnricher
+participant DestinationResolver
+participant MessageWireCodec
+participant MessageSendExecutor
+participant DirectMessageSender
+end box
+box "SPI" #ECEFF1
+participant MessageProviderRegistry
+participant MessageProvider
+end box
+box "Provider" #FFEBEE
+participant "Kafka/Pulsar/RocketMQ Provider" as ProviderImpl
+end box
+
+BusinessService -> MessagePublisher: send(destination, payload, options)
+MessagePublisher -> MessageTemplate: send(destination, payload, options)
+MessageTemplate -> MessageEnvelopeEnricher: enrich(envelope, options)
+MessageTemplate -> DestinationResolver: resolve(destination, options)
+MessageTemplate -> MessageWireCodec: encode(envelope, route)
+MessageTemplate -> MessageSendExecutor: send(prepared)
+MessageSendExecutor -> DirectMessageSender: send(prepared)
+DirectMessageSender -> MessageProviderRegistry: get(providerName)
+DirectMessageSender -> MessageProvider: send(request)
+MessageProvider -> ProviderImpl: send(request)
+ProviderImpl --> MessageProvider: ProviderSendResult
+MessageProvider --> DirectMessageSender: ProviderSendResult
+DirectMessageSender --> MessageSendExecutor: SendResult
+MessageSendExecutor --> MessageTemplate: SendResult
+MessageTemplate --> BusinessService: SendResult
+@enduml

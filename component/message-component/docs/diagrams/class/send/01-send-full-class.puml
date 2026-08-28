@@ -1,0 +1,63 @@
+@startuml
+!include ../../_common/style.puml
+
+title Message Send Full Class Diagram
+left to right direction
+
+package "API Publish" #E3F2FD {
+  interface MessagePublisher
+  class SendOptions
+  class SendResult
+  enum SendStatus
+  enum SendStage
+  enum SendFailureType
+  class SendReliabilityInfo
+}
+package "Core Send" #FFF3E0 {
+  class MessageTemplate
+  interface MessageSendExecutor
+  class DirectMessageSender
+  class DefaultReliableMessageSender
+  class MessageSendReliabilityOptions
+  class PreparedMessageSend
+  class MessageSendRetryClassifier
+  class MessageWireCodec
+  class DestinationResolver
+  class MessageEnvelopeEnricher
+  class MessageProviderRegistry
+}
+package "SPI Send" #ECEFF1 {
+  interface MessageProvider
+  class ProviderSendRequest
+  class ProviderSendResult
+  enum ProviderSendStatus
+}
+package "Providers" #FFEBEE {
+  class KafkaMessageProvider
+  class PulsarMessageProvider
+  class RocketMqMessageProvider
+}
+package "Retry Component" #FCE4EC {
+  interface RetryExecutor
+  interface RetryPolicyRegistry
+}
+
+MessagePublisher <|.. MessageTemplate
+MessageTemplate --> DestinationResolver
+MessageTemplate --> MessageEnvelopeEnricher
+MessageTemplate --> MessageWireCodec
+MessageTemplate --> MessageSendExecutor
+MessageSendExecutor <|.. DirectMessageSender
+MessageSendExecutor <|.. DefaultReliableMessageSender
+DirectMessageSender --> MessageProviderRegistry
+DirectMessageSender --> MessageProvider
+DefaultReliableMessageSender --> RetryExecutor
+DefaultReliableMessageSender --> RetryPolicyRegistry
+DefaultReliableMessageSender --> MessageSendRetryClassifier
+MessageProvider <|.. KafkaMessageProvider
+MessageProvider <|.. PulsarMessageProvider
+MessageProvider <|.. RocketMqMessageProvider
+MessageProvider --> ProviderSendRequest
+MessageProvider --> ProviderSendResult
+SendResult --> SendReliabilityInfo
+@enduml

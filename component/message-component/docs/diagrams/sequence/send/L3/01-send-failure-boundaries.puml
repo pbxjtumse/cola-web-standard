@@ -1,0 +1,40 @@
+@startuml
+!include ../../../_common/style.puml
+
+title Send L3 - Send Failure Boundary Mapping
+
+box "Core Send" #FFF3E0
+participant MessageTemplate
+participant MessageSendExecutor
+participant DefaultReliableMessageSender
+participant MessageSendRetryClassifier
+end box
+box "Retry Component" #FCE4EC
+participant RetryExecutor
+end box
+box "SPI" #ECEFF1
+participant MessageProvider
+end box
+
+MessageTemplate -> MessageSendExecutor: send(prepared)
+MessageSendExecutor -> DefaultReliableMessageSender: send(prepared)
+DefaultReliableMessageSender -> RetryExecutor: execute(command)
+RetryExecutor -> MessageProvider: send(request)
+alt confirmed
+  MessageProvider --> RetryExecutor: CONFIRMED / NONE
+  RetryExecutor --> DefaultReliableMessageSender: SUCCESS
+else retryable failed
+  MessageProvider --> RetryExecutor: FAILED / NETWORK_ERROR
+  RetryExecutor -> MessageSendRetryClassifier: shouldRetry(...)
+  MessageSendRetryClassifier --> RetryExecutor: RETRY
+else unknown and retryWhenUnknown=false
+  MessageProvider --> RetryExecutor: UNKNOWN / TIMEOUT
+  RetryExecutor -> MessageSendRetryClassifier: shouldRetry(...)
+  MessageSendRetryClassifier --> RetryExecutor: STOP
+else rejected
+  MessageProvider --> RetryExecutor: REJECTED / ROUTING_ERROR
+  RetryExecutor -> MessageSendRetryClassifier: shouldRetry(...)
+  MessageSendRetryClassifier --> RetryExecutor: STOP
+end
+DefaultReliableMessageSender --> MessageSendExecutor: SendResult
+@enduml

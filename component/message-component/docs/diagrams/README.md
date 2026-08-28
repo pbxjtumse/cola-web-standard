@@ -1,94 +1,63 @@
-# message-component PlantUML 图分层说明
+# Message Component v13 UML Diagrams
 
-本目录采用和 distributed-lock-component 一致的图示规范：
+本目录是 message-component v13 的 UML 最终整理版。
 
-```text
-L0：组件总览 / 生命周期总览
-L1：核心主流程
-L2：核心内部协作
-L3：异常、边界、可靠性流程
-L4：具体 Provider / 中间件 / 协议映射
-```
-
-## 1. 重要约定
-
-1. **颜色保持一致**：API、Core、Core Send、SPI、Provider、Retry、Foundation、Broker 使用固定颜色。
-2. **时序图到类级别即可**：参与者写类名和所在包，箭头文字写协作语义，不再写 `类.方法名`。
-3. **class 图补充结构理解**：复杂流程先看 class，再看 sequence，再看 state。
-4. **L4 不污染 L1 / L2**：Kafka、Pulsar、RocketMQ4 的专属状态只放 L4。
-
-## 2. 模块颜色约定
-
-| 模块 | 颜色 | 说明 |
-|---|---|---|
-| Business / Demo | `#E8F5E9` | 业务调用、Demo Controller / Listener |
-| API | `#E3F2FD` | `message-api` |
-| Core | `#EDE7F6` | `message-core` 基础编排 |
-| Core Send | `#FFF3E0` | `core.send` / `core.send.reliability` |
-| SPI | `#ECEFF1` | `message-spi` |
-| Provider | `#FFEBEE` | Kafka / Pulsar / RocketMQ4 integration |
-| Retry Component | `#FCE4EC` | `retry-component` |
-| Foundation | `#E0F2F1` | foundation id / serialization |
-| Broker | `#FFFDE7` | Kafka / Pulsar / RocketMQ4 |
-| Starter / Config | `#F3E8FF` | Spring Boot AutoConfiguration |
-
-## 3. 当前图结构
+## 目录规则
 
 ```text
-docs/diagrams
-├── class
-│   ├── L0
-│   ├── L1
-│   ├── L2
-│   ├── L3
-│   └── L4
-├── sequence
-│   ├── L0
-│   ├── L1
-│   ├── L2
-│   ├── L3
-│   └── L4
-└── state
-    ├── L1
-    ├── L2
-    ├── L3
-    └── L4
+diagrams/
+├── _common/
+├── class/
+├── sequence/
+└── state/
 ```
 
-## 4. 推荐阅读顺序
+## 图类型规则
+
+- 类图：使用模块颜色，作为结构全貌入口。
+- 时序图：使用模块颜色，按 send / consume 和 L0-L4 表达流程深度。
+- 状态图：不使用颜色，按 send / consume 下的状态机主题组织。
+
+## 状态图可视化标记规则
+
+状态图不再只依赖 PlantUML stereotype，因为隐式节点渲染后不容易看出类型。
+本版要求每个关键状态框直接显示分类和来源，例如：
 
 ```text
-class/L0/01-module-overview.puml
-sequence/L1/01-send-core-flow.puml
-class/L2/01-reliable-send-collaboration.puml
-sequence/L2/05-retry-executor-flow.puml
-sequence/L3/05-unknown-stop-no-retry.puml
-sequence/L3/06-retry-exhausted.puml
-sequence/L4/03-rocketmq4-send-result-mapping.puml
-state/L2/01-reliable-send-retry-state.puml
-```
-## 6. Class 图补全说明
+VALIDATE
+[STAGE ENUM]
+SendStage.VALIDATE
 
-V10 对 class 图做了补全，不再只是几张主干入口图。当前 class 图覆盖：
+VALIDATION_ERROR
+[FAILURE ENUM]
+SendFailureType.VALIDATION_ERROR
+
+PROCESSING_TIMEOUT
+[LOGICAL]
+PROCESSING + processing_expire_time < now
+```
+
+常用标记：
 
 ```text
-class/L0/01-module-overview.puml                模块总览
-class/L0/02-demo-entry-view.puml                Demo 入口与三 Provider 验证
-class/L1/01-api-core-key-classes.puml           API / Core 主入口
-class/L1/02-api-full-package-classes.puml       message-api 全量分包
-class/L2/01-reliable-send-collaboration.puml    可靠发送核心协作
-class/L2/02-core-package-classes.puml           message-core 全量分包
-class/L2/03-routing-class-view.puml             路由模型
-class/L2/04-codec-class-view.puml               编解码边界
-class/L2/05-id-enrich-class-view.puml           messageId 与 enrich
-class/L2/06-spi-contract-class-view.puml        SPI 契约
-class/L3/01-send-result-boundary-classes.puml   发送结果边界
-class/L3/02-starter-autoconfig-class-view.puml  自动装配边界
-class/L4/01-provider-implementation-view.puml   Provider 总览
-class/L4/02-kafka-provider-class-view.puml      Kafka Provider
-class/L4/03-pulsar-provider-class-view.puml     Pulsar Provider
-class/L4/04-rocketmq4-provider-class-view.puml  RocketMQ4 Provider
+[STAGE ENUM]              SendStage 等阶段枚举
+[STATUS ENUM]             SendStatus 等结果枚举
+[FAILURE ENUM]            SendFailureType / ConsumeFailureType 等失败类型枚举
+[DECISION ENUM]           ConsumeDecision 枚举
+[RETRY ENUM]              RetryStatus 枚举
+[ACQUIRE ENUM]            IdempotentAcquireStatus 枚举
+[IDEMPOTENT DB ENUM]      IdempotencyStatus 当前真实持久状态枚举
+[WRITE ENUM]              IdempotencyWriteStatus 条件写结果枚举
+[POLICY ENUM]             MessageIdempotencyFailurePolicy / ConsumerReliabilityMode 等策略枚举
+[PROVIDER ACTION ENUM]    Kafka/Pulsar/RocketMQ consume mapper action enum
+[LOGICAL]                 根据查询、时间、次数、配置推导，不是枚举
+[RUNTIME]                 执行过程节点，不是枚举
+[MESSAGE SEMANTIC]        message-component 消费语义，不一定是 idempotent-api 持久枚举
 ```
 
-这些图用于对齐 distributed-lock-component 的文档质量：既有主链路时序，也有模块与类结构。
+## 当前代码枚举核对结论
 
+- `SendFailureType` 当前没有 `INVALID_OPTIONS`，参数或选项非法应使用 `VALIDATION_ERROR`。
+- `IdempotencyStatus` 当前只有 `PROCESSING / SUCCESS / FAILED`。
+- `DISCARDED` 是当前 message-component 消费语义：`ConsumeDecision.DISCARD`、`markDiscarded(...)`、`DUPLICATE_DISCARDED`。
+  但当前 idempotent-component 的持久状态枚举里没有 `DISCARDED`，因此状态图标记为 `[MESSAGE SEMANTIC]`，不标记为 `[IDEMPOTENT DB ENUM]`。

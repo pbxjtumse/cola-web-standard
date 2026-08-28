@@ -1,0 +1,139 @@
+@startuml
+title Consume Failure Recovery - Retry / Takeover / Rejected / Discard With Enum Labels
+
+' 状态图保持默认黑白，不引入模块颜色。
+
+legend right
+  代码枚举节点直接显示真实来源：枚举类.枚举值
+  示例：ConsumeDecision.ACK / SendFailureType.VALIDATION_ERROR
+  LOGICAL = 查询、时间、次数、配置推导，代码枚举中不存在
+  RUNTIME = 执行过程节点，代码枚举中不存在
+  ACTION = repository / adapter 动作，不是状态枚举
+  PROVIDER ACTION = Kafka / Pulsar / RocketMQ 原生确认动作
+  PROVIDER CAUSE = Provider 原生返回或异常，不是统一状态枚举
+  MESSAGE SEMANTIC = message-component 语义，目前不是持久化枚举
+endlegend
+
+state "DELIVERY_RECEIVED\nRUNTIME\nProvider inbound message received" as R_DELIVERY_RECEIVED
+state "ACQUIRE_RUNNING\nRUNTIME\noperations.acquire(context)" as R_ACQUIRE_RUNNING
+state "ACQUIRED\nIdempotentAcquireStatus.ACQUIRED" as A_ACQUIRED
+state "PROCESSING\nIdempotentAcquireStatus.PROCESSING" as A_PROCESSING
+state "REJECTED\nIdempotentAcquireStatus.REJECTED" as A_REJECTED
+state "STORAGE_ERROR\nIdempotentAcquireStatus.STORAGE_ERROR" as A_STORAGE_ERROR
+
+state "PROCESSING\nIdempotencyStatus.PROCESSING" as DB_PROCESSING
+state "SUCCESS\nIdempotencyStatus.SUCCESS" as DB_SUCCESS
+state "FAILED\nIdempotencyStatus.FAILED" as DB_FAILED
+state "DISCARDED\nMESSAGE SEMANTIC\nnot in current IdempotencyStatus" as M_DISCARDED
+
+state "PROCESSING_TIMEOUT\nLOGICAL\nPROCESSING + processing_expire_time < now" as L_PROCESSING_TIMEOUT
+state "FAILED_RETRYABLE\nLOGICAL\nFAILED + attempt_count < maxAttempts" as L_FAILED_RETRYABLE
+state "MAX_ATTEMPTS_EXCEEDED\nLOGICAL\nFAILED + attempt_count >= maxAttempts" as L_MAX_ATTEMPTS
+
+state "TAKEOVER_CAS\nRUNTIME\nCAS ownerToken for timed-out PROCESSING" as R_TAKEOVER_CAS
+state "REACQUIRE_CAS\nRUNTIME\nCAS FAILED -> PROCESSING" as R_REACQUIRE_CAS
+state "HANDLER_RUNNING\nRUNTIME\nMessageHandler.handle(...)" as R_HANDLER_RUNNING
+state "BUSINESS_SUCCESS\nRUNTIME\nhandler returns ACK" as R_BUSINESS_SUCCESS
+state "BUSINESS_RETRY\nRUNTIME\nhandler returns RETRY/null" as R_BUSINESS_RETRY
+state "BUSINESS_EXCEPTION\nRUNTIME\nhandler throws exception" as R_BUSINESS_EXCEPTION
+state "BUSINESS_DISCARD\nRUNTIME\nhandler returns DISCARD" as R_BUSINESS_DISCARD
+state "MARK_SUCCESS\nRUNTIME\noperations.markSuccess(ownerToken)" as R_MARK_SUCCESS
+state "MARK_FAILED_BEST_EFFORT\nRUNTIME\noperations.markFailed(ownerToken)" as R_MARK_FAILED
+state "MARK_DISCARDED\nRUNTIME\noperations.markDiscarded(ownerToken)" as R_MARK_DISCARDED
+state "ROLLBACK_AND_RETRY\nRUNTIME\ntransaction rollback then retry" as R_ROLLBACK_RETRY
+
+state "UPDATED\nIdempotencyWriteStatus.UPDATED\n(markSuccess)" as W_SUCCESS_UPDATED
+state "UPDATED\nIdempotencyWriteStatus.UPDATED\n(markFailed)" as W_FAILED_UPDATED
+state "STALE_OWNER\nIdempotencyWriteStatus.STALE_OWNER" as W_STALE_OWNER
+state "PROVIDER_ERROR\nIdempotencyWriteStatus.PROVIDER_ERROR" as W_PROVIDER_ERROR
+
+state "ACK\nConsumeDecision.ACK" as D_ACK
+state "RETRY\nConsumeDecision.RETRY" as D_RETRY
+state "DISCARD\nConsumeDecision.DISCARD" as D_DISCARD
+state "DEAD_LETTER\nConsumeDecision.DEAD_LETTER" as D_DEAD_LETTER
+
+state "RETRY\nMessageIdempotencyFailurePolicy.RETRY" as P_RETRY
+state "DISCARD\nMessageIdempotencyFailurePolicy.DISCARD" as P_DISCARD
+state "DEAD_LETTER\nMessageIdempotencyFailurePolicy.DEAD_LETTER" as P_DLQ
+
+state "WAIT_REDELIVERY\nRUNTIME\nBroker will redeliver later" as R_WAIT_REDELIVERY
+state "PROVIDER_CONFIRM\nRUNTIME\ncommit/ack/consume success" as R_PROVIDER_CONFIRM
+
+[*] --> R_DELIVERY_RECEIVED
+R_DELIVERY_RECEIVED --> R_ACQUIRE_RUNNING
+
+R_ACQUIRE_RUNNING --> A_STORAGE_ERROR
+A_STORAGE_ERROR --> D_RETRY : do not invoke handler
+D_RETRY --> R_WAIT_REDELIVERY
+R_WAIT_REDELIVERY --> R_DELIVERY_RECEIVED
+
+R_ACQUIRE_RUNNING --> A_PROCESSING : another owner active
+A_PROCESSING --> D_RETRY
+
+R_ACQUIRE_RUNNING --> L_PROCESSING_TIMEOUT : existing PROCESSING timed out
+L_PROCESSING_TIMEOUT --> R_TAKEOVER_CAS
+R_TAKEOVER_CAS --> A_ACQUIRED : CAS success
+R_TAKEOVER_CAS --> A_PROCESSING : CAS failed
+
+R_ACQUIRE_RUNNING --> L_FAILED_RETRYABLE : FAILED and attempts left
+L_FAILED_RETRYABLE --> R_REACQUIRE_CAS
+R_REACQUIRE_CAS --> A_ACQUIRED : CAS success
+R_REACQUIRE_CAS --> R_ACQUIRE_RUNNING : CAS failed / re-query
+
+R_ACQUIRE_RUNNING --> L_MAX_ATTEMPTS
+L_MAX_ATTEMPTS --> A_REJECTED
+A_REJECTED --> P_RETRY
+A_REJECTED --> P_DISCARD
+A_REJECTED --> P_DLQ
+P_RETRY --> D_RETRY
+P_DISCARD --> R_MARK_DISCARDED
+P_DLQ --> D_DEAD_LETTER
+D_DEAD_LETTER --> D_RETRY : v13 no full DLQ, keep redelivery/manual handling
+
+A_ACQUIRED --> DB_PROCESSING
+DB_PROCESSING --> R_HANDLER_RUNNING
+R_HANDLER_RUNNING --> R_BUSINESS_SUCCESS
+R_HANDLER_RUNNING --> R_BUSINESS_RETRY
+R_HANDLER_RUNNING --> R_BUSINESS_EXCEPTION
+R_HANDLER_RUNNING --> R_BUSINESS_DISCARD
+
+R_BUSINESS_SUCCESS --> R_MARK_SUCCESS
+R_MARK_SUCCESS --> W_SUCCESS_UPDATED
+W_SUCCESS_UPDATED --> DB_SUCCESS
+DB_SUCCESS --> D_ACK
+R_MARK_SUCCESS --> W_STALE_OWNER
+R_MARK_SUCCESS --> W_PROVIDER_ERROR
+W_STALE_OWNER --> R_ROLLBACK_RETRY
+W_PROVIDER_ERROR --> R_ROLLBACK_RETRY
+
+R_BUSINESS_DISCARD --> R_MARK_DISCARDED
+R_MARK_DISCARDED --> M_DISCARDED
+M_DISCARDED --> D_DISCARD
+R_MARK_DISCARDED --> W_STALE_OWNER
+R_MARK_DISCARDED --> W_PROVIDER_ERROR
+
+R_BUSINESS_RETRY --> R_ROLLBACK_RETRY
+R_BUSINESS_EXCEPTION --> R_ROLLBACK_RETRY
+R_ROLLBACK_RETRY --> R_MARK_FAILED
+R_MARK_FAILED --> W_FAILED_UPDATED
+W_FAILED_UPDATED --> DB_FAILED
+R_MARK_FAILED --> W_STALE_OWNER
+R_MARK_FAILED --> W_PROVIDER_ERROR
+DB_FAILED --> D_RETRY
+W_STALE_OWNER --> D_RETRY
+W_PROVIDER_ERROR --> D_RETRY
+
+D_ACK --> R_PROVIDER_CONFIRM
+D_DISCARD --> R_PROVIDER_CONFIRM
+R_PROVIDER_CONFIRM --> [*]
+
+note right of L_PROCESSING_TIMEOUT
+  逻辑推导状态，不是 IdempotencyStatus。
+  不需要先落库为 EXPIRED，可以直接 CAS 抢占。
+end note
+
+note right of M_DISCARDED
+  message-component 存在 markDiscarded 和 ConsumeDecision.DISCARD。
+  但当前 idempotent-api 没有 IdempotencyStatus.DISCARDED。
+end note
+@enduml

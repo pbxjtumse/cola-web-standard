@@ -1,0 +1,31 @@
+@startuml
+!include ../../../_common/style.puml
+
+title Consume L2 - ConsumeDecision Provider Ack Mapping
+
+box "Core Consume" #FFF3E0
+participant MessageConsumeDispatcher
+end box
+box "Provider" #FFEBEE
+participant KafkaConsumeDecisionMapper
+participant PulsarConsumeDecisionMapper
+participant RocketMqConsumeDecisionMapper
+end box
+
+MessageConsumeDispatcher -> KafkaConsumeDecisionMapper: map(ACK)
+KafkaConsumeDecisionMapper --> MessageConsumeDispatcher: commit offset + 1
+MessageConsumeDispatcher -> KafkaConsumeDecisionMapper: map(RETRY)
+KafkaConsumeDecisionMapper --> MessageConsumeDispatcher: no commit / seek current
+MessageConsumeDispatcher -> KafkaConsumeDecisionMapper: map(DISCARD)
+KafkaConsumeDecisionMapper --> MessageConsumeDispatcher: commit offset + 1
+
+MessageConsumeDispatcher -> PulsarConsumeDecisionMapper: map(ACK / DISCARD)
+PulsarConsumeDecisionMapper --> MessageConsumeDispatcher: acknowledge
+MessageConsumeDispatcher -> PulsarConsumeDecisionMapper: map(RETRY)
+PulsarConsumeDecisionMapper --> MessageConsumeDispatcher: negativeAcknowledge
+
+MessageConsumeDispatcher -> RocketMqConsumeDecisionMapper: map(ACK / DISCARD)
+RocketMqConsumeDecisionMapper --> MessageConsumeDispatcher: CONSUME_SUCCESS
+MessageConsumeDispatcher -> RocketMqConsumeDecisionMapper: map(RETRY)
+RocketMqConsumeDecisionMapper --> MessageConsumeDispatcher: RECONSUME_LATER
+@enduml

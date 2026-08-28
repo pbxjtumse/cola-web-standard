@@ -1,0 +1,125 @@
+@startuml
+title Reliable Send Retry State - RetryStatus And Message Mapping From Code
+
+' 状态图保持默认黑白，不引入模块颜色。
+
+legend right
+  代码枚举节点直接显示真实来源：枚举类.枚举值
+  示例：ConsumeDecision.ACK / SendFailureType.VALIDATION_ERROR
+  LOGICAL = 查询、时间、次数、配置推导，代码枚举中不存在
+  RUNTIME = 执行过程节点，代码枚举中不存在
+  ACTION = repository / adapter 动作，不是状态枚举
+  PROVIDER ACTION = Kafka / Pulsar / RocketMQ 原生确认动作
+  PROVIDER CAUSE = Provider 原生返回或异常，不是统一状态枚举
+  MESSAGE SEMANTIC = message-component 语义，目前不是持久化枚举
+endlegend
+
+state "ATTEMPT_READY\nRUNTIME\nready to call provider" as R_READY
+state "ATTEMPT_RUNNING\nRUNTIME\nproviderSend(...) executing" as R_RUNNING
+state "CLASSIFY_RESULT\nRUNTIME\nMessageSendRetryClassifier classifies result" as R_CLASSIFY_RESULT
+state "CLASSIFY_EXCEPTION\nRUNTIME\nRetry component classifies exception" as R_CLASSIFY_EXCEPTION
+state "BACKOFF_WAIT\nRUNTIME\nBackoffPolicy delays next attempt" as R_BACKOFF
+state "STOP_UNKNOWN\nRUNTIME\nUNKNOWN + retryWhenUnknown=false" as R_STOP_UNKNOWN
+state "RETRYABLE_FAILURE\nRUNTIME\nFAILED + retryable failure type" as R_RETRYABLE_FAILURE
+state "RETRYABLE_UNKNOWN\nRUNTIME\nUNKNOWN + retryWhenUnknown=true" as R_RETRYABLE_UNKNOWN
+state "RETRYABLE_EXCEPTION\nRUNTIME\nIOException / TimeoutException" as R_RETRYABLE_EXCEPTION
+state "NON_RETRYABLE_RESULT\nRUNTIME\nREJECTED or non retryable failure" as R_NON_RETRYABLE_RESULT
+state "INTERRUPTED_BY_THREAD\nRUNTIME\nThread interrupted while retrying" as R_INTERRUPTED_BY_THREAD
+
+state "CONFIRMED\nSendStatus.CONFIRMED" as ST_CONFIRMED
+state "FAILED\nSendStatus.FAILED" as ST_FAILED
+state "REJECTED\nSendStatus.REJECTED" as ST_REJECTED
+state "UNKNOWN\nSendStatus.UNKNOWN" as ST_UNKNOWN
+
+state "SUCCESS\nRetryStatus.SUCCESS" as RT_SUCCESS
+state "EXHAUSTED\nRetryStatus.EXHAUSTED" as RT_EXHAUSTED
+state "NOT_RETRYABLE\nRetryStatus.NOT_RETRYABLE" as RT_NOT_RETRYABLE
+state "TIMED_OUT\nRetryStatus.TIMED_OUT" as RT_TIMED_OUT
+state "INTERRUPTED\nRetryStatus.INTERRUPTED" as RT_INTERRUPTED
+state "CANCELLED\nRetryStatus.CANCELLED" as RT_CANCELLED
+state "ABORTED\nRetryStatus.ABORTED" as RT_ABORTED
+state "EXECUTION_FAILED\nRetryStatus.EXECUTION_FAILED" as RT_EXECUTION_FAILED
+
+state "TRANSIENT\nRetryFailureCategory.TRANSIENT" as C_TRANSIENT
+state "DEPENDENCY_UNAVAILABLE\nRetryFailureCategory.DEPENDENCY_UNAVAILABLE" as C_DEPENDENCY
+state "NON_RETRYABLE\nRetryFailureCategory.NON_RETRYABLE" as C_NON_RETRYABLE
+state "UNKNOWN_CATEGORY\nRetryFailureCategory.UNKNOWN" as C_UNKNOWN
+
+state "RETRY_EXHAUSTED\nSendFailureType.RETRY_EXHAUSTED" as F_RETRY_EXHAUSTED
+state "RETRY_EXECUTION_ERROR\nSendFailureType.RETRY_EXECUTION_ERROR" as F_RETRY_EXECUTION_ERROR
+state "TIMEOUT\nSendFailureType.TIMEOUT" as F_TIMEOUT
+state "INTERRUPTED\nSendFailureType.INTERRUPTED" as F_INTERRUPTED
+state "UNKNOWN_OUTCOME\nSendFailureType.UNKNOWN_OUTCOME" as F_UNKNOWN_OUTCOME
+
+[*] --> R_READY
+R_READY --> R_RUNNING : attempt #n
+R_RUNNING --> ST_CONFIRMED : provider result confirmed
+ST_CONFIRMED --> RT_SUCCESS
+RT_SUCCESS --> [*]
+
+R_RUNNING --> R_CLASSIFY_RESULT : provider returns non-confirmed result
+R_RUNNING --> R_CLASSIFY_EXCEPTION : provider throws / future exception
+
+R_CLASSIFY_RESULT --> R_NON_RETRYABLE_RESULT : REJECTED / validation / auth / unsupported
+R_NON_RETRYABLE_RESULT --> C_NON_RETRYABLE
+C_NON_RETRYABLE --> RT_NOT_RETRYABLE
+RT_NOT_RETRYABLE --> ST_REJECTED : if provider status was REJECTED
+RT_NOT_RETRYABLE --> ST_FAILED : if provider status was FAILED
+RT_NOT_RETRYABLE --> ST_UNKNOWN : if provider status was UNKNOWN
+
+R_CLASSIFY_RESULT --> R_STOP_UNKNOWN : UNKNOWN and retryWhenUnknown=false
+R_STOP_UNKNOWN --> C_UNKNOWN
+C_UNKNOWN --> RT_NOT_RETRYABLE
+
+R_CLASSIFY_RESULT --> R_RETRYABLE_FAILURE : NETWORK_ERROR / TIMEOUT / CLIENT_ERROR
+R_RETRYABLE_FAILURE --> C_TRANSIENT
+C_TRANSIENT --> R_BACKOFF : attempts left
+C_TRANSIENT --> RT_EXHAUSTED : no attempts left
+
+R_CLASSIFY_RESULT --> R_RETRYABLE_UNKNOWN : retryWhenUnknown=true
+R_RETRYABLE_UNKNOWN --> F_UNKNOWN_OUTCOME
+F_UNKNOWN_OUTCOME --> R_BACKOFF : attempts left
+F_UNKNOWN_OUTCOME --> RT_EXHAUSTED : no attempts left
+
+R_CLASSIFY_EXCEPTION --> R_RETRYABLE_EXCEPTION : IOException / TimeoutException
+R_RETRYABLE_EXCEPTION --> C_DEPENDENCY
+C_DEPENDENCY --> R_BACKOFF : attempts left
+C_DEPENDENCY --> RT_EXHAUSTED : no attempts left
+
+R_BACKOFF --> R_READY : next attempt
+
+RT_EXHAUSTED --> F_RETRY_EXHAUSTED
+F_RETRY_EXHAUSTED --> ST_FAILED : last result FAILED
+F_RETRY_EXHAUSTED --> ST_UNKNOWN : last result UNKNOWN
+
+R_RUNNING --> RT_TIMED_OUT : retry maxDuration exceeded
+RT_TIMED_OUT --> F_TIMEOUT
+F_TIMEOUT --> ST_UNKNOWN
+
+R_RUNNING --> R_INTERRUPTED_BY_THREAD : interrupted during wait/backoff
+R_INTERRUPTED_BY_THREAD --> RT_INTERRUPTED
+RT_INTERRUPTED --> F_INTERRUPTED
+F_INTERRUPTED --> ST_UNKNOWN
+
+R_RUNNING --> RT_CANCELLED : retry was cancelled
+R_RUNNING --> RT_ABORTED : retry listener / policy aborted
+R_RUNNING --> RT_EXECUTION_FAILED : retry executor internal failure
+RT_CANCELLED --> F_RETRY_EXECUTION_ERROR
+RT_ABORTED --> F_RETRY_EXECUTION_ERROR
+RT_EXECUTION_FAILED --> F_RETRY_EXECUTION_ERROR
+F_RETRY_EXECUTION_ERROR --> ST_FAILED
+
+ST_FAILED --> [*]
+ST_REJECTED --> [*]
+ST_UNKNOWN --> [*]
+
+note right of RT_EXHAUSTED
+  RetryStatus.EXHAUSTED 来自 retry-component。
+  message-component 再映射为 SendFailureType.RETRY_EXHAUSTED。
+end note
+
+note right of R_STOP_UNKNOWN
+  STOP_UNKNOWN 是运行时分类分支，不是代码枚举。
+  最终通常是 RetryStatus.NOT_RETRYABLE + SendStatus.UNKNOWN。
+end note
+@enduml

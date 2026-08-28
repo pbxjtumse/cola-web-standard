@@ -1,0 +1,67 @@
+@startuml
+title Ack Failure And Redelivery Recovery - Explicit Stored Enum / Decision Enum
+
+' 状态图保持默认黑白，不引入模块颜色。
+
+legend right
+  代码枚举节点直接显示真实来源：枚举类.枚举值
+  示例：ConsumeDecision.ACK / SendFailureType.VALIDATION_ERROR
+  LOGICAL = 查询、时间、次数、配置推导，代码枚举中不存在
+  RUNTIME = 执行过程节点，代码枚举中不存在
+  ACTION = repository / adapter 动作，不是状态枚举
+  PROVIDER ACTION = Kafka / Pulsar / RocketMQ 原生确认动作
+  PROVIDER CAUSE = Provider 原生返回或异常，不是统一状态枚举
+  MESSAGE SEMANTIC = message-component 语义，目前不是持久化枚举
+endlegend
+
+state "FIRST_DELIVERY\nRUNTIME\nBroker delivers message first time" as R_FIRST_DELIVERY
+state "ACQUIRED\nIdempotentAcquireStatus.ACQUIRED" as A_ACQUIRED
+state "PROCESSING\nIdempotencyStatus.PROCESSING" as DB_PROCESSING
+state "TRANSACTION_RUNNING\nRUNTIME\nbusiness + markSuccess transaction" as R_TX_RUNNING
+state "BUSINESS_DONE\nRUNTIME\nhandler returns ACK" as R_BUSINESS_DONE
+state "SUCCESS\nIdempotencyStatus.SUCCESS" as DB_SUCCESS
+state "TRANSACTION_COMMITTED\nRUNTIME\nlocal transaction committed" as R_TX_COMMITTED
+state "ACK\nConsumeDecision.ACK" as D_ACK
+state "PROVIDER_ACKING\nPROVIDER ACTION\nKafka commit / Pulsar ack / RocketMQ success" as P_ACKING
+state "ACK_SUCCESS\nRUNTIME\nBroker confirmation success" as R_ACK_SUCCESS
+state "ACK_FAILED\nRUNTIME\ncommit/ack failed or app crashed before returning" as R_ACK_FAILED
+state "BROKER_REDELIVERS\nRUNTIME\nmessage remains unconfirmed" as R_BROKER_REDELIVERS
+state "SECOND_DELIVERY\nRUNTIME\nBroker delivers same message again" as R_SECOND_DELIVERY
+state "DUPLICATE_SUCCESS\nIdempotentAcquireStatus.DUPLICATE_SUCCESS" as A_DUP_SUCCESS
+state "SKIP_HANDLER\nRUNTIME\nhandler is not invoked" as R_SKIP_HANDLER
+state "ACK_AGAIN\nConsumeDecision.ACK" as D_ACK_AGAIN
+state "PROVIDER_ACKING_AGAIN\nPROVIDER ACTION\nconfirm same broker message again" as P_ACKING_AGAIN
+state "COMPLETED\nRUNTIME\nconsume completed" as R_COMPLETED
+
+[*] --> R_FIRST_DELIVERY
+R_FIRST_DELIVERY --> A_ACQUIRED : acquire(...)
+A_ACQUIRED --> DB_PROCESSING : status=PROCESSING, ownerToken=current
+DB_PROCESSING --> R_TX_RUNNING
+R_TX_RUNNING --> R_BUSINESS_DONE
+R_BUSINESS_DONE --> DB_SUCCESS : markSuccess(ownerToken)
+DB_SUCCESS --> R_TX_COMMITTED
+R_TX_COMMITTED --> D_ACK
+D_ACK --> P_ACKING
+P_ACKING --> R_ACK_SUCCESS
+R_ACK_SUCCESS --> R_COMPLETED
+R_COMPLETED --> [*]
+
+P_ACKING --> R_ACK_FAILED
+R_ACK_FAILED --> R_BROKER_REDELIVERS
+R_BROKER_REDELIVERS --> R_SECOND_DELIVERY
+R_SECOND_DELIVERY --> A_DUP_SUCCESS : acquire(...)
+A_DUP_SUCCESS --> R_SKIP_HANDLER
+R_SKIP_HANDLER --> D_ACK_AGAIN
+D_ACK_AGAIN --> P_ACKING_AGAIN
+P_ACKING_AGAIN --> R_COMPLETED
+
+note right of DB_SUCCESS
+  SUCCESS 是真实持久状态枚举：IdempotencyStatus.SUCCESS。
+  它已经在本地事务内落地，所以 ACK 失败后重投不会重新执行业务。
+end note
+
+note right of R_ACK_FAILED
+  ACK_FAILED 是恢复演进节点，不是代码枚举。
+  它只表示 Broker 仍可能重投。
+end note
+@enduml

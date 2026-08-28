@@ -1,0 +1,94 @@
+@startuml
+title Provider Send Result Mapping - Native Cause To Unified Send Enums
+
+' 状态图保持默认黑白，不引入模块颜色。
+
+legend right
+  代码枚举节点直接显示真实来源：枚举类.枚举值
+  示例：ConsumeDecision.ACK / SendFailureType.VALIDATION_ERROR
+  LOGICAL = 查询、时间、次数、配置推导，代码枚举中不存在
+  RUNTIME = 执行过程节点，代码枚举中不存在
+  ACTION = repository / adapter 动作，不是状态枚举
+  PROVIDER ACTION = Kafka / Pulsar / RocketMQ 原生确认动作
+  PROVIDER CAUSE = Provider 原生返回或异常，不是统一状态枚举
+  MESSAGE SEMANTIC = message-component 语义，目前不是持久化枚举
+endlegend
+
+state "PROVIDER_CALLING\nRUNTIME\nMessageProvider.send(request)" as R_PROVIDER_CALLING
+state "KAFKA_NATIVE_RESULT\nPROVIDER CAUSE\nRecordMetadata / Kafka exception" as P_KAFKA
+state "PULSAR_NATIVE_RESULT\nPROVIDER CAUSE\nMessageId / Pulsar exception" as P_PULSAR
+state "ROCKETMQ_NATIVE_RESULT\nPROVIDER CAUSE\nSendResult / Remoting exception" as P_ROCKETMQ
+
+state "NATIVE_CONFIRMED\nPROVIDER CAUSE\nBroker accepted and id returned" as P_CONFIRMED
+state "NATIVE_REJECTED\nPROVIDER CAUSE\nschema/auth/route/parameter rejected" as P_REJECTED
+state "NATIVE_FAILED\nPROVIDER CAUSE\nconnection/client failure before confirm" as P_FAILED
+state "NATIVE_UNKNOWN\nPROVIDER CAUSE\nrequest timed out / broker outcome uncertain" as P_UNKNOWN
+
+state "CONFIRMED\nSendStatus.CONFIRMED" as ST_CONFIRMED
+state "FAILED\nSendStatus.FAILED" as ST_FAILED
+state "REJECTED\nSendStatus.REJECTED" as ST_REJECTED
+state "UNKNOWN\nSendStatus.UNKNOWN" as ST_UNKNOWN
+
+state "NONE\nSendFailureType.NONE" as F_NONE
+state "SERIALIZATION_ERROR\nSendFailureType.SERIALIZATION_ERROR" as F_SERIALIZATION
+state "AUTHORIZATION_ERROR\nSendFailureType.AUTHORIZATION_ERROR" as F_AUTHORIZATION
+state "NETWORK_ERROR\nSendFailureType.NETWORK_ERROR" as F_NETWORK
+state "TIMEOUT\nSendFailureType.TIMEOUT" as F_TIMEOUT
+state "BROKER_REJECTED\nSendFailureType.BROKER_REJECTED" as F_BROKER_REJECTED
+state "CLIENT_ERROR\nSendFailureType.CLIENT_ERROR" as F_CLIENT
+state "UNKNOWN_OUTCOME\nSendFailureType.UNKNOWN_OUTCOME" as F_UNKNOWN_OUTCOME
+
+[*] --> R_PROVIDER_CALLING
+R_PROVIDER_CALLING --> P_KAFKA : kafka provider
+R_PROVIDER_CALLING --> P_PULSAR : pulsar provider
+R_PROVIDER_CALLING --> P_ROCKETMQ : rocketmq provider
+
+P_KAFKA --> P_CONFIRMED : RecordMetadata returned
+P_KAFKA --> P_REJECTED : SerializationException / AuthorizationException
+P_KAFKA --> P_FAILED : NetworkException / DisconnectException
+P_KAFKA --> P_UNKNOWN : timeout waiting ack
+
+P_PULSAR --> P_CONFIRMED : MessageId returned
+P_PULSAR --> P_REJECTED : authorization / schema rejected
+P_PULSAR --> P_FAILED : connection failure before confirm
+P_PULSAR --> P_UNKNOWN : timeout before final confirm
+
+P_ROCKETMQ --> P_CONFIRMED : SEND_OK
+P_ROCKETMQ --> P_UNKNOWN : FLUSH_DISK_TIMEOUT / FLUSH_SLAVE_TIMEOUT / SLAVE_NOT_AVAILABLE
+P_ROCKETMQ --> P_FAILED : RemotingConnectException / client failure
+P_ROCKETMQ --> P_REJECTED : topic / route / auth / parameter rejected
+
+P_CONFIRMED --> ST_CONFIRMED
+P_CONFIRMED --> F_NONE
+F_NONE --> ST_CONFIRMED
+
+P_REJECTED --> ST_REJECTED
+P_REJECTED --> F_SERIALIZATION : serialization/schema
+P_REJECTED --> F_AUTHORIZATION : auth
+P_REJECTED --> F_BROKER_REJECTED : broker rejects request
+
+P_FAILED --> ST_FAILED
+P_FAILED --> F_NETWORK : connection/network
+P_FAILED --> F_CLIENT : client-side failure
+
+P_UNKNOWN --> ST_UNKNOWN
+P_UNKNOWN --> F_TIMEOUT : timeout
+P_UNKNOWN --> F_UNKNOWN_OUTCOME : broker outcome uncertain
+
+ST_CONFIRMED --> [*]
+ST_FAILED --> [*]
+ST_REJECTED --> [*]
+ST_UNKNOWN --> [*]
+F_SERIALIZATION --> [*]
+F_AUTHORIZATION --> [*]
+F_BROKER_REJECTED --> [*]
+F_NETWORK --> [*]
+F_CLIENT --> [*]
+F_TIMEOUT --> [*]
+F_UNKNOWN_OUTCOME --> [*]
+
+note right of P_ROCKETMQ
+  RocketMQ FLUSH_* 不应标成 REJECTED。
+  它表示刷盘/同步链路不完整，更接近 UNKNOWN。
+end note
+@enduml

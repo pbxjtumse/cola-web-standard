@@ -1,0 +1,29 @@
+@startuml
+!include ../../../_common/style.puml
+
+title Consume L3 - RocketMQ4 Consume Flow
+
+box "Provider" #FFEBEE
+participant RocketMqPushConsumer
+participant RocketMqConsumerDispatcherAdapter
+participant RocketMqConsumeDecisionMapper
+end box
+box "Core Consume" #FFF3E0
+participant ProviderMessageListener
+end box
+
+RocketMqPushConsumer -> RocketMqConsumerDispatcherAdapter: consumeMessage(msgs, context)
+loop each MessageExt
+  RocketMqConsumerDispatcherAdapter -> ProviderMessageListener: onMessage(inbound)
+  ProviderMessageListener --> RocketMqConsumerDispatcherAdapter: ProviderConsumeResult
+  alt ACK / DISCARD
+    RocketMqConsumerDispatcherAdapter -> RocketMqConsumeDecisionMapper: map(result)
+    RocketMqConsumeDecisionMapper --> RocketMqConsumerDispatcherAdapter: CONSUME_SUCCESS for this message
+  else RETRY
+    RocketMqConsumerDispatcherAdapter -> RocketMqConsumeDecisionMapper: map(result)
+    RocketMqConsumeDecisionMapper --> RocketMqConsumerDispatcherAdapter: RECONSUME_LATER
+    RocketMqConsumerDispatcherAdapter --> RocketMqPushConsumer: RECONSUME_LATER
+  end
+end
+RocketMqConsumerDispatcherAdapter --> RocketMqPushConsumer: CONSUME_SUCCESS
+@enduml

@@ -1,0 +1,37 @@
+@startuml
+!include ../../../_common/style.puml
+
+title Send L4 - Provider Send Result Mapping
+
+box "Core Send" #FFF3E0
+participant DirectMessageSender
+end box
+box "Provider" #FFEBEE
+participant KafkaMessageProvider
+participant PulsarMessageProvider
+participant RocketMqMessageProvider
+end box
+box "Broker" #FFFDE7
+participant Kafka
+participant Pulsar
+participant RocketMQ
+end box
+
+== Kafka ==
+DirectMessageSender -> KafkaMessageProvider: send(request)
+KafkaMessageProvider -> Kafka: producer.send(record).get()
+Kafka --> KafkaMessageProvider: RecordMetadata / exception
+KafkaMessageProvider --> DirectMessageSender: ProviderSendResult
+
+== Pulsar ==
+DirectMessageSender -> PulsarMessageProvider: send(request)
+PulsarMessageProvider -> Pulsar: producer.sendAsync(message)
+Pulsar --> PulsarMessageProvider: MessageId / exception
+PulsarMessageProvider --> DirectMessageSender: ProviderSendResult
+
+== RocketMQ4 ==
+DirectMessageSender -> RocketMqMessageProvider: send(request)
+RocketMqMessageProvider -> RocketMQ: producer.send(message)
+RocketMQ --> RocketMqMessageProvider: SendResult / exception
+RocketMqMessageProvider --> DirectMessageSender: ProviderSendResult
+@enduml

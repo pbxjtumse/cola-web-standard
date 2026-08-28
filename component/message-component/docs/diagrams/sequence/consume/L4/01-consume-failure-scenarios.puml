@@ -1,0 +1,38 @@
+@startuml
+!include ../../../_common/style.puml
+
+title Consume L4 - Failure Scenarios And Recovery
+
+box "Provider" #FFEBEE
+participant Broker
+participant Provider
+end box
+box "Core Consume" #FFF3E0
+participant MessageIdempotencyExecutor
+end box
+box "Idempotent Component" #FCE4EC
+participant IdempotentExecutor
+end box
+box "Business" #E8F5E9
+participant MessageHandler
+end box
+
+== handler success, ack failed ==
+Provider -> MessageIdempotencyExecutor: execute(...)
+MessageIdempotencyExecutor -> IdempotentExecutor: acquire(...)
+IdempotentExecutor --> MessageIdempotencyExecutor: ACQUIRED
+MessageIdempotencyExecutor -> MessageHandler: handle(...)
+MessageHandler --> MessageIdempotencyExecutor: ACK
+MessageIdempotencyExecutor -> IdempotentExecutor: markSuccess(ownerToken)
+MessageIdempotencyExecutor --> Provider: ACK
+Provider -> Broker: ack / commit
+Broker --> Provider: ack failed
+
+== redelivery after ack failed ==
+Broker -> Provider: redeliver same message
+Provider -> MessageIdempotencyExecutor: execute(...)
+MessageIdempotencyExecutor -> IdempotentExecutor: acquire(...)
+IdempotentExecutor --> MessageIdempotencyExecutor: DUPLICATE_SUCCESS
+MessageIdempotencyExecutor --> Provider: ACK without handler
+Provider -> Broker: ack / commit again
+@enduml

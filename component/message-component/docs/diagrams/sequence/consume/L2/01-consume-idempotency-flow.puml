@@ -1,0 +1,40 @@
+@startuml
+!include ../../../_common/style.puml
+
+title Consume L2 - Message Idempotency Executor Flow
+
+box "Core Consume" #FFF3E0
+participant ConsumeExecutionTemplate
+participant MessageIdempotencyExecutor
+participant MessageIdempotencySceneResolver
+participant MessageIdempotencyKeyResolver
+participant MessageIdempotencyOwnerTokenGenerator
+end box
+box "Idempotent Component" #FCE4EC
+participant IdempotentExecutor
+end box
+box "Business" #E8F5E9
+participant MessageHandler
+end box
+
+ConsumeExecutionTemplate -> MessageIdempotencyExecutor: execute(envelope, context, invocation)
+MessageIdempotencyExecutor -> MessageIdempotencySceneResolver: resolveScene(envelope, context)
+MessageIdempotencyExecutor -> MessageIdempotencyKeyResolver: resolveKey(envelope, context)
+MessageIdempotencyExecutor -> MessageIdempotencyOwnerTokenGenerator: generate(context)
+MessageIdempotencyExecutor -> IdempotentExecutor: acquire(request)
+alt ACQUIRED
+  MessageIdempotencyExecutor -> MessageHandler: handle(envelope, context)
+  MessageHandler --> MessageIdempotencyExecutor: ConsumeDecision
+  alt ACK
+    MessageIdempotencyExecutor -> IdempotentExecutor: markSuccess(ownerToken, result)
+  else DISCARD
+    MessageIdempotencyExecutor -> IdempotentExecutor: markDiscarded(ownerToken, result)
+  else RETRY / exception
+    MessageIdempotencyExecutor -> IdempotentExecutor: markFailed(ownerToken, error)
+  end
+else DUPLICATE_SUCCESS / DUPLICATE_DISCARDED
+  MessageIdempotencyExecutor --> ConsumeExecutionTemplate: ACK without handler
+else PROCESSING / STORAGE_ERROR
+  MessageIdempotencyExecutor --> ConsumeExecutionTemplate: RETRY without handler
+end
+@enduml

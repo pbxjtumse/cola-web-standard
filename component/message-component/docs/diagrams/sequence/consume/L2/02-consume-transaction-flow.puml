@@ -1,0 +1,40 @@
+@startuml
+!include ../../../_common/style.puml
+
+title Consume L2 - Transaction Boundary
+
+box "Core Consume" #FFF3E0
+participant MessageIdempotencyExecutor
+participant MessageConsumeTransactionExecutor
+end box
+box "Business" #E8F5E9
+participant MessageHandler
+end box
+box "Idempotent Component" #FCE4EC
+participant IdempotentExecutor
+end box
+box "Transaction Component" #E0F2F1
+participant TransactionTemplate
+end box
+box "Provider" #FFEBEE
+participant ProviderAckMapper
+end box
+
+MessageIdempotencyExecutor -> IdempotentExecutor: acquire(request)
+IdempotentExecutor --> MessageIdempotencyExecutor: ACQUIRED
+MessageIdempotencyExecutor -> MessageConsumeTransactionExecutor: execute(context, callback)
+MessageConsumeTransactionExecutor -> TransactionTemplate: execute(callback)
+TransactionTemplate -> MessageHandler: handle(envelope, context)
+alt handler ACK
+  MessageHandler --> TransactionTemplate: ACK
+  TransactionTemplate -> IdempotentExecutor: markSuccess(ownerToken, result)
+  TransactionTemplate --> MessageConsumeTransactionExecutor: commit
+  MessageConsumeTransactionExecutor --> MessageIdempotencyExecutor: ACK
+  MessageIdempotencyExecutor -> ProviderAckMapper: complete(ACK)
+else handler exception / RETRY
+  MessageHandler --> TransactionTemplate: exception / RETRY
+  TransactionTemplate --> MessageConsumeTransactionExecutor: rollback
+  MessageIdempotencyExecutor -> IdempotentExecutor: markFailed(ownerToken, error)
+  MessageIdempotencyExecutor -> ProviderAckMapper: complete(RETRY)
+end
+@enduml

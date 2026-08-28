@@ -1,0 +1,131 @@
+@startuml
+title Idempotent Record State - Stored Status vs Derived Logical State From Code
+
+' 状态图保持默认黑白，不引入模块颜色。
+' 重点：明确哪些是当前代码里的持久状态枚举，哪些只是推导状态。
+
+legend right
+  代码枚举节点直接显示真实来源：枚举类.枚举值
+  示例：ConsumeDecision.ACK / SendFailureType.VALIDATION_ERROR
+  LOGICAL = 查询、时间、次数、配置推导，代码枚举中不存在
+  RUNTIME = 执行过程节点，代码枚举中不存在
+  ACTION = repository / adapter 动作，不是状态枚举
+  PROVIDER ACTION = Kafka / Pulsar / RocketMQ 原生确认动作
+  PROVIDER CAUSE = Provider 原生返回或异常，不是统一状态枚举
+  MESSAGE SEMANTIC = message-component 语义，目前不是持久化枚举
+endlegend
+
+state "ABSENT\nLOGICAL\nselect returns no row" as L_ABSENT
+state "LOOKUP\nACTION\nquery by namespace + scene + key" as A_LOOKUP
+state "INSERT_PROCESSING\nACTION\ninsert row with ownerToken" as A_INSERT_PROCESSING
+state "PROCESSING\nIdempotencyStatus.PROCESSING" as DB_PROCESSING
+state "SUCCESS\nIdempotencyStatus.SUCCESS" as DB_SUCCESS
+state "FAILED\nIdempotencyStatus.FAILED" as DB_FAILED
+state "DISCARDED\nMESSAGE SEMANTIC\nnot in current IdempotencyStatus\nmarkDiscarded semantic" as M_DISCARDED
+
+state "PROCESSING_ACTIVE\nLOGICAL\nPROCESSING + processing_expire_time >= now" as L_PROCESSING_ACTIVE
+state "PROCESSING_TIMEOUT\nLOGICAL\nPROCESSING + processing_expire_time < now" as L_PROCESSING_TIMEOUT
+state "FAILED_RETRYABLE\nLOGICAL\nFAILED + attempt_count < maxAttempts" as L_FAILED_RETRYABLE
+state "MAX_ATTEMPTS_EXCEEDED\nLOGICAL\nFAILED + attempt_count >= maxAttempts" as L_MAX_ATTEMPTS
+state "RECORD_EXPIRED\nLOGICAL\nexpire_time < now" as L_RECORD_EXPIRED
+state "STORAGE_ERROR\nLOGICAL\nrepository/provider exception" as L_STORAGE_ERROR
+
+state "ACQUIRED\nIdempotentAcquireStatus.ACQUIRED" as ACQ_ACQUIRED
+state "DUPLICATE_SUCCESS\nIdempotentAcquireStatus.DUPLICATE_SUCCESS" as ACQ_DUP_SUCCESS
+state "DUPLICATE_DISCARDED\nIdempotentAcquireStatus.DUPLICATE_DISCARDED" as ACQ_DUP_DISCARDED
+state "PROCESSING\nIdempotentAcquireStatus.PROCESSING" as ACQ_PROCESSING
+state "REJECTED\nIdempotentAcquireStatus.REJECTED" as ACQ_REJECTED
+state "STORAGE_ERROR\nIdempotentAcquireStatus.STORAGE_ERROR" as ACQ_STORAGE_ERROR
+
+state "UPDATED\nIdempotencyWriteStatus.UPDATED\n(markSuccess)" as W_SUCCESS_UPDATED
+state "UPDATED\nIdempotencyWriteStatus.UPDATED\n(markFailed)" as W_FAILED_UPDATED
+state "STALE_OWNER\nIdempotencyWriteStatus.STALE_OWNER" as W_STALE_OWNER
+state "ALREADY_FINAL\nIdempotencyWriteStatus.ALREADY_FINAL" as W_ALREADY_FINAL
+state "PROVIDER_ERROR\nIdempotencyWriteStatus.PROVIDER_ERROR" as W_PROVIDER_ERROR
+
+state "CAS_TAKEOVER\nACTION\nupdate ownerToken where PROCESSING timeout" as A_CAS_TAKEOVER
+state "CAS_REACQUIRE_FAILED\nACTION\nupdate FAILED -> PROCESSING" as A_CAS_REACQUIRE_FAILED
+state "MARK_SUCCESS\nACTION\nmarkSuccess(ownerToken)" as A_MARK_SUCCESS
+state "MARK_FAILED\nACTION\nmarkFailed(ownerToken)" as A_MARK_FAILED
+state "MARK_DISCARDED\nACTION\nmarkDiscarded(ownerToken)" as A_MARK_DISCARDED
+state "CLEANUP_DELETE\nACTION\ndelete expired record" as A_CLEANUP_DELETE
+
+[*] --> A_LOOKUP
+A_LOOKUP --> L_ABSENT : no row
+L_ABSENT --> A_INSERT_PROCESSING
+A_INSERT_PROCESSING --> DB_PROCESSING
+DB_PROCESSING --> ACQ_ACQUIRED : return acquire result
+
+A_LOOKUP --> DB_SUCCESS : row.status=SUCCESS
+DB_SUCCESS --> ACQ_DUP_SUCCESS : return acquire result
+
+A_LOOKUP --> M_DISCARDED : adapter identifies discarded semantic
+M_DISCARDED --> ACQ_DUP_DISCARDED : return acquire result
+
+A_LOOKUP --> DB_PROCESSING : row.status=PROCESSING
+DB_PROCESSING --> L_PROCESSING_ACTIVE : processing_expire_time >= now
+L_PROCESSING_ACTIVE --> ACQ_PROCESSING : another owner is processing
+DB_PROCESSING --> L_PROCESSING_TIMEOUT : processing_expire_time < now
+L_PROCESSING_TIMEOUT --> A_CAS_TAKEOVER
+A_CAS_TAKEOVER --> DB_PROCESSING : CAS success, new ownerToken
+A_CAS_TAKEOVER --> ACQ_PROCESSING : CAS failed / another owner won
+
+A_LOOKUP --> DB_FAILED : row.status=FAILED
+DB_FAILED --> L_FAILED_RETRYABLE : attempt_count < maxAttempts
+L_FAILED_RETRYABLE --> A_CAS_REACQUIRE_FAILED
+A_CAS_REACQUIRE_FAILED --> DB_PROCESSING : CAS success
+A_CAS_REACQUIRE_FAILED --> A_LOOKUP : CAS failed, re-query
+DB_FAILED --> L_MAX_ATTEMPTS : attempt_count >= maxAttempts
+L_MAX_ATTEMPTS --> ACQ_REJECTED : failurePolicy decides retry/discard/dlq later
+
+A_LOOKUP --> L_STORAGE_ERROR : repository exception
+L_STORAGE_ERROR --> ACQ_STORAGE_ERROR
+
+DB_PROCESSING --> A_MARK_SUCCESS : handler ACK
+A_MARK_SUCCESS --> W_SUCCESS_UPDATED : ownerToken matches
+W_SUCCESS_UPDATED --> DB_SUCCESS
+A_MARK_SUCCESS --> W_STALE_OWNER : ownerToken mismatch
+A_MARK_SUCCESS --> W_ALREADY_FINAL : already SUCCESS/FAILED
+A_MARK_SUCCESS --> W_PROVIDER_ERROR : repository error
+W_STALE_OWNER --> ACQ_STORAGE_ERROR : caller returns RETRY
+W_ALREADY_FINAL --> ACQ_STORAGE_ERROR : caller returns RETRY
+W_PROVIDER_ERROR --> ACQ_STORAGE_ERROR : caller returns RETRY
+
+DB_PROCESSING --> A_MARK_FAILED : handler exception/RETRY/transaction rollback
+A_MARK_FAILED --> W_FAILED_UPDATED
+W_FAILED_UPDATED --> DB_FAILED
+A_MARK_FAILED --> W_STALE_OWNER
+A_MARK_FAILED --> W_PROVIDER_ERROR
+
+DB_PROCESSING --> A_MARK_DISCARDED : handler DISCARD / failurePolicy=DISCARD
+A_MARK_DISCARDED --> M_DISCARDED : message consume terminal semantic
+A_MARK_DISCARDED --> W_STALE_OWNER
+A_MARK_DISCARDED --> W_PROVIDER_ERROR
+
+DB_SUCCESS --> L_RECORD_EXPIRED : expire_time < now
+DB_FAILED --> L_RECORD_EXPIRED : expire_time < now
+M_DISCARDED --> L_RECORD_EXPIRED : expire_time < now
+L_RECORD_EXPIRED --> A_CLEANUP_DELETE
+A_CLEANUP_DELETE --> L_ABSENT
+
+note right of DB_PROCESSING
+  当前 idempotent-api 的真实持久状态枚举：IdempotencyStatus.PROCESSING。
+  它应携带 ownerToken / version / processingExpireTime。
+end note
+
+note right of M_DISCARDED
+  当前代码中：message-component 有 markDiscarded(...)、DUPLICATE_DISCARDED、ConsumeDecision.DISCARD。
+  但 idempotent-component 当前 IdempotencyStatus 没有 DISCARDED。
+  因此图上标为 MESSAGE SEMANTIC，不是 IdempotencyStatus 持久状态枚举。
+end note
+
+note right of L_PROCESSING_TIMEOUT
+  逻辑推导状态，不应写入 status 字段。
+  由 PROCESSING + processing_expire_time < now 推导，直接 CAS 抢占即可。
+end note
+
+note right of L_RECORD_EXPIRED
+  生命周期过期，不建议覆盖原本 SUCCESS/FAILED 的业务历史状态。
+  清理任务可直接按 expire_time 删除。
+end note
+@enduml

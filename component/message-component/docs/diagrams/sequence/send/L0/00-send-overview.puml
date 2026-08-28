@@ -1,0 +1,61 @@
+@startuml
+!include ../../../_common/style.puml
+
+title Send L0 - Message Send Capability Overview
+
+left to right direction
+
+package "Business" #E8F5E9 {
+  [BusinessService]
+}
+package "API" #E3F2FD {
+  [MessagePublisher]
+  [MessageEnvelope]
+  [SendOptions]
+  [SendResult]
+}
+package "Core Send" #FFF3E0 {
+  [MessageTemplate]
+  [MessageSendExecutor]
+  [DirectMessageSender]
+  [DefaultReliableMessageSender]
+  [MessageWireCodec]
+  [DestinationResolver]
+}
+package "Retry Component" #FCE4EC {
+  [RetryExecutor]
+  [RetryPolicyRegistry]
+}
+package "SPI" #ECEFF1 {
+  [MessageProvider]
+  [ProviderSendRequest]
+  [ProviderSendResult]
+}
+package "Provider" #FFEBEE {
+  [KafkaMessageProvider]
+  [PulsarMessageProvider]
+  [RocketMqMessageProvider]
+}
+package "Broker" #FFFDE7 {
+  [Kafka]
+  [Pulsar]
+  [RocketMQ]
+}
+
+[BusinessService] --> [MessagePublisher]
+[MessagePublisher] --> [MessageTemplate]
+[MessageTemplate] --> [DestinationResolver]
+[MessageTemplate] --> [MessageWireCodec]
+[MessageTemplate] --> [MessageSendExecutor]
+[MessageSendExecutor] --> [DirectMessageSender]
+[MessageSendExecutor] --> [DefaultReliableMessageSender]
+[DefaultReliableMessageSender] --> [RetryExecutor]
+[DirectMessageSender] --> [MessageProvider]
+[DefaultReliableMessageSender] --> [MessageProvider]
+[MessageProvider] <|.. [KafkaMessageProvider]
+[MessageProvider] <|.. [PulsarMessageProvider]
+[MessageProvider] <|.. [RocketMqMessageProvider]
+[KafkaMessageProvider] --> [Kafka]
+[PulsarMessageProvider] --> [Pulsar]
+[RocketMqMessageProvider] --> [RocketMQ]
+@enduml
