@@ -1,5 +1,7 @@
 package com.xjtu.iron.message.api.consume;
 
+import com.xjtu.iron.message.api.model.MessageDestination;
+
 import java.time.Instant;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -9,180 +11,197 @@ import java.util.Objects;
 /**
  * 表示一次具体消费投递的运行时上下文。
  *
- * <p>{@code providerName}：实际 Provider 名称</p>
- * <p>{@code physicalDestination}：实际物理目的地</p>
- * <p>{@code consumerGroup}：消费组或订阅名称</p>
- * <p>{@code providerMessageId}：Provider 原生消息 ID</p>
- * <p>{@code deliveryAttempt}：当前投递次数；Provider 无法提供时通常为 1</p>
- * <p>{@code receivedAt}：组件收到消息的时间</p>
- * <p>{@code metadata}：Provider 只读原生诊断元数据</p>
+ * <p>该上下文面向业务 Handler，不派生 Kafka/Pulsar/RocketMQ 子类。Provider 特有字段进入 attributes，
+ * 例如 kafka.partition、kafka.offset、pulsar.ledgerId、rocketmq.queueOffset。</p>
  */
 public final class ConsumeContext {
-    /** 实际 Provider 名称。 */
     private final String providerName;
-
-    /** 实际物理目的地。 */
     private final String physicalDestination;
-
-    /** 消费组或订阅名称。 */
+    private final MessageDestination logicalDestination;
     private final String consumerGroup;
-
-    /** Provider 原生消息 ID。 */
     private final String providerMessageId;
-
-    /** 组件收到消息的时间。 */
+    private final String messageId;
+    private final String messageKey;
+    private final String eventType;
+    private final int deliveryAttempt;
     private final Instant receivedAt;
+    private final Instant startedAt;
+    private final ConsumerReliabilityMode reliabilityMode;
+    private final MessageIdempotencyMode idempotencyMode;
+    private final String idempotencyScene;
+    private final String idempotencyKey;
+    private final Map<String, String> headers;
+    private final Map<String, String> attributes;
 
-    /** Provider 只读原生诊断元数据。 */
-    private final Map<String, String> metadata;
-
-
-    /**
-     * 统一修正投递次数并复制元数据。
-     */
     public ConsumeContext(
-        String providerName,
-        String physicalDestination,
-        String consumerGroup,
-        String providerMessageId,
-        int deliveryAttempt,
-        Instant receivedAt,
-        Map<String, String> metadata) {
-        // 对无法提供或非法的次数统一使用 1。
-        deliveryAttempt = Math.max(1, deliveryAttempt);
-        // 防止调用方修改 Provider 原始元数据。
-        metadata = metadata == null || metadata.isEmpty()
-                ? Map.of()
-                : Collections.unmodifiableMap(new LinkedHashMap<>(metadata));
-    
-        // 保存完成校验和标准化后的 providerName。
-        this.providerName = providerName;
-        // 保存完成校验和标准化后的 physicalDestination。
-        this.physicalDestination = physicalDestination;
-        // 保存完成校验和标准化后的 consumerGroup。
-        this.consumerGroup = consumerGroup;
-        // 保存完成校验和标准化后的 providerMessageId。
-        this.providerMessageId = providerMessageId;
-        // 保存完成校验和标准化后的 receivedAt。
-        this.receivedAt = receivedAt;
-        // 保存完成校验和标准化后的 metadata。
-        this.metadata = metadata;
-    }
-    /**
-     * 返回实际 Provider 名称。
-     *
-     * @return 实际 Provider 名称
-     */
-    public String providerName() {
-        // 返回不可变字段。
-        return providerName;
+            String providerName,
+            String physicalDestination,
+            String consumerGroup,
+            String providerMessageId,
+            int deliveryAttempt,
+            Instant receivedAt,
+            Map<String, String> attributes) {
+        this(
+                providerName,
+                physicalDestination,
+                null,
+                consumerGroup,
+                providerMessageId,
+                null,
+                null,
+                null,
+                deliveryAttempt,
+                receivedAt,
+                Instant.now(),
+                ConsumerReliabilityMode.AT_LEAST_ONCE,
+                MessageIdempotencyMode.NONE,
+                null,
+                null,
+                Map.of(),
+                attributes);
     }
 
-    /**
-     * 返回实际物理目的地。
-     *
-     * @return 实际物理目的地
-     */
-    public String physicalDestination() {
-        // 返回不可变字段。
-        return physicalDestination;
+    public ConsumeContext(
+            String providerName,
+            String physicalDestination,
+            MessageDestination logicalDestination,
+            String consumerGroup,
+            String providerMessageId,
+            String messageId,
+            String messageKey,
+            String eventType,
+            int deliveryAttempt,
+            Instant receivedAt,
+            Instant startedAt,
+            ConsumerReliabilityMode reliabilityMode,
+            MessageIdempotencyMode idempotencyMode,
+            String idempotencyScene,
+            String idempotencyKey,
+            Map<String, String> headers,
+            Map<String, String> attributes) {
+        this.providerName = normalize(providerName);
+        this.physicalDestination = normalize(physicalDestination);
+        this.logicalDestination = logicalDestination;
+        this.consumerGroup = normalize(consumerGroup);
+        this.providerMessageId = normalize(providerMessageId);
+        this.messageId = normalize(messageId);
+        this.messageKey = normalize(messageKey);
+        this.eventType = normalize(eventType);
+        this.deliveryAttempt = Math.max(1, deliveryAttempt);
+        this.receivedAt = receivedAt == null ? Instant.now() : receivedAt;
+        this.startedAt = startedAt == null ? Instant.now() : startedAt;
+        this.reliabilityMode = reliabilityMode == null ? ConsumerReliabilityMode.AT_LEAST_ONCE : reliabilityMode;
+        this.idempotencyMode = idempotencyMode == null ? MessageIdempotencyMode.NONE : idempotencyMode;
+        this.idempotencyScene = normalize(idempotencyScene);
+        this.idempotencyKey = normalize(idempotencyKey);
+        this.headers = immutable(headers);
+        this.attributes = immutable(attributes);
     }
 
-    /**
-     * 返回消费组或订阅名称。
-     *
-     * @return 消费组或订阅名称
-     */
-    public String consumerGroup() {
-        // 返回不可变字段。
-        return consumerGroup;
+    public ConsumeContext withIdempotency(String scene, String key, MessageIdempotencyMode mode) {
+        return new ConsumeContext(
+                providerName,
+                physicalDestination,
+                logicalDestination,
+                consumerGroup,
+                providerMessageId,
+                messageId,
+                messageKey,
+                eventType,
+                deliveryAttempt,
+                receivedAt,
+                startedAt,
+                reliabilityMode,
+                mode == null ? idempotencyMode : mode,
+                scene,
+                key,
+                headers,
+                attributes);
     }
 
-    /**
-     * 返回Provider 原生消息 ID。
-     *
-     * @return Provider 原生消息 ID
-     */
-    public String providerMessageId() {
-        // 返回不可变字段。
-        return providerMessageId;
+    public String providerName() { return providerName; }
+    public String physicalDestination() { return physicalDestination; }
+    public MessageDestination logicalDestination() { return logicalDestination; }
+    public String consumerGroup() { return consumerGroup; }
+    public String providerMessageId() { return providerMessageId; }
+    public String messageId() { return messageId; }
+    public String messageKey() { return messageKey; }
+    public String eventType() { return eventType; }
+    public int deliveryAttempt() { return deliveryAttempt; }
+    public Instant receivedAt() { return receivedAt; }
+    public Instant startedAt() { return startedAt; }
+    public ConsumerReliabilityMode reliabilityMode() { return reliabilityMode; }
+    public MessageIdempotencyMode idempotencyMode() { return idempotencyMode; }
+    public String idempotencyScene() { return idempotencyScene; }
+    public String idempotencyKey() { return idempotencyKey; }
+    public Map<String, String> headers() { return headers; }
+    public Map<String, String> attributes() { return attributes; }
+
+    /** 兼容旧代码中的 metadata 命名。 */
+    public Map<String, String> metadata() { return attributes; }
+
+    private static Map<String, String> immutable(Map<String, String> source) {
+        if (source == null || source.isEmpty()) {
+            return Map.of();
+        }
+        return Collections.unmodifiableMap(new LinkedHashMap<>(source));
     }
 
-
-
-    /**
-     * 返回组件收到消息的时间。
-     *
-     * @return 组件收到消息的时间
-     */
-    public Instant receivedAt() {
-        // 返回不可变字段。
-        return receivedAt;
+    private static String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
-    /**
-     * 返回Provider 只读原生诊断元数据。
-     *
-     * @return Provider 只读原生诊断元数据
-     */
-    public Map<String, String> metadata() {
-        // 返回不可变字段。
-        return metadata;
-    }
-
-    /**
-     * 按全部字段比较两个值对象。
-     *
-     * @param object 待比较对象
-     * @return 字段值全部一致时返回 true
-     */
     @Override
     public boolean equals(Object object) {
-        // 同一对象直接相等。
         if (this == object) {
             return true;
         }
-        // 类型不同或对象为空时不相等。
         if (object == null || getClass() != object.getClass()) {
             return false;
         }
-        // 转换为当前类型后逐字段比较。
         ConsumeContext other = (ConsumeContext) object;
-        return Objects.equals(providerName, other.providerName)
+        return deliveryAttempt == other.deliveryAttempt
+                && Objects.equals(providerName, other.providerName)
                 && Objects.equals(physicalDestination, other.physicalDestination)
+                && Objects.equals(logicalDestination, other.logicalDestination)
                 && Objects.equals(consumerGroup, other.consumerGroup)
                 && Objects.equals(providerMessageId, other.providerMessageId)
+                && Objects.equals(messageId, other.messageId)
+                && Objects.equals(messageKey, other.messageKey)
+                && Objects.equals(eventType, other.eventType)
                 && Objects.equals(receivedAt, other.receivedAt)
-                && Objects.equals(metadata, other.metadata);
+                && Objects.equals(startedAt, other.startedAt)
+                && reliabilityMode == other.reliabilityMode
+                && idempotencyMode == other.idempotencyMode
+                && Objects.equals(idempotencyScene, other.idempotencyScene)
+                && Objects.equals(idempotencyKey, other.idempotencyKey)
+                && Objects.equals(headers, other.headers)
+                && Objects.equals(attributes, other.attributes);
     }
 
-    /**
-     * 根据全部字段计算哈希值。
-     *
-     * @return 哈希值
-     */
     @Override
     public int hashCode() {
-        // 使用与 equals 相同的字段计算哈希值。
-        return Objects.hash(providerName, physicalDestination, consumerGroup, providerMessageId, receivedAt, metadata);
+        return Objects.hash(
+                providerName,
+                physicalDestination,
+                logicalDestination,
+                consumerGroup,
+                providerMessageId,
+                messageId,
+                messageKey,
+                eventType,
+                deliveryAttempt,
+                receivedAt,
+                startedAt,
+                reliabilityMode,
+                idempotencyMode,
+                idempotencyScene,
+                idempotencyKey,
+                headers,
+                attributes);
     }
-
-    /**
-     * 返回便于诊断的字段摘要。
-     *
-     * @return 字符串摘要
-     */
-    @Override
-    public String toString() {
-        // 拼接全部字段，保持值对象可诊断。
-        return "ConsumeContext{" +
-                "providerName=" + providerName +
-                ", physicalDestination=" + physicalDestination +
-                ", consumerGroup=" + consumerGroup +
-                ", providerMessageId=" + providerMessageId +
-                ", receivedAt=" + receivedAt +
-                ", metadata=" + metadata +
-                '}';
-    }
-
 }

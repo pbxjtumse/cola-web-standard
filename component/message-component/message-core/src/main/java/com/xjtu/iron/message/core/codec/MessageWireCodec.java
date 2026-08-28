@@ -157,10 +157,20 @@ public final class MessageWireCodec {
         ConsumeContext consumeContext = new ConsumeContext(
                 providerDestination.providerName(),
                 providerDestination.physicalName(),
+                definition.destination(),
                 definition.consumerGroup(),
                 inbound.providerMessageId(),
-                INITIAL_DELIVERY_ATTEMPT,
+                envelope.messageId(),
+                envelope.messageKey(),
+                envelope.messageType(),
+                inbound.deliveryAttempt(),
                 inbound.receivedAt(),
+                java.time.Instant.now(),
+                definition.reliabilityMode(),
+                definition.idempotencyOptions().mode(),
+                definition.idempotencyOptions().scene(),
+                null,
+                envelope.headers().asMap(),
                 inbound.providerMetadata());
         // 返回信封和运行时上下文组合。
         return new DecodedInbound<>(envelope, consumeContext);

@@ -14,6 +14,7 @@ import com.xjtu.iron.message.core.routing.DestinationRouteRegistry;
 import com.xjtu.iron.message.core.send.DirectMessageSender;
 import com.xjtu.iron.message.core.send.MessageSendExecutor;
 import com.xjtu.iron.message.core.send.PreparedMessageSend;
+import com.xjtu.iron.message.core.consume.ConsumeExecutionTemplate;
 
 import com.xjtu.iron.message.api.consume.ConsumeDecision;
 import com.xjtu.iron.message.api.consume.ConsumerDefinition;
@@ -37,6 +38,7 @@ import com.xjtu.iron.message.spi.ProviderInboundMessage;
 import com.xjtu.iron.message.spi.ProviderSendRequest;
 import com.xjtu.iron.message.spi.ProviderSubscription;
 import com.xjtu.iron.message.spi.ProviderSubscriptionRequest;
+import com.xjtu.iron.message.spi.ProviderConsumeResult;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -86,6 +88,9 @@ public final class MessageTemplate
     /** 发送执行器。 */
     private final MessageSendExecutor sendExecutor;
 
+    /** 消费执行模板。 */
+    private final ConsumeExecutionTemplate consumeExecutionTemplate;
+
     public MessageTemplate(
             MessageComponentOptions options,
             MessageProviderRegistry providerRegistry,
@@ -109,6 +114,7 @@ public final class MessageTemplate
                 contextAccessor,
                 "contextAccessor must not be null");
         this.sendExecutor = Objects.requireNonNull(sendExecutor, "sendExecutor must not be null");
+        this.consumeExecutionTemplate = new ConsumeExecutionTemplate();
     }
 
     /**
@@ -244,7 +250,7 @@ public final class MessageTemplate
         ProviderSubscriptionRequest providerRequest = new ProviderSubscriptionRequest(
                 providerDestination,
                 definition.consumerGroup(),
-                inbound -> handleInbound(definition, handler, providerDestination, inbound));
+                inbound -> ProviderConsumeResult.of(handleInbound(definition, handler, providerDestination, inbound)));
         ProviderSubscription providerSubscription = provider.subscribe(providerRequest);
         if (providerSubscription == null) {
             throw new IllegalStateException("provider returned null subscription");
@@ -372,10 +378,7 @@ public final class MessageTemplate
                     inbound);
             try (MessageContextAccessor.Scope ignored = contextAccessor.open(
                     new CurrentMessage(decoded.envelope(), decoded.consumeContext()))) {
-                ConsumeDecision decision = handler.handle(
-                        decoded.envelope(),
-                        decoded.consumeContext());
-                return decision == null ? ConsumeDecision.RETRY : decision;
+                return consumeExecutionTemplate.execute(definition, decoded.envelope(), decoded.consumeContext(), handler);
             }
         } catch (RuntimeException exception) {
             return ConsumeDecision.RETRY;

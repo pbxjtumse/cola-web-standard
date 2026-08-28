@@ -28,7 +28,7 @@ else handler failure
   Handler --> Template: RuntimeException
   Template --> ProviderImpl: ConsumeDecision.RETRY
 else success
-  Handler --> Template: ConsumeDecision.SUCCESS
-  Template --> ProviderImpl: ConsumeDecision.SUCCESS
+  Handler --> Template: ConsumeDecision.ACK
+  Template --> ProviderImpl: ConsumeDecision.ACK
 end
 @enduml

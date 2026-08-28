@@ -102,7 +102,11 @@ public final class PulsarMessageProvider implements MessageProvider {
         // 声明普通发布和普通消费。
         return Set.of(
                 MessageCapability.BASIC_PUBLISH,
-                MessageCapability.BASIC_CONSUME);
+                MessageCapability.BASIC_CONSUME,
+                MessageCapability.MANUAL_ACK,
+                MessageCapability.NEGATIVE_ACK,
+                MessageCapability.REDELIVERY,
+                MessageCapability.DEAD_LETTER);
     }
 
     /**
@@ -197,12 +201,12 @@ public final class PulsarMessageProvider implements MessageProvider {
                         // 调用 core 监听器。
                         try {
                             // 获取业务消费决策。
-                            decision = request.listener().onMessage(inbound);
+                            decision = request.listener().onMessage(inbound).decision();
                         } catch (RuntimeException ignored) {
                             // 异常保持 RETRY。
                         }
                         // SUCCESS 时异步 ACK。
-                        if (decision == ConsumeDecision.SUCCESS) {
+                        if (decision == ConsumeDecision.ACK || decision == ConsumeDecision.DISCARD) {
                             // 异步 ACK 失败时主动 Negative ACK，加快至少一次语义下的重新投递。
                             nativeConsumer.acknowledgeAsync(message)
                                     .exceptionally(throwable -> {

@@ -88,7 +88,7 @@ public class DemoSubscriptionRunner implements ApplicationRunner, AutoCloseable 
                 listener.onMessage(typedMessage, context);
 
                 // 业务处理成功后返回 SUCCESS，Provider 才会 ACK 或提交位点。
-                return ConsumeDecision.SUCCESS;
+                return ConsumeDecision.ACK;
             });
             subscriptions.add(subscription);
         }

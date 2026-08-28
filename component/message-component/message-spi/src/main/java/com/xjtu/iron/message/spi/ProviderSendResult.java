@@ -7,15 +7,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-
 /**
- * 表示 Provider 层返回给 core 的标准发送结果。
- *
- * <p>{@code status}：Provider 能够确认的发送状态</p>
- * <p>{@code failureType}：标准失败类型</p>
- * <p>{@code providerMessageId}：Broker 或 Provider 原生消息 ID</p>
- * <p>{@code description}：诊断描述</p>
- * <p>{@code metadata}：原生诊断元数据</p>
  * Provider 层发送结果，承接原生中间件结果到 message-core 统一语义的第一次映射。
  *
  * <p>Kafka、Pulsar、RocketMQ 的原生结果差异很大：有的返回 offset，有的返回 MessageId，有的返回 SendStatus。

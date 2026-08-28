@@ -94,3 +94,12 @@ V10 补全了 class 图体系。之前的 class 图主要是主干视图，本�
 ## 5. V12 可靠发送测试补强
 
 V12 补齐了 message-core 的 FakeProvider 异常路径测试，并补充 starter 自动装配保护测试。当前二期可靠发送冻结前的关键验证点已经覆盖：正常三 MQ 联调、可重试失败、重试耗尽、UNKNOWN 默认不重试、REJECTED 不重试、Provider IOException 映射、可靠性字段语义以及缺少 retry Bean 时启动失败。
+
+
+## v13 可靠消费一期
+
+- [15. 可靠消费一期总览](15-consume-reliability-overview.md)
+- [16. 消费幂等设计](16-consume-idempotency-design.md)
+- [17. 消费事务设计](17-consume-transaction-design.md)
+- [18. Provider 消费确认映射](18-provider-consume-ack-mapping.md)
+- [19. 消费配置与启动校验](19-consume-config-and-startup-rules.md)

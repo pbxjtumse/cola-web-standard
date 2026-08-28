@@ -118,7 +118,13 @@ public final class KafkaMessageProvider implements MessageProvider {
     @Override
     public Set<MessageCapability> capabilities() {
         // Kafka Provider 支持普通发布和普通消费。
-        return Set.of(MessageCapability.BASIC_PUBLISH, MessageCapability.BASIC_CONSUME);
+        return Set.of(
+                MessageCapability.BASIC_PUBLISH,
+                MessageCapability.BASIC_CONSUME,
+                MessageCapability.OFFSET_COMMIT,
+                MessageCapability.REDELIVERY,
+                MessageCapability.ORDERED_CONSUME,
+                MessageCapability.BATCH_CONSUME);
     }
 
     /**
@@ -406,12 +412,12 @@ public final class KafkaMessageProvider implements MessageProvider {
                             // 调用 core 监听器。
                             try {
                                 // 获取业务消费决策。
-                                decision = request.listener().onMessage(inbound);
+                                decision = request.listener().onMessage(inbound).decision();
                             } catch (RuntimeException ignored) {
                                 // 异常保持 RETRY。
                             }
                             // SUCCESS 时提交当前分区下一条 offset。
-                            if (decision == ConsumeDecision.SUCCESS) {
+                            if (decision == ConsumeDecision.ACK || decision == ConsumeDecision.DISCARD) {
                                 // Kafka 提交语义是下一条待消费 offset。
                                 OffsetAndMetadata nextOffset = new OffsetAndMetadata(record.offset() + 1);
                                 // 只提交当前分区，避免覆盖其他分区未完成的进度。

@@ -2,15 +2,35 @@ package com.xjtu.iron.message.spi;
 
 /**
  * 描述 Provider 对公共消息能力的支持情况。
- *
- * <p>一期只声明普通发布和普通消费。事务、顺序、延时和回放将在三期通过
- * 专属能力接口表达，而不是提前塞入一个巨大公共枚举。</p>
  */
 public enum MessageCapability {
-
     /** 支持普通消息发布。 */
     BASIC_PUBLISH,
 
     /** 支持普通消息消费。 */
-    BASIC_CONSUME
+    BASIC_CONSUME,
+
+    /** 支持消费者显式提交或推进 offset。 */
+    OFFSET_COMMIT,
+
+    /** 支持手动 ACK。 */
+    MANUAL_ACK,
+
+    /** 支持 Negative ACK。 */
+    NEGATIVE_ACK,
+
+    /** 通过 listener 返回消费状态表达 ACK/RETRY，例如 RocketMQ 4。 */
+    RETURN_CONSUME_STATUS,
+
+    /** 支持消息重新投递。 */
+    REDELIVERY,
+
+    /** 支持死信能力。 */
+    DEAD_LETTER,
+
+    /** 支持分区或队列内顺序消费。 */
+    ORDERED_CONSUME,
+
+    /** 原生回调可能批量投递消息。 */
+    BATCH_CONSUME
 }

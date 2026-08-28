@@ -3,11 +3,11 @@
 
 title L4：Provider 原生结果到统一发送状态映射
 
-state "Native Provider Result" as NATIVE
-state "CONFIRMED" as CONFIRMED
-state "FAILED" as FAILED
-state "UNKNOWN" as UNKNOWN
-state "REJECTED" as REJECTED
+state "Native Provider Result" as NATIVE #FFEBEE
+state "CONFIRMED" as CONFIRMED #DCFCE7
+state "FAILED" as FAILED #FEE2E2
+state "UNKNOWN" as UNKNOWN #FEF3C7
+state "REJECTED" as REJECTED #FFE4E6
 
 [*] --> NATIVE
 NATIVE --> CONFIRMED : success ack / send ok

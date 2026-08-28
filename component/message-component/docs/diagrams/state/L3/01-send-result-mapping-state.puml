@@ -4,10 +4,10 @@
 title L3：RetryResult 到 SendResult 映射状态图
 
 state "RetryResult" as RETRY #FCE4EC
-state "CONFIRMED\nSendStatus.CONFIRMED" as CONFIRMED
-state "FAILED\nSendStatus.FAILED" as FAILED
-state "UNKNOWN\nSendStatus.UNKNOWN" as UNKNOWN
-state "REJECTED\nSendStatus.REJECTED" as REJECTED
+state "CONFIRMED\nSendStatus.CONFIRMED" as CONFIRMED #DCFCE7
+state "FAILED\nSendStatus.FAILED" as FAILED #FEE2E2
+state "UNKNOWN\nSendStatus.UNKNOWN" as UNKNOWN #FEF3C7
+state "REJECTED\nSendStatus.REJECTED" as REJECTED #FFE4E6
 
 [*] --> RETRY
 RETRY --> CONFIRMED : SUCCESS

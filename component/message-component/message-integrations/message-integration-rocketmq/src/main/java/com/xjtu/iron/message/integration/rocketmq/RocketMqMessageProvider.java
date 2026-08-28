@@ -82,7 +82,11 @@ public final class RocketMqMessageProvider implements MessageProvider {
     public Set<MessageCapability> capabilities() {
         return Set.of(
                 MessageCapability.BASIC_PUBLISH,
-                MessageCapability.BASIC_CONSUME);
+                MessageCapability.BASIC_CONSUME,
+                MessageCapability.RETURN_CONSUME_STATUS,
+                MessageCapability.REDELIVERY,
+                MessageCapability.DEAD_LETTER,
+                MessageCapability.BATCH_CONSUME);
     }
 
     @Override
@@ -161,11 +165,11 @@ public final class RocketMqMessageProvider implements MessageProvider {
                 for (ProviderInboundMessage inbound : inboundMessages) {
                     ConsumeDecision decision = ConsumeDecision.RETRY;
                     try {
-                        decision = request.listener().onMessage(inbound);
+                        decision = request.listener().onMessage(inbound).decision();
                     } catch (RuntimeException ignored) {
                         decision = ConsumeDecision.RETRY;
                     }
-                    if (decision != ConsumeDecision.SUCCESS) {
+                    if (decision != ConsumeDecision.ACK && decision != ConsumeDecision.DISCARD) {
                         return ConsumeConcurrentlyStatus.RECONSUME_LATER;
                     }
                 }

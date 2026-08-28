@@ -7,7 +7,7 @@ import com.xjtu.iron.message.core.send.MessageSendExecutor;
 import com.xjtu.iron.message.core.send.MessageSendReliabilityOptions;
 import com.xjtu.iron.retry.api.execution.RetryExecutor;
 import com.xjtu.iron.retry.api.policy.RetryPolicyRegistry;
-import org.testng.annotations.Test;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 

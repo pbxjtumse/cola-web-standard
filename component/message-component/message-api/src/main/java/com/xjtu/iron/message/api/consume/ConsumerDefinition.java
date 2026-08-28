@@ -1,147 +1,111 @@
 package com.xjtu.iron.message.api.consume;
+
 import com.xjtu.iron.message.api.model.MessageDestination;
 
 import java.util.Objects;
 
 /**
- * 定义一个普通消息消费者。
+ * 定义一个消息消费者。
  *
- * <p>{@code destination}：逻辑目的地</p>
- * <p>{@code consumerGroup}：消费组或订阅名称</p>
- * <p>{@code payloadType}：业务消息体类型</p>
+ * <p>v13 在原有 destination、consumerGroup、payloadType 的基础上，增加可靠性、幂等和事务配置。
+ * 老构造器仍然保留，默认使用 AT_LEAST_ONCE、不开启幂等、不开启事务。</p>
+ *
  * @param <T> 业务消息体类型
  */
 public final class ConsumerDefinition<T> {
-    /** 逻辑目的地。 */
+    private final String consumerId;
+    private final String providerName;
     private final MessageDestination destination;
-
-    /** 消费组或订阅名称。 */
     private final String consumerGroup;
-
-    /** 业务消息体类型。 */
     private final Class<T> payloadType;
+    private final ConsumerReliabilityMode reliabilityMode;
+    private final MessageIdempotencyOptions idempotencyOptions;
+    private final MessageConsumeTransactionOptions transactionOptions;
 
-
-    /**
-     * 校验消费者定义。
-     */
-    public ConsumerDefinition(
-        MessageDestination destination,
-        String consumerGroup,
-        Class<T> payloadType) {
-        // 逻辑目的地不能为空。
-        destination = Objects.requireNonNull(destination, "destination must not be null");
-        // 消费组不能为空或空白。
-        if (consumerGroup == null || consumerGroup.isBlank()) {
-            // 不同 Provider 都依赖消费组或订阅名区分消费进度。
-            throw new IllegalArgumentException("consumerGroup must not be blank");
-        }
-        // 去除消费组首尾空白。
-        consumerGroup = consumerGroup.trim();
-        // 反序列化目标类型不能为空。
-        payloadType = Objects.requireNonNull(payloadType, "payloadType must not be null");
-    
-        // 保存完成校验和标准化后的 destination。
-        this.destination = destination;
-        // 保存完成校验和标准化后的 consumerGroup。
-        this.consumerGroup = consumerGroup;
-        // 保存完成校验和标准化后的 payloadType。
-        this.payloadType = payloadType;
+    public ConsumerDefinition(MessageDestination destination, String consumerGroup, Class<T> payloadType) {
+        this(
+                consumerGroup,
+                null,
+                destination,
+                consumerGroup,
+                payloadType,
+                ConsumerReliabilityMode.AT_LEAST_ONCE,
+                MessageIdempotencyOptions.disabled(),
+                MessageConsumeTransactionOptions.disabled());
     }
 
-    /**
-     * 创建消费者定义。
-     *
-     * @param destination 逻辑目的地
-     * @param consumerGroup 消费组
-     * @param payloadType 消息体类型
-     * @param <T> 消息体类型
-     * @return 消费者定义
-     */
-    public static <T> ConsumerDefinition<T> of(
+    public ConsumerDefinition(
+            String consumerId,
+            String providerName,
             MessageDestination destination,
             String consumerGroup,
-            Class<T> payloadType) {
-        // 使用静态工厂提升调用处可读性。
+            Class<T> payloadType,
+            ConsumerReliabilityMode reliabilityMode,
+            MessageIdempotencyOptions idempotencyOptions,
+            MessageConsumeTransactionOptions transactionOptions) {
+        this.consumerId = textOrDefault(consumerId, consumerGroup);
+        this.providerName = normalize(providerName);
+        this.destination = Objects.requireNonNull(destination, "destination must not be null");
+        this.consumerGroup = requireText(consumerGroup, "consumerGroup must not be blank");
+        this.payloadType = Objects.requireNonNull(payloadType, "payloadType must not be null");
+        this.reliabilityMode = reliabilityMode == null ? ConsumerReliabilityMode.AT_LEAST_ONCE : reliabilityMode;
+        this.idempotencyOptions = idempotencyOptions == null ? MessageIdempotencyOptions.disabled() : idempotencyOptions;
+        this.transactionOptions = transactionOptions == null ? MessageConsumeTransactionOptions.disabled() : transactionOptions;
+    }
+
+    public static <T> ConsumerDefinition<T> of(MessageDestination destination, String consumerGroup, Class<T> payloadType) {
         return new ConsumerDefinition<>(destination, consumerGroup, payloadType);
     }
-    /**
-     * 返回逻辑目的地。
-     *
-     * @return 逻辑目的地
-     */
-    public MessageDestination destination() {
-        // 返回不可变字段。
-        return destination;
+
+    public String consumerId() { return consumerId; }
+    public String providerName() { return providerName; }
+    public MessageDestination destination() { return destination; }
+    public String consumerGroup() { return consumerGroup; }
+    public Class<T> payloadType() { return payloadType; }
+    public ConsumerReliabilityMode reliabilityMode() { return reliabilityMode; }
+    public MessageIdempotencyOptions idempotencyOptions() { return idempotencyOptions; }
+    public MessageConsumeTransactionOptions transactionOptions() { return transactionOptions; }
+
+    private static String textOrDefault(String value, String defaultValue) {
+        String normalized = normalize(value);
+        return normalized == null ? requireText(defaultValue, "default value must not be blank") : normalized;
     }
 
-    /**
-     * 返回消费组或订阅名称。
-     *
-     * @return 消费组或订阅名称
-     */
-    public String consumerGroup() {
-        // 返回不可变字段。
-        return consumerGroup;
+    private static String requireText(String value, String message) {
+        String normalized = normalize(value);
+        if (normalized == null) {
+            throw new IllegalArgumentException(message);
+        }
+        return normalized;
     }
 
-    /**
-     * 返回业务消息体类型。
-     *
-     * @return 业务消息体类型
-     */
-    public Class<T> payloadType() {
-        // 返回不可变字段。
-        return payloadType;
+    private static String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
-    /**
-     * 按全部字段比较两个值对象。
-     *
-     * @param object 待比较对象
-     * @return 字段值全部一致时返回 true
-     */
     @Override
     public boolean equals(Object object) {
-        // 同一对象直接相等。
         if (this == object) {
             return true;
         }
-        // 类型不同或对象为空时不相等。
         if (object == null || getClass() != object.getClass()) {
             return false;
         }
-        // 转换为当前类型后逐字段比较。
         ConsumerDefinition<?> other = (ConsumerDefinition<?>) object;
-        return Objects.equals(destination, other.destination)
+        return Objects.equals(consumerId, other.consumerId)
+                && Objects.equals(providerName, other.providerName)
+                && Objects.equals(destination, other.destination)
                 && Objects.equals(consumerGroup, other.consumerGroup)
-                && Objects.equals(payloadType, other.payloadType);
+                && Objects.equals(payloadType, other.payloadType)
+                && reliabilityMode == other.reliabilityMode;
     }
 
-    /**
-     * 根据全部字段计算哈希值。
-     *
-     * @return 哈希值
-     */
     @Override
     public int hashCode() {
-        // 使用与 equals 相同的字段计算哈希值。
-        return Objects.hash(destination, consumerGroup, payloadType);
+        return Objects.hash(consumerId, providerName, destination, consumerGroup, payloadType, reliabilityMode);
     }
-
-    /**
-     * 返回便于诊断的字段摘要。
-     *
-     * @return 字符串摘要
-     */
-    @Override
-    public String toString() {
-        // 拼接全部字段，保持值对象可诊断。
-        return "ConsumerDefinition{" +
-                "destination=" + destination +
-                ", consumerGroup=" + consumerGroup +
-                ", payloadType=" + payloadType +
-                '}';
-    }
-
 }

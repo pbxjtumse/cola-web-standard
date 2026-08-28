@@ -34,7 +34,7 @@
 | `MessageHandler` | 消费处理回调 |
 | `MessageSubscription` | 订阅句柄 |
 | `ConsumeContext` | 当前 Provider 投递上下文 |
-| `ConsumeDecision` | `SUCCESS / RETRY` |
+| `ConsumeDecision` | `ACK / RETRY / DISCARD / DEAD_LETTER` |
 
 ### 其他
 

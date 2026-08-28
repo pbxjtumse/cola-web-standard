@@ -55,6 +55,7 @@ class DefaultReliableMessageSenderTest {
                 returning(ProviderSendResult.confirmed("provider-message-1")));
 
         SendResult result = sender(defaultOptions()).send(prepared(provider));
+
         assertEquals(SendStatus.CONFIRMED, result.status());
         assertEquals(SendStage.COMPLETE, result.stage());
         assertEquals(SendFailureType.NONE, result.failureType());
