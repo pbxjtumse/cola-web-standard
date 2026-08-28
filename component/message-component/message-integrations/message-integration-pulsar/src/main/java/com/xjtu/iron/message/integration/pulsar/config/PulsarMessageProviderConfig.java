@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.integration.pulsar;
+package com.xjtu.iron.message.integration.pulsar.config;
 
 import java.time.Duration;
 import java.util.Objects;

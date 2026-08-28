@@ -11,6 +11,10 @@
     <dependencies>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
+            <artifactId>message-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.xjtu.iron</groupId>
             <artifactId>message-spi</artifactId>
         </dependency>
         <dependency>

@@ -1,7 +1,7 @@
 package com.xjtu.iron.message.integration.rocketmq.autoconfigure;
 
 import com.xjtu.iron.message.integration.rocketmq.RocketMqMessageProvider;
-import com.xjtu.iron.message.integration.rocketmq.RocketMqMessageProviderConfig;
+import com.xjtu.iron.message.integration.rocketmq.config.RocketMqMessageProviderConfig;
 import com.xjtu.iron.message.spi.MessageProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;

@@ -1,0 +1,7 @@
+' State diagrams intentionally keep plain black/white style.
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam defaultFontName "PingFang SC"
+skinparam defaultFontSize 14
+hide empty description

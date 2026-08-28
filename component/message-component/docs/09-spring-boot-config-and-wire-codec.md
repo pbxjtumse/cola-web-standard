@@ -11,7 +11,7 @@ message-starter
     └── properties
         ├── MessageProperties
         ├── MessageRouteProperties
-        ├── MessageSerializerProperties
+        ├── foundation SerializerProperties
         └── MessageDemoProperties
 
 message-integrations
@@ -59,7 +59,7 @@ IDEA 重新加载 Maven 后，`xjtu.iron.message.*`、`xjtu.iron.message.kafka.*
 消息组件刻意区分两层：
 
 ```text
-MessageSerializer
+foundation Serializer
     只负责 payload <-> byte[]
 
 MessageWireCodec
@@ -85,20 +85,20 @@ MessageWireCodec
 
 ## 4. foundation-component 序列化接入方式
 
-当前代码保留 `MessageSerializer` 作为消息组件的 payload 序列化端口。
+当前代码保留 `foundation Serializer` 作为消息组件的 payload 序列化端口。
 
-`JacksonMessageSerializer` 已合并到 `message-core.codec`。Starter 默认提供 Jackson 实现，并使用 `@ConditionalOnMissingBean`。因此业务或后续 foundation 序列化适配模块只要提供一个 `MessageSerializer` Bean，默认 Jackson Bean 就会自动让位。
+`Jacksonfoundation Serializer` 已合并到 `message-core.codec`。Starter 默认提供 Jackson 实现，并使用 `@ConditionalOnMissingBean`。因此业务或后续 foundation 序列化适配模块只要提供一个 `foundation Serializer` Bean，默认 Jackson Bean 就会自动让位。
 
 推荐后续接入方式：
 
 ```text
 foundation-serialization
     ↓
-FoundationMessageSerializer implements MessageSerializer
+Foundationfoundation Serializer implements foundation Serializer
     ↓
 MessageWireCodec
     ↓
 ProviderSendRequest / ProviderInboundMessage
 ```
 
-当前版本允许 core 持有默认 Jackson 实现，但不应该让业务代码直接依赖 Jackson。后续如果 foundation-serialization 完全稳定，可以通过 `MessageSerializer` Bean 替换默认实现。
+当前版本允许 core 持有默认 Jackson 实现，但不应该让业务代码直接依赖 Jackson。后续如果 foundation-serialization 完全稳定，可以通过 `foundation Serializer` Bean 替换默认实现。

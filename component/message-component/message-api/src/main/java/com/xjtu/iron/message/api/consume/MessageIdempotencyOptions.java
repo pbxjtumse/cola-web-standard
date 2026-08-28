@@ -13,15 +13,34 @@ public final class MessageIdempotencyOptions {
     private static final Duration DEFAULT_PROCESSING_TIMEOUT = Duration.ofMinutes(5);
     private static final Duration DEFAULT_RECORD_RETENTION = Duration.ofDays(7);
 
+    /** 是否启用 message-component 的消费幂等执行逻辑。 */
     private final boolean enabled;
+
+    /** 幂等 key 生成模式，例如 MESSAGE_ID、BUSINESS_KEY、CUSTOM。 */
     private final MessageIdempotencyMode mode;
+
+    /** 幂等命名空间，消息消费默认使用 message-consume。 */
     private final String namespace;
+
+    /** 业务幂等场景，通常与 consumerGroup 或业务消费场景对应。 */
     private final String scene;
+
+    /** 自定义幂等 key resolver 的 Spring Bean 名称，仅 CUSTOM 或复杂 BUSINESS_KEY 场景使用。 */
     private final String keyResolverBean;
+
+    /** PROCESSING 状态的处理超时时间，超过后允许其他消费者 ownerToken 抢占。 */
     private final Duration processingTimeout;
+
+    /** 幂等记录保留时间，超过后可由清理任务删除。 */
     private final Duration recordRetention;
+
+    /** 最大处理尝试次数，包含第一次正常处理。 */
     private final int maxAttempts;
+
+    /** 超过最大次数或 acquire 被拒绝时的处理策略。 */
     private final MessageIdempotencyFailurePolicy failurePolicy;
+
+    /** 幂等存储路由提示，不是表名；真实表由 idempotent-storage 决定。 */
     private final String storeName;
 
     public MessageIdempotencyOptions(

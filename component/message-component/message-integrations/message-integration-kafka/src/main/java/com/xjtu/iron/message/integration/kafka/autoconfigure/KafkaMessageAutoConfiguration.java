@@ -1,7 +1,7 @@
 package com.xjtu.iron.message.integration.kafka.autoconfigure;
 
 import com.xjtu.iron.message.integration.kafka.KafkaMessageProvider;
-import com.xjtu.iron.message.integration.kafka.KafkaMessageProviderConfig;
+import com.xjtu.iron.message.integration.kafka.config.KafkaMessageProviderConfig;
 import com.xjtu.iron.message.spi.MessageProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;

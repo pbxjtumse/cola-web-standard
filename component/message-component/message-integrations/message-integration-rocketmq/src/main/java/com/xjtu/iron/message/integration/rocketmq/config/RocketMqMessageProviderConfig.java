@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.integration.rocketmq;
+package com.xjtu.iron.message.integration.rocketmq.config;
 
 import java.time.Duration;
 import java.util.LinkedHashSet;

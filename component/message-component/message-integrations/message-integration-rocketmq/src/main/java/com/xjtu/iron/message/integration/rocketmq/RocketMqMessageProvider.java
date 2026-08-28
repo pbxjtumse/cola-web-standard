@@ -3,6 +3,8 @@ package com.xjtu.iron.message.integration.rocketmq;
 import com.xjtu.iron.message.api.consume.ConsumeDecision;
 import com.xjtu.iron.message.api.publish.SendFailureType;
 import com.xjtu.iron.message.api.publish.SendStatus;
+import com.xjtu.iron.message.integration.rocketmq.config.RocketMqMessageProviderConfig;
+import com.xjtu.iron.message.integration.rocketmq.config.RocketMqMetadataKeys;
 import com.xjtu.iron.message.spi.MessageCapability;
 import com.xjtu.iron.message.spi.MessageProvider;
 import com.xjtu.iron.message.spi.ProviderInboundMessage;

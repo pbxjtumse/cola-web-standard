@@ -17,8 +17,8 @@ import java.util.List;
 /**
  * message-component 的 Spring Boot 根配置属性。
  *
- * <p>该类承接 {@code xjtu.iron.message.*} 下的公共配置，包括默认 Provider、路由列表、序列化配置、
- * demo 配置以及二期发送可靠性配置。各中间件自身参数则放在各自 integration 的 properties 中。</p>
+ * <p>该类承接 {@code xjtu.iron.message.*} 下的公共配置，包括默认 Provider、路由列表、demo 配置
+ * 以及二期发送可靠性配置。payload 序列化统一由 foundation-serialization 的 Serializer Bean 承接。</p>
  */
 public class MessageProperties {
 
@@ -57,11 +57,6 @@ public class MessageProperties {
      * <p>生产环境建议使用 STRICT，避免逻辑名称拼错后误投物理 Topic。</p>
      */
     private DestinationRoutingMode routingMode = DestinationRoutingMode.STRICT;
-
-    /**
-     * 消息体序列化配置。
-     */
-    private MessageSerializerProperties serializer = new MessageSerializerProperties();
 
     /**
      * 可靠性增强配置。
@@ -124,14 +119,6 @@ public class MessageProperties {
 
     public void setRoutingMode(DestinationRoutingMode routingMode) {
         this.routingMode = routingMode;
-    }
-
-    public MessageSerializerProperties getSerializer() {
-        return serializer;
-    }
-
-    public void setSerializer(MessageSerializerProperties serializer) {
-        this.serializer = serializer == null ? new MessageSerializerProperties() : serializer;
     }
 
     public Reliability getReliability() {

@@ -8,7 +8,11 @@ import com.xjtu.iron.message.api.model.MessageEnvelope;
 import com.xjtu.iron.message.api.model.MessageHeaderNames;
 import com.xjtu.iron.message.api.model.MessageHeaders;
 import com.xjtu.iron.message.api.model.MessageMetadata;
-import com.xjtu.iron.message.api.codec.MessageSerializer;
+import com.xjtu.iron.foundation.serialization.SerializationContext;
+import com.xjtu.iron.foundation.serialization.SerializationFormat;
+import com.xjtu.iron.foundation.serialization.SerializationOptions;
+import com.xjtu.iron.foundation.serialization.SerializedPayload;
+import com.xjtu.iron.foundation.serialization.Serializer;
 import com.xjtu.iron.message.spi.ProviderDestination;
 import com.xjtu.iron.message.spi.ProviderInboundMessage;
 import com.xjtu.iron.message.spi.ProviderSendRequest;
@@ -21,11 +25,11 @@ import java.util.Objects;
 /**
  * 统一消息线级协议编解码器，负责在 message-api 模型和 Provider SPI 请求之间转换。
  *
- * <p>注意它不是普通 JSON 序列化器。{@code MessageSerializer} 只负责 payload 对象和 byte[] 的转换，
- * 而 {@code MessageWireCodec} 负责把 messageId、messageType、messageKey、context、headers、destination 等
- * 统一消息语义放入 Provider 请求或从 Provider 入站消息中还原出来。</p>
+ * <p>注意它不是普通 JSON 序列化器。foundation-serialization 的 {@code Serializer} 只负责 payload
+ * 对象与字节之间的转换，而 {@code MessageWireCodec} 负责把 messageId、messageType、messageKey、context、
+ * headers、destination 等统一消息语义放入 Provider 请求或从 Provider 入站消息中还原出来。</p>
  *
- * <p>因此即使 Jackson 序列化实现迁移到 core，wire codec 这个边界也不能删除。
+ * <p>因此即使 payload 序列化统一复用 foundation-component，wire codec 这个边界也不能删除。
  * 它是 message-component 统一 Kafka、Pulsar、RocketMQ 线级协议的核心入口。</p>
  */
 public final class MessageWireCodec {
@@ -33,19 +37,38 @@ public final class MessageWireCodec {
     /** 一期无法从全部 Provider 获得统一投递次数时使用的基础值。 */
     private static final int INITIAL_DELIVERY_ATTEMPT = 1;
 
-    /** 业务消息体序列化器。 */
-    private final MessageSerializer serializer;
+    /** 业务消息体序列化器，统一复用 foundation-serialization。 */
+    private final Serializer payloadSerializer;
+
+    /** 当前线级协议支持的 payload 媒体类型。 */
+    private final String contentType;
+
+    /** 单次 payload 序列化选项。 */
+    private final SerializationOptions serializationOptions;
 
     /**
      * 创建线级消息编解码器。
      *
      * <p>{@code serializer}：消息体序列化器</p>
      */
-    public MessageWireCodec(MessageSerializer serializer) {
-        // 序列化器不能为空。
-        this.serializer = Objects.requireNonNull(
-                serializer,
-                "serializer must not be null");
+    public MessageWireCodec(Serializer payloadSerializer) {
+        this(
+                payloadSerializer,
+                SerializationFormat.JSON.getContentType(),
+                SerializationOptions.builder().build());
+    }
+
+    public MessageWireCodec(
+            Serializer payloadSerializer,
+            String contentType,
+            SerializationOptions serializationOptions) {
+        this.payloadSerializer = Objects.requireNonNull(
+                payloadSerializer,
+                "payloadSerializer must not be null");
+        this.contentType = requireText(contentType, "contentType must not be blank");
+        this.serializationOptions = Objects.requireNonNull(
+                serializationOptions,
+                "serializationOptions must not be null");
     }
 
     /**
@@ -60,8 +83,15 @@ public final class MessageWireCodec {
             MessageDestination destination,
             ProviderDestination providerDestination,
             MessageEnvelope<?> message) {
-        // 先序列化业务消息体。
-        byte[] body = serializer.serialize(message.payload());
+        // 先通过 foundation-serialization 序列化业务消息体。
+        SerializedPayload serializedPayload = payloadSerializer.serialize(
+                message.payload(),
+                serializationOptions,
+                SerializationContext.builder()
+                        .contentType(contentType)
+                        .schemaVersion(message.metadata().schemaVersion())
+                        .build());
+        byte[] body = serializedPayload.getBody();
         // 构建完整线级消息头。
         Map<String, String> wireHeaders = toWireHeaders(destination, message);
         // 创建 Provider SPI 请求。
@@ -108,11 +138,11 @@ public final class MessageWireCodec {
                 wireHeaders,
                 MessageHeaderNames.CONTENT_TYPE);
         // 不一致时拒绝盲目反序列化。
-        if (!serializer.contentType().equalsIgnoreCase(contentType)) {
-            // 一期只有单一 Serializer，因此不支持自动按 content-type 选择。
+        if (!this.contentType.equalsIgnoreCase(contentType)) {
+            // 一期只有单一 payload Serializer，因此不支持自动按 content-type 选择。
             throw new IllegalArgumentException(
                     "unsupported message content type: " + contentType
-                            + ", expected=" + serializer.contentType());
+                            + ", expected=" + this.contentType);
         }
 
         // 解析业务事件发生时间。
@@ -140,8 +170,13 @@ public final class MessageWireCodec {
         // 删除组件系统头，只向业务暴露用户头和 trace 等非保留技术头。
         Map<String, String> userHeaders = extractUserHeaders(wireHeaders);
         // 反序列化业务消息体。
-        T payload = serializer.deserialize(
-                inbound.body(),
+        T payload = payloadSerializer.deserialize(
+                new SerializedPayload(
+                        inbound.body(),
+                        SerializationContext.builder()
+                                .contentType(this.contentType)
+                                .schemaVersion(schemaVersion)
+                                .build()),
                 definition.payloadType());
         // 构造统一入站消息信封。
         MessageEnvelope<T> envelope = MessageEnvelope.builder(messageType, payload)
@@ -177,13 +212,22 @@ public final class MessageWireCodec {
     }
 
     /**
-     * 返回当前序列化器。
+     * 返回当前 payload 序列化器。
      *
-     * @return 消息序列化器
+     * @return foundation payload 序列化器
      */
-    public MessageSerializer serializer() {
+    public Serializer payloadSerializer() {
         // 序列化器实例不可变引用，可安全返回。
-        return serializer;
+        return payloadSerializer;
+    }
+
+    /**
+     * 返回当前线级 payload 媒体类型。
+     *
+     * @return 媒体类型，例如 application/json
+     */
+    public String contentType() {
+        return contentType;
     }
 
     /**
@@ -212,7 +256,7 @@ public final class MessageWireCodec {
                 MessageHeaderNames.CREATED_AT,
                 metadata.createdAt().toString());
         // 写入序列化媒体类型。
-        headers.put(MessageHeaderNames.CONTENT_TYPE, serializer.contentType());
+        headers.put(MessageHeaderNames.CONTENT_TYPE, contentType);
         // 写入逻辑目的地命名空间用于诊断和跨平台治理。
         headers.put(
                 MessageHeaderNames.DESTINATION_NAMESPACE,
@@ -303,6 +347,16 @@ public final class MessageWireCodec {
             // 去除首尾空白后写入。
             headers.put(name, value.trim());
         }
+    }
+
+    /**
+     * 读取并规范化必填文本。
+     */
+    private static String requireText(String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(message);
+        }
+        return value.trim();
     }
 
     /**

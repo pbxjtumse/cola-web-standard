@@ -40,8 +40,7 @@
 
 | 包 | 类 | 说明 |
 |---|---|---|
-| `api.codec` | `MessageSerializer` | payload 序列化接口 |
-| `api.exception` | `MessageException` | API 层统一异常 |
+| `foundation-serialization` | `Serializer` | payload 序列化接口，message-api 不再重复定义 |
 | `api.annotation` | `MessageListener` | 注解式消费入口 |
 
 ## 2. message-spi
@@ -65,15 +64,12 @@
 | `core` | `MessageTemplate` | 发送和消费生命周期门面 |
 | `core` | `MessageComponentOptions` | 组件运行参数 |
 | `core.enrich` | `MessageEnvelopeEnricher` | 补齐 messageId、时间、上下文 |
-| `core.id` | `MessageIdGenerator` | 消息 ID 生成接口 |
-| `core.id` | `FoundationMessageIdGenerator` | foundation-id 适配器 |
-| `core.id` | `UuidMessageIdGenerator` | 本地 fallback ID 生成器 |
 | `core.routing` | `DestinationResolver` / `DefaultDestinationResolver` | 逻辑目的地解析 |
 | `core.routing` | `DestinationRoute` / `DestinationRouteRegistry` | 显式路由配置 |
 | `core.routing` | `DestinationRoutingMode` | STRICT / IMPLICIT_DEFAULT |
 | `core.provider` | `MessageProviderRegistry` | Provider 注册和选择 |
 | `core.codec` | `MessageWireCodec` | envelope 线级协议编解码 |
-| `core.codec` | `JacksonMessageSerializer` | 默认 JSON payload 序列化 |
+| `foundation-serialization.jackson` | `JacksonJsonSerializer` | 默认 JSON payload 序列化 |
 | `core.context` | `CurrentMessage` | 当前入站消息快照 |
 | `core.context` | `MessageContextAccessor` / `ThreadLocalMessageContextAccessor` | 消费作用域上下文 |
 | `core.send` | `PreparedMessageSend` | 发送准备完成后的不可变快照 |

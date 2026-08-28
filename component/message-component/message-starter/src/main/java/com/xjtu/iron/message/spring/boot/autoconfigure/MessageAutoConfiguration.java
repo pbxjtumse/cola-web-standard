@@ -1,8 +1,11 @@
 package com.xjtu.iron.message.spring.boot.autoconfigure;
 
-import com.xjtu.iron.message.api.codec.MessageSerializer;
+import com.xjtu.iron.foundation.id.api.StringIdGenerator;
+import com.xjtu.iron.foundation.id.nanoid.NanoIdStringIdGenerator;
+import com.xjtu.iron.foundation.id.registry.StringIdGeneratorRegistry;
+import com.xjtu.iron.foundation.serialization.Serializer;
+import com.xjtu.iron.foundation.serialization.jackson.JacksonJsonSerializer;
 import com.xjtu.iron.message.core.MessageComponentOptions;
-import com.xjtu.iron.message.core.codec.JacksonMessageSerializer;
 import com.xjtu.iron.message.core.send.reliability.DefaultReliableMessageSender;
 import com.xjtu.iron.message.core.routing.DestinationRoute;
 import com.xjtu.iron.message.core.routing.DestinationRouteRegistry;
@@ -11,9 +14,6 @@ import com.xjtu.iron.message.core.provider.MessageProviderRegistry;
 import com.xjtu.iron.message.core.send.MessageSendExecutor;
 import com.xjtu.iron.message.core.send.MessageSendReliabilityOptions;
 import com.xjtu.iron.message.core.MessageTemplate;
-import com.xjtu.iron.message.core.id.FoundationMessageIdGenerator;
-import com.xjtu.iron.message.core.id.MessageIdGenerator;
-import com.xjtu.iron.message.core.id.UuidMessageIdGenerator;
 import com.xjtu.iron.message.spi.MessageProvider;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageProperties;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageRouteProperties;
@@ -22,6 +22,7 @@ import com.xjtu.iron.retry.api.execution.RetryExecutor;
 import com.xjtu.iron.retry.api.policy.RetryPolicyRegistry;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -29,14 +30,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.function.Supplier;
 import java.util.concurrent.ForkJoinPool;
 
 /**
@@ -64,8 +61,8 @@ public class MessageAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public MessageSerializer messageSerializer() {
-        return new JacksonMessageSerializer();
+    public Serializer messagePayloadSerializer() {
+        return new JacksonJsonSerializer();
     }
 
     /**
@@ -181,102 +178,47 @@ public class MessageAutoConfiguration {
     /**
      * 创建默认消息 ID 生成器。
      *
-     * <p>
-     * 生产工程建议提供自己的 MessageIdGenerator Bean，
-     * 例如使用 FoundationMessageIdGenerator 适配 foundation-component 的统一 ID 能力。
-     * 没有显式 Bean 时才使用 UUID fallback，保证 demo 可以独立启动。
-     * </p>
+     * <p>message-component 直接复用 foundation-id。优先使用业务声明的 {@code StringIdGeneratorRegistry}
+     * 中的 message/default 生成器，其次使用唯一的业务 {@code StringIdGenerator} Bean。都不存在时，使用
+     * foundation-id 的 NanoId fallback，保证 demo 可以独立启动。</p>
      *
      * @return 消息 ID 生成器
      */
-    @Bean
-    @ConditionalOnMissingBean
-    public MessageIdGenerator messageIdGenerator(ListableBeanFactory beanFactory) {
-        Optional<Supplier<String>> foundationIdSupplier = detectFoundationIdSupplier(beanFactory);
-        if (foundationIdSupplier.isPresent()) {
-            return FoundationMessageIdGenerator.from(foundationIdSupplier.get());
+    @Bean("messageStringIdGenerator")
+    @ConditionalOnMissingBean(name = "messageStringIdGenerator")
+    public StringIdGenerator messageStringIdGenerator(ListableBeanFactory beanFactory) {
+        StringIdGenerator fromRegistry = resolveFromRegistry(beanFactory);
+        if (fromRegistry != null) {
+            return fromRegistry;
         }
-        return new UuidMessageIdGenerator();
+        StringIdGenerator fromBean = resolveNamedStringIdGenerator(beanFactory);
+        if (fromBean != null) {
+            return fromBean;
+        }
+        return new NanoIdStringIdGenerator();
     }
 
-    /**
-     * 尝试自动发现 foundation-component 提供的字符串 ID 生成器。
-     *
-     * <p>
-     * message-starter 不直接依赖 foundation-id 的具体 API，避免基础组件接口
-     * 重构时强制修改 message-core。这里采用保守的反射适配：只识别
-     * 包名或接口名明显属于 foundation-id 的 Bean，并且只调用无参的
-     * nextId / nextStringId / generateId / next 方法。
-     * </p>
-     */
-    private static Optional<Supplier<String>> detectFoundationIdSupplier(ListableBeanFactory beanFactory) {
-        String[] beanNames = beanFactory.getBeanNamesForType(Object.class, false, false);
-        for (String beanName : beanNames) {
-            Class<?> beanType = beanFactory.getType(beanName, false);
-            if (!looksLikeFoundationIdGenerator(beanType)) {
-                continue;
+    private static StringIdGenerator resolveFromRegistry(ListableBeanFactory beanFactory) {
+        String[] registryNames = beanFactory.getBeanNamesForType(StringIdGeneratorRegistry.class, false, false);
+        for (String registryName : registryNames) {
+            StringIdGeneratorRegistry registry = beanFactory.getBean(registryName, StringIdGeneratorRegistry.class);
+            if (registry.contains("message")) {
+                return registry.require("message");
             }
-            Method method = findIdMethod(beanType);
-            if (method == null) {
-                continue;
-            }
-            return Optional.of(() -> invokeIdMethod(beanFactory.getBean(beanName), method));
-        }
-        return Optional.empty();
-    }
-
-    private static boolean looksLikeFoundationIdGenerator(Class<?> beanType) {
-        if (beanType == null) {
-            return false;
-        }
-        String className = beanType.getName();
-        if (className.startsWith("com.xjtu.iron.foundation.id.")) {
-            return true;
-        }
-        if (className.contains(".foundation.id.")) {
-            return true;
-        }
-        for (Class<?> interfaceType : beanType.getInterfaces()) {
-            String interfaceName = interfaceType.getName();
-            if (interfaceName.startsWith("com.xjtu.iron.foundation.id.")) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static Method findIdMethod(Class<?> beanType) {
-        String[] methodNames = {"nextId", "nextStringId", "generateId", "next"};
-        for (String methodName : methodNames) {
-            try {
-                Method method = beanType.getMethod(methodName);
-                if (method.getParameterCount() == 0) {
-                    return method;
-                }
-            } catch (NoSuchMethodException ignored) {
-                // 尝试下一个候选方法名。
+            if (registry.contains("default")) {
+                return registry.require("default");
             }
         }
         return null;
     }
 
-    private static String invokeIdMethod(Object bean, Method method) {
-        try {
-            Object id = method.invoke(bean);
-            if (id == null) {
-                throw new IllegalStateException("foundation id generator returned null id");
+    private static StringIdGenerator resolveNamedStringIdGenerator(ListableBeanFactory beanFactory) {
+        for (String preferredName : List.of("messageIdGenerator", "defaultStringIdGenerator")) {
+            if (beanFactory.containsBean(preferredName)) {
+                return beanFactory.getBean(preferredName, StringIdGenerator.class);
             }
-            String value = id.toString().trim();
-            if (value.isEmpty()) {
-                throw new IllegalStateException("foundation id generator returned blank id");
-            }
-            return value;
-        } catch (IllegalAccessException exception) {
-            throw new IllegalStateException("cannot access foundation id generator method", exception);
-        } catch (InvocationTargetException exception) {
-            Throwable cause = exception.getCause() == null ? exception : exception.getCause();
-            throw new IllegalStateException("foundation id generator invocation failed", cause);
         }
+        return null;
     }
 
     /**
@@ -285,7 +227,7 @@ public class MessageAutoConfiguration {
      * @param options 组件运行参数
      * @param providerRegistry Provider 注册表
      * @param routeRegistry 路由注册表
-     * @param serializer 消息体序列化器
+     * @param payloadSerializer 消息体序列化器
      * @param sendExecutor 发送执行器
      * @return 统一消息模板
      */
@@ -296,14 +238,15 @@ public class MessageAutoConfiguration {
             MessageComponentOptions options,
             MessageProviderRegistry providerRegistry,
             DestinationRouteRegistry routeRegistry,
-            MessageSerializer serializer,
-            MessageIdGenerator messageIdGenerator,
+            Serializer payloadSerializer,
+            @Qualifier("messageStringIdGenerator")
+            StringIdGenerator messageIdGenerator,
             MessageSendExecutor sendExecutor) {
         return MessageTemplate.create(
                 options,
                 providerRegistry,
                 routeRegistry,
-                serializer,
+                payloadSerializer,
                 messageIdGenerator,
                 sendExecutor);
     }

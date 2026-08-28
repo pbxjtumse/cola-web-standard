@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.integration.pulsar;
+package com.xjtu.iron.message.integration.pulsar.config;
 
 /** Pulsar Provider 诊断元数据键。 */
 public final class PulsarMetadataKeys {

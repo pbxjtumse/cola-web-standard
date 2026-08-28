@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.integration.kafka;
+package com.xjtu.iron.message.integration.kafka.config;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;

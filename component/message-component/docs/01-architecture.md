@@ -48,8 +48,7 @@ com.xjtu.iron.message.api
 ├── model       # MessageEnvelope / Metadata / Context / Headers / Destination
 ├── publish     # MessagePublisher / SendOptions / SendResult / SendStatus
 ├── consume     # ConsumerDefinition / MessageHandler / ConsumeDecision
-├── codec       # MessageSerializer
-├── exception   # MessageException
+├── codec       # MessageWireCodec
 └── annotation  # MessageListener
 ```
 
@@ -86,7 +85,7 @@ com.xjtu.iron.message.core
 | `core.context` | 当前消息上下文、ThreadLocal 消费作用域 |
 | `core.routing` | 逻辑目的地到 Provider 物理目的地的路由 |
 | `core.codec` | 线级协议编解码和默认 JSON payload 序列化 |
-| `core.id` | 消息 ID 生成策略和 foundation-id 适配 |
+| `foundation-id` | `StringIdGenerator` 统一生成 messageId，message-core 不再维护本地 ID 生成抽象 |
 | `core.provider` | Provider 注册表和选择 |
 | `core.enrich` | 发送前补齐 messageId、时间、上下文 |
 | `core.send` | 发送执行抽象、直发执行器、发送快照 |
@@ -129,4 +128,4 @@ DefaultReliableMessageSender
 | `message-starter` 是否静默降级 | 不静默。启用可靠发送但缺少 RetryExecutor 时启动失败 |
 | `message-codec-jackson` 是否独立 | 不独立，已合并到 `message-core.codec` |
 | `MessageWireCodec` 是否删除 | 不删除。它负责 envelope 线级协议，不等于 JSON 序列化 |
-| messageId 是否使用 foundation | 通过 `MessageIdGenerator` 适配 foundation-id，未发现 foundation 时允许 UUID fallback |
+| messageId 是否使用 foundation | 直接使用 foundation-id StringIdGenerator，默认 fallback 使用 NanoIdStringIdGenerator |

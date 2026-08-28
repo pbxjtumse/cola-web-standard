@@ -1,7 +1,7 @@
 package com.xjtu.iron.message.integration.pulsar.autoconfigure;
 
 import com.xjtu.iron.message.integration.pulsar.PulsarMessageProvider;
-import com.xjtu.iron.message.integration.pulsar.PulsarMessageProviderConfig;
+import com.xjtu.iron.message.integration.pulsar.config.PulsarMessageProviderConfig;
 import com.xjtu.iron.message.spi.MessageProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;

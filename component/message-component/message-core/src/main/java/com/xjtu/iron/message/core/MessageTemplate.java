@@ -5,8 +5,6 @@ import com.xjtu.iron.message.core.context.CurrentMessage;
 import com.xjtu.iron.message.core.context.MessageContextAccessor;
 import com.xjtu.iron.message.core.context.ThreadLocalMessageContextAccessor;
 import com.xjtu.iron.message.core.enrich.MessageEnvelopeEnricher;
-import com.xjtu.iron.message.core.id.UuidMessageIdGenerator;
-import com.xjtu.iron.message.core.id.MessageIdGenerator;
 import com.xjtu.iron.message.core.provider.MessageProviderRegistry;
 import com.xjtu.iron.message.core.routing.DefaultDestinationResolver;
 import com.xjtu.iron.message.core.routing.DestinationResolver;
@@ -23,7 +21,9 @@ import com.xjtu.iron.message.api.model.MessageDestination;
 import com.xjtu.iron.message.api.model.MessageEnvelope;
 import com.xjtu.iron.message.api.consume.MessageHandler;
 import com.xjtu.iron.message.api.publish.MessagePublisher;
-import com.xjtu.iron.message.api.codec.MessageSerializer;
+import com.xjtu.iron.foundation.id.api.StringIdGenerator;
+import com.xjtu.iron.foundation.id.nanoid.NanoIdStringIdGenerator;
+import com.xjtu.iron.foundation.serialization.Serializer;
 import com.xjtu.iron.message.api.consume.MessageSubscription;
 import com.xjtu.iron.message.api.publish.SendFailureType;
 import com.xjtu.iron.message.api.publish.SendOptions;
@@ -100,19 +100,11 @@ public final class MessageTemplate
             MessageContextAccessor contextAccessor,
             MessageSendExecutor sendExecutor) {
         this.options = Objects.requireNonNull(options, "options must not be null");
-        this.providerRegistry = Objects.requireNonNull(
-                providerRegistry,
-                "providerRegistry must not be null");
-        this.destinationResolver = Objects.requireNonNull(
-                destinationResolver,
-                "destinationResolver must not be null");
-        this.envelopeEnricher = Objects.requireNonNull(
-                envelopeEnricher,
-                "envelopeEnricher must not be null");
+        this.providerRegistry = Objects.requireNonNull(providerRegistry, "providerRegistry must not be null");
+        this.destinationResolver = Objects.requireNonNull(destinationResolver, "destinationResolver must not be null");
+        this.envelopeEnricher = Objects.requireNonNull(envelopeEnricher, "envelopeEnricher must not be null");
         this.wireCodec = Objects.requireNonNull(wireCodec, "wireCodec must not be null");
-        this.contextAccessor = Objects.requireNonNull(
-                contextAccessor,
-                "contextAccessor must not be null");
+        this.contextAccessor = Objects.requireNonNull(contextAccessor, "contextAccessor must not be null");
         this.sendExecutor = Objects.requireNonNull(sendExecutor, "sendExecutor must not be null");
         this.consumeExecutionTemplate = new ConsumeExecutionTemplate();
     }
@@ -144,13 +136,13 @@ public final class MessageTemplate
             MessageComponentOptions options,
             MessageProviderRegistry providerRegistry,
             DestinationRouteRegistry routeRegistry,
-            MessageSerializer serializer) {
+            Serializer payloadSerializer) {
         return create(
                 options,
                 providerRegistry,
                 routeRegistry,
-                serializer,
-                new UuidMessageIdGenerator(),
+                payloadSerializer,
+                new NanoIdStringIdGenerator(),
                 new DirectMessageSender(options.clock()));
     }
 
@@ -161,14 +153,14 @@ public final class MessageTemplate
             MessageComponentOptions options,
             MessageProviderRegistry providerRegistry,
             DestinationRouteRegistry routeRegistry,
-            MessageSerializer serializer,
+            Serializer payloadSerializer,
             MessageSendExecutor sendExecutor) {
         return create(
                 options,
                 providerRegistry,
                 routeRegistry,
-                serializer,
-                new UuidMessageIdGenerator(),
+                payloadSerializer,
+                new NanoIdStringIdGenerator(),
                 sendExecutor);
     }
 
@@ -179,8 +171,8 @@ public final class MessageTemplate
             MessageComponentOptions options,
             MessageProviderRegistry providerRegistry,
             DestinationRouteRegistry routeRegistry,
-            MessageSerializer serializer,
-            MessageIdGenerator messageIdGenerator,
+            Serializer payloadSerializer,
+            StringIdGenerator messageIdGenerator,
             MessageSendExecutor sendExecutor) {
         ThreadLocalMessageContextAccessor contextAccessor = new ThreadLocalMessageContextAccessor();
         DefaultDestinationResolver destinationResolver = new DefaultDestinationResolver(
@@ -191,7 +183,7 @@ public final class MessageTemplate
                 options,
                 messageIdGenerator,
                 contextAccessor);
-        MessageWireCodec wireCodec = new MessageWireCodec(serializer);
+        MessageWireCodec wireCodec = new MessageWireCodec(payloadSerializer);
         return new MessageTemplate(
                 options,
                 providerRegistry,

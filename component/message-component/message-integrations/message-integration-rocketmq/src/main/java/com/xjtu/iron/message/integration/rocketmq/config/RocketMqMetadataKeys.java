@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.integration.rocketmq;
+package com.xjtu.iron.message.integration.rocketmq.config;
 
 /**
  * RocketMQ Provider 写入公共结果元数据的 key。

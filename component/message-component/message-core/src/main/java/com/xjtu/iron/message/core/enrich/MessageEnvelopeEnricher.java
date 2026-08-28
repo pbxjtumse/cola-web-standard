@@ -3,7 +3,7 @@ package com.xjtu.iron.message.core.enrich;
 import com.xjtu.iron.message.core.MessageComponentOptions;
 import com.xjtu.iron.message.core.context.CurrentMessage;
 import com.xjtu.iron.message.core.context.MessageContextAccessor;
-import com.xjtu.iron.message.core.id.MessageIdGenerator;
+import com.xjtu.iron.foundation.id.api.StringIdGenerator;
 
 import com.xjtu.iron.message.api.model.MessageContext;
 import com.xjtu.iron.message.api.model.MessageEnvelope;
@@ -18,18 +18,18 @@ import java.util.Objects;
  * 组件在真正发送前需要补齐 messageId、createdAt、occurredAt、source、correlationId、causationId 等公共信息。
  * 这些补齐动作集中放在本类，避免散落在 MessageTemplate 或各 Provider 中。</p>
  *
- * <p>messageId 的生成通过 {@code MessageIdGenerator} 完成。默认可以使用 UUID fallback，
- * 在完整技术组件体系中应优先适配 foundation-component 的统一 ID 生成能力。</p>
+ * <p>messageId 的生成直接复用 foundation-component 的 {@code StringIdGenerator}。message-core 不再维护
+ * 自己的消息 ID 生成抽象，避免基础能力重复建设。</p>
  */
 public final class MessageEnvelopeEnricher {
 
     private final MessageComponentOptions options;
-    private final MessageIdGenerator messageIdGenerator;
+    private final StringIdGenerator messageIdGenerator;
     private final MessageContextAccessor contextAccessor;
 
     public MessageEnvelopeEnricher(
             MessageComponentOptions options,
-            MessageIdGenerator messageIdGenerator,
+            StringIdGenerator messageIdGenerator,
             MessageContextAccessor contextAccessor) {
         this.options = Objects.requireNonNull(options, "options must not be null");
         this.messageIdGenerator = Objects.requireNonNull(

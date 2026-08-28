@@ -13,13 +13,28 @@ import java.util.Objects;
  * @param <T> 业务消息体类型
  */
 public final class ConsumerDefinition<T> {
+    /** 本地消费者定义 ID，用于配置合并、日志和启动校验，不一定等于 MQ consumerGroup。 */
     private final String consumerId;
+
+    /** 显式指定的 Provider 名称；为空时由 destination/providerHint 或默认 Provider 决定。 */
     private final String providerName;
+
+    /** 业务逻辑目的地，例如 namespace=order、name=paid。 */
     private final MessageDestination destination;
+
+    /** MQ 消费组，用于 Kafka offset、Pulsar subscription、RocketMQ consumer group 等 Provider 语义。 */
     private final String consumerGroup;
+
+    /** 业务 Handler 接收的 payload 类型，用于 MessageWireCodec 反序列化。 */
     private final Class<T> payloadType;
+
+    /** 消费可靠性目标，例如 AT_LEAST_ONCE 或 EFFECTIVELY_ONCE。 */
     private final ConsumerReliabilityMode reliabilityMode;
+
+    /** 当前消费者的消费幂等配置。 */
     private final MessageIdempotencyOptions idempotencyOptions;
+
+    /** 当前消费者的事务模板配置。 */
     private final MessageConsumeTransactionOptions transactionOptions;
 
     public ConsumerDefinition(MessageDestination destination, String consumerGroup, Class<T> payloadType) {

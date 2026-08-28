@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.integration.kafka;
+package com.xjtu.iron.message.integration.kafka.config;
 
 /** Kafka Provider 诊断元数据键，避免在发送和消费流程中散落字符串字面量。 */
 public final class KafkaMetadataKeys {

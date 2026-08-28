@@ -3,6 +3,8 @@ package com.xjtu.iron.message.integration.pulsar;
 import com.xjtu.iron.message.api.consume.ConsumeDecision;
 import com.xjtu.iron.message.api.publish.SendFailureType;
 import com.xjtu.iron.message.api.publish.SendStatus;
+import com.xjtu.iron.message.integration.pulsar.config.PulsarMessageProviderConfig;
+import com.xjtu.iron.message.integration.pulsar.config.PulsarMetadataKeys;
 import com.xjtu.iron.message.spi.MessageCapability;
 import com.xjtu.iron.message.spi.MessageProvider;
 import com.xjtu.iron.message.spi.ProviderInboundMessage;

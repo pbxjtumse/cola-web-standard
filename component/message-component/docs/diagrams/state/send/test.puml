@@ -1,0 +1,138 @@
+@startuml
+title Send Full State - Explicit Enum / Runtime / Failure Markers From Code
+
+' 状态图保持默认黑白，不引入模块颜色。
+' 本图根据当前 message-component / retry-component 代码枚举重新标注。
+
+legend right
+  代码枚举节点直接显示真实来源：枚举类.枚举值
+  示例：ConsumeDecision.ACK / SendFailureType.VALIDATION_ERROR
+  LOGICAL = 查询、时间、次数、配置推导，代码枚举中不存在
+  RUNTIME = 执行过程节点，代码枚举中不存在
+  ACTION = repository / adapter 动作，不是状态枚举
+  PROVIDER ACTION = Kafka / Pulsar / RocketMQ 原生确认动作
+  PROVIDER CAUSE = Provider 原生返回或异常，不是统一状态枚举
+  MESSAGE SEMANTIC = message-component 语义，目前不是持久化枚举
+endlegend
+
+state "CREATED\nRUNTIME\nMessageTemplate.send(...) called" as R_CREATED
+state "VALIDATE\nSendStage.VALIDATE" as S_VALIDATE
+state "ENRICH\nSendStage.ENRICH" as S_ENRICH
+state "RESOLVE\nSendStage.RESOLVE" as S_RESOLVE
+state "SERIALIZE\nSendStage.SERIALIZE" as S_SERIALIZE
+state "SEND\nSendStage.SEND" as S_SEND
+state "RETRY\nSendStage.RETRY" as S_RETRY
+state "CONFIRM\nSendStage.CONFIRM" as S_CONFIRM
+state "COMPLETE\nSendStage.COMPLETE" as S_COMPLETE
+
+state "PREPARED\nRUNTIME\nPreparedMessageSend created" as R_PREPARED
+state "RETRY_ATTEMPT\nRUNTIME\nRetryExecutor invokes provider send" as R_RETRY_ATTEMPT
+state "PROVIDER_EXCEPTION\nRUNTIME\nCompletionStage completed exceptionally" as R_PROVIDER_EXCEPTION
+
+state "CONFIRMED\nSendStatus.CONFIRMED" as ST_CONFIRMED
+state "FAILED\nSendStatus.FAILED" as ST_FAILED
+state "REJECTED\nSendStatus.REJECTED" as ST_REJECTED
+state "UNKNOWN\nSendStatus.UNKNOWN" as ST_UNKNOWN
+
+state "VALIDATION_ERROR\nSendFailureType.VALIDATION_ERROR" as F_VALIDATION_ERROR
+state "SERIALIZATION_ERROR\nSendFailureType.SERIALIZATION_ERROR" as F_SERIALIZATION_ERROR
+state "ROUTING_ERROR\nSendFailureType.ROUTING_ERROR" as F_ROUTING_ERROR
+state "PROVIDER_NOT_FOUND\nSendFailureType.PROVIDER_NOT_FOUND" as F_PROVIDER_NOT_FOUND
+state "UNSUPPORTED_CAPABILITY\nSendFailureType.UNSUPPORTED_CAPABILITY" as F_UNSUPPORTED_CAPABILITY
+state "NETWORK_ERROR\nSendFailureType.NETWORK_ERROR" as F_NETWORK_ERROR
+state "TIMEOUT\nSendFailureType.TIMEOUT" as F_TIMEOUT
+state "CLIENT_ERROR\nSendFailureType.CLIENT_ERROR" as F_CLIENT_ERROR
+state "BROKER_REJECTED\nSendFailureType.BROKER_REJECTED" as F_BROKER_REJECTED
+state "AUTHORIZATION_ERROR\nSendFailureType.AUTHORIZATION_ERROR" as F_AUTHORIZATION_ERROR
+state "RETRY_EXHAUSTED\nSendFailureType.RETRY_EXHAUSTED" as F_RETRY_EXHAUSTED
+state "RETRY_EXECUTION_ERROR\nSendFailureType.RETRY_EXECUTION_ERROR" as F_RETRY_EXECUTION_ERROR
+state "UNKNOWN_OUTCOME\nSendFailureType.UNKNOWN_OUTCOME" as F_UNKNOWN_OUTCOME
+state "UNKNOWN_ERROR\nSendFailureType.UNKNOWN_ERROR" as F_UNKNOWN_ERROR
+
+state "SUCCESS\nRetryStatus.SUCCESS" as RT_SUCCESS
+state "EXHAUSTED\nRetryStatus.EXHAUSTED" as RT_EXHAUSTED
+state "NOT_RETRYABLE\nRetryStatus.NOT_RETRYABLE" as RT_NOT_RETRYABLE
+state "EXECUTION_FAILED\nRetryStatus.EXECUTION_FAILED" as RT_EXECUTION_FAILED
+
+[*] --> R_CREATED
+R_CREATED --> S_VALIDATE : validate(...)
+
+S_VALIDATE --> F_VALIDATION_ERROR : invalid SendOptions / envelope
+F_VALIDATION_ERROR --> ST_FAILED : build SendResult
+S_VALIDATE --> S_ENRICH : valid
+
+S_ENRICH --> S_RESOLVE : enrich ok
+S_ENRICH --> F_UNKNOWN_ERROR : enricher exception
+F_UNKNOWN_ERROR --> ST_FAILED
+
+S_RESOLVE --> F_ROUTING_ERROR : no route
+S_RESOLVE --> F_PROVIDER_NOT_FOUND : provider missing
+S_RESOLVE --> F_UNSUPPORTED_CAPABILITY : provider cannot satisfy capability
+F_ROUTING_ERROR --> ST_FAILED
+F_PROVIDER_NOT_FOUND --> ST_FAILED
+F_UNSUPPORTED_CAPABILITY --> ST_REJECTED
+S_RESOLVE --> S_SERIALIZE : route resolved
+
+S_SERIALIZE --> F_SERIALIZATION_ERROR : encode failed
+F_SERIALIZATION_ERROR --> ST_REJECTED
+S_SERIALIZE --> R_PREPARED : PreparedMessageSend
+
+R_PREPARED --> S_SEND : reliability disabled
+R_PREPARED --> S_RETRY : reliability enabled
+
+S_SEND --> S_CONFIRM : ProviderSendResult returned
+S_SEND --> R_PROVIDER_EXCEPTION : provider future exception
+R_PROVIDER_EXCEPTION --> F_NETWORK_ERROR : IOException / connection
+R_PROVIDER_EXCEPTION --> F_TIMEOUT : TimeoutException
+R_PROVIDER_EXCEPTION --> F_CLIENT_ERROR : other client exception
+F_NETWORK_ERROR --> ST_FAILED
+F_TIMEOUT --> ST_UNKNOWN
+F_CLIENT_ERROR --> ST_FAILED
+
+S_CONFIRM --> ST_CONFIRMED : SendStatus.CONFIRMED
+S_CONFIRM --> ST_FAILED : SendStatus.FAILED
+S_CONFIRM --> ST_REJECTED : SendStatus.REJECTED
+S_CONFIRM --> ST_UNKNOWN : SendStatus.UNKNOWN
+S_CONFIRM --> F_BROKER_REJECTED : broker rejects
+S_CONFIRM --> F_AUTHORIZATION_ERROR : auth rejected
+S_CONFIRM --> F_UNKNOWN_OUTCOME : outcome uncertain
+F_BROKER_REJECTED --> ST_REJECTED
+F_AUTHORIZATION_ERROR --> ST_REJECTED
+F_UNKNOWN_OUTCOME --> ST_UNKNOWN
+
+S_RETRY --> R_RETRY_ATTEMPT : RetryExecutor.execute(...)
+R_RETRY_ATTEMPT --> S_SEND : next attempt
+R_RETRY_ATTEMPT --> RT_SUCCESS : provider finally confirmed
+RT_SUCCESS --> ST_CONFIRMED
+R_RETRY_ATTEMPT --> RT_NOT_RETRYABLE : classifier stops retry
+RT_NOT_RETRYABLE --> ST_FAILED : keep provider failure semantic
+RT_NOT_RETRYABLE --> ST_UNKNOWN : if last provider result UNKNOWN
+R_RETRY_ATTEMPT --> RT_EXHAUSTED : attempts exhausted
+RT_EXHAUSTED --> F_RETRY_EXHAUSTED
+F_RETRY_EXHAUSTED --> ST_FAILED
+F_RETRY_EXHAUSTED --> ST_UNKNOWN : if last result UNKNOWN
+R_RETRY_ATTEMPT --> RT_EXECUTION_FAILED : retry framework failed
+RT_EXECUTION_FAILED --> F_RETRY_EXECUTION_ERROR
+F_RETRY_EXECUTION_ERROR --> ST_FAILED
+
+ST_CONFIRMED --> S_COMPLETE
+ST_FAILED --> S_COMPLETE
+ST_REJECTED --> S_COMPLETE
+ST_UNKNOWN --> S_COMPLETE
+S_COMPLETE --> [*]
+
+note right of F_VALIDATION_ERROR
+  当前代码中没有 SendFailureType.INVALID_OPTIONS。
+  参数/选项非法应标记为 SendFailureType.VALIDATION_ERROR。
+end note
+
+note bottom of S_VALIDATE
+  SendStage 用于定位当前执行阶段，
+  不是最终发送结果。
+end note
+
+note bottom of ST_UNKNOWN
+  UNKNOWN 是 SendStatus 枚举。
+  默认不重试 UNKNOWN，避免重复发送。
+end note
+@enduml

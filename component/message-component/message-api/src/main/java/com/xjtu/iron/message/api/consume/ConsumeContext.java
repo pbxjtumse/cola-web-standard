@@ -15,22 +15,55 @@ import java.util.Objects;
  * 例如 kafka.partition、kafka.offset、pulsar.ledgerId、rocketmq.queueOffset。</p>
  */
 public final class ConsumeContext {
+    /** 当前消息来自哪个 Provider，例如 kafka、pulsar、rocketmq。 */
     private final String providerName;
+
+    /** Provider 侧真实物理目的地，例如 Kafka topic、Pulsar topic、RocketMQ topic。 */
     private final String physicalDestination;
+
+    /** message-component 的逻辑目的地，表达业务语义，不等价于真实 MQ topic。 */
     private final MessageDestination logicalDestination;
+
+    /** 当前订阅使用的消费者组，同一个 consumerGroup 通常共享一份消费进度。 */
     private final String consumerGroup;
+
+    /** Provider 原生消息 ID 或位点标识，用于诊断和 Provider 侧排查。 */
     private final String providerMessageId;
+
+    /** message-component 线级消息 ID，用于追踪和默认 MESSAGE_ID 幂等。 */
     private final String messageId;
+
+    /** 业务聚合 key，例如 orderId、userId、requestNo；它不等于 messageId。 */
     private final String messageKey;
+
+    /** 业务事件类型，也就是 MessageEnvelope.messageType。 */
     private final String eventType;
+
+    /** 当前消息第几次投递；Provider 无法提供时使用 1。 */
     private final int deliveryAttempt;
+
+    /** Provider 收到原生消息的时间。 */
     private final Instant receivedAt;
+
+    /** message-core 开始处理本次投递的时间。 */
     private final Instant startedAt;
+
+    /** 当前消费者声明的可靠性模式，例如 AT_LEAST_ONCE 或 EFFECTIVELY_ONCE。 */
     private final ConsumerReliabilityMode reliabilityMode;
+
+    /** 当前消费者声明的幂等模式，例如 NONE、MESSAGE_ID、BUSINESS_KEY。 */
     private final MessageIdempotencyMode idempotencyMode;
+
+    /** 消费幂等场景，通常来自 consumerGroup 或业务显式 scene。 */
     private final String idempotencyScene;
+
+    /** 本次投递解析出的幂等 key；没有进入幂等执行前可能为空。 */
     private final String idempotencyKey;
+
+    /** 业务可见的消息头，不包含 x-iron-message-* 系统线级头。 */
     private final Map<String, String> headers;
+
+    /** Provider 特有诊断属性，例如 kafka.partition、pulsar.ledgerId、rocketmq.queueOffset。 */
     private final Map<String, String> attributes;
 
     public ConsumeContext(
