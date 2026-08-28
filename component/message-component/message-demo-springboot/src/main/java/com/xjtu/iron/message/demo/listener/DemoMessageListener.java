@@ -1,6 +1,6 @@
 package com.xjtu.iron.message.demo.listener;
 
-import com.xjtu.iron.message.api.consume.ConsumeContext;
+import com.xjtu.iron.message.api.consume.context.ConsumeContext;
 import com.xjtu.iron.message.api.model.MessageEnvelope;
 import com.xjtu.iron.message.demo.store.InMemoryReceivedMessageStore;
 import org.springframework.stereotype.Component;

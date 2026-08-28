@@ -1,5 +1,7 @@
-package com.xjtu.iron.message.api.consume;
+package com.xjtu.iron.message.api.consume.context;
 
+import com.xjtu.iron.message.api.consume.definition.ConsumerReliabilityMode;
+import com.xjtu.iron.message.api.consume.definition.MessageIdempotencyMode;
 import com.xjtu.iron.message.api.model.MessageDestination;
 
 import java.time.Instant;

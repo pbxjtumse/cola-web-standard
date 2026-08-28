@@ -1,7 +1,7 @@
 package com.xjtu.iron.message.spring.boot.autoconfigure.consume;
 
-import com.xjtu.iron.message.api.consume.ConsumerDefinition;
-import com.xjtu.iron.message.api.consume.ConsumerReliabilityMode;
+import com.xjtu.iron.message.api.consume.definition.ConsumerDefinition;
+import com.xjtu.iron.message.api.consume.definition.ConsumerReliabilityMode;
 import com.xjtu.iron.message.spi.MessageCapability;
 import com.xjtu.iron.message.spi.MessageProvider;
 

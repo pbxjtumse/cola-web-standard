@@ -1,6 +1,6 @@
 package com.xjtu.iron.message.integration.kafka.consume;
 
-import com.xjtu.iron.message.api.consume.ConsumeDecision;
+import com.xjtu.iron.message.api.consume.decision.ConsumeDecision;
 
 /**
  * Kafka 消费决策映射说明类。

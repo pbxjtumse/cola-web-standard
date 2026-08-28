@@ -1,7 +1,7 @@
 package com.xjtu.iron.message.spring.boot.autoconfigure.properties;
 
-import com.xjtu.iron.message.api.consume.ConsumerReliabilityMode;
-import com.xjtu.iron.message.api.consume.ConsumeDecision;
+import com.xjtu.iron.message.api.consume.definition.ConsumerReliabilityMode;
+import com.xjtu.iron.message.api.consume.decision.ConsumeDecision;
 
 /** 全局消费默认配置。 */
 public final class MessageConsumeProperties {

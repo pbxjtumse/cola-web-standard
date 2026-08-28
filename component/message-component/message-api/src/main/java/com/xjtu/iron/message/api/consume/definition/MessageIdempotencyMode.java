@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api.consume;
+package com.xjtu.iron.message.api.consume.definition;
 
 /**
  * 消费幂等 key 生成模式。

@@ -1,9 +1,9 @@
 package com.xjtu.iron.message.core.consume;
 
-import com.xjtu.iron.message.api.consume.ConsumeContext;
-import com.xjtu.iron.message.api.consume.ConsumeDecision;
-import com.xjtu.iron.message.api.consume.MessageHandler;
-import com.xjtu.iron.message.api.consume.ConsumerDefinition;
+import com.xjtu.iron.message.api.consume.context.ConsumeContext;
+import com.xjtu.iron.message.api.consume.decision.ConsumeDecision;
+import com.xjtu.iron.message.api.consume.handler.MessageHandler;
+import com.xjtu.iron.message.api.consume.definition.ConsumerDefinition;
 import com.xjtu.iron.message.api.model.MessageEnvelope;
 import com.xjtu.iron.message.core.consume.idempotency.MessageIdempotencyExecutor;
 import com.xjtu.iron.message.core.consume.idempotency.NoopMessageIdempotencyExecutor;

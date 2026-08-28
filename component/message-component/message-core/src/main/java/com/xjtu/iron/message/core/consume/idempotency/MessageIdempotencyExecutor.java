@@ -1,8 +1,8 @@
 package com.xjtu.iron.message.core.consume.idempotency;
 
-import com.xjtu.iron.message.api.consume.ConsumeContext;
-import com.xjtu.iron.message.api.consume.ConsumeDecision;
-import com.xjtu.iron.message.api.consume.MessageIdempotencyOptions;
+import com.xjtu.iron.message.api.consume.context.ConsumeContext;
+import com.xjtu.iron.message.api.consume.decision.ConsumeDecision;
+import com.xjtu.iron.message.api.consume.definition.MessageIdempotencyOptions;
 import com.xjtu.iron.message.api.model.MessageEnvelope;
 import com.xjtu.iron.message.core.consume.ConsumeInvocation;
 

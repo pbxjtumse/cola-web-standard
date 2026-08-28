@@ -1,7 +1,7 @@
 package com.xjtu.iron.message.spring.boot.autoconfigure.properties;
 
-import com.xjtu.iron.message.api.consume.MessageIdempotencyFailurePolicy;
-import com.xjtu.iron.message.api.consume.MessageIdempotencyMode;
+import com.xjtu.iron.message.api.consume.definition.MessageIdempotencyFailurePolicy;
+import com.xjtu.iron.message.api.consume.definition.MessageIdempotencyMode;
 
 import java.time.Duration;
 

@@ -1,7 +1,7 @@
 package com.xjtu.iron.message.core.consume;
 
-import com.xjtu.iron.message.api.consume.ConsumeDecision;
-import com.xjtu.iron.message.api.consume.ConsumeContext;
+import com.xjtu.iron.message.api.consume.decision.ConsumeDecision;
+import com.xjtu.iron.message.api.consume.context.ConsumeContext;
 
 /**
  * 将业务异常转换为统一消费决策。

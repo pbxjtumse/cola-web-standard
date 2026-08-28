@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api.consume;
+package com.xjtu.iron.message.api.consume.decision;
 
 /**
  * 统一消费决策，表示业务处理、幂等判断和异常分类之后，Provider 应如何反馈 Broker。

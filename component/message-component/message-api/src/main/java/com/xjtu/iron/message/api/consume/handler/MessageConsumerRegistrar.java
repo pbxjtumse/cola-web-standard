@@ -1,4 +1,6 @@
-package com.xjtu.iron.message.api.consume;
+package com.xjtu.iron.message.api.consume.handler;
+
+import com.xjtu.iron.message.api.consume.definition.ConsumerDefinition;
 
 /**
  * 面向业务代码的统一消费者注册接口。

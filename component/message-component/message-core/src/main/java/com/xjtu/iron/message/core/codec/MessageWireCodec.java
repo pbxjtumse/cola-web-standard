@@ -1,7 +1,7 @@
 package com.xjtu.iron.message.core.codec;
 
-import com.xjtu.iron.message.api.consume.ConsumeContext;
-import com.xjtu.iron.message.api.consume.ConsumerDefinition;
+import com.xjtu.iron.message.api.consume.context.ConsumeContext;
+import com.xjtu.iron.message.api.consume.definition.ConsumerDefinition;
 import com.xjtu.iron.message.api.model.MessageContext;
 import com.xjtu.iron.message.api.model.MessageDestination;
 import com.xjtu.iron.message.api.model.MessageEnvelope;

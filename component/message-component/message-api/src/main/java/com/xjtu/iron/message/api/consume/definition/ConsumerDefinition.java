@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api.consume;
+package com.xjtu.iron.message.api.consume.definition;
 
 import com.xjtu.iron.message.api.model.MessageDestination;
 

@@ -1,6 +1,6 @@
 package com.xjtu.iron.message.integration.kafka;
 
-import com.xjtu.iron.message.api.consume.ConsumeDecision;
+import com.xjtu.iron.message.api.consume.decision.ConsumeDecision;
 import com.xjtu.iron.message.api.publish.SendFailureType;
 import com.xjtu.iron.message.api.publish.SendStatus;
 import com.xjtu.iron.message.integration.kafka.config.KafkaMessageProviderConfig;

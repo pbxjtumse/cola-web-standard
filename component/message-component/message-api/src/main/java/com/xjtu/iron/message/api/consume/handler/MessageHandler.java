@@ -1,5 +1,7 @@
-package com.xjtu.iron.message.api.consume;
+package com.xjtu.iron.message.api.consume.handler;
 
+import com.xjtu.iron.message.api.consume.context.ConsumeContext;
+import com.xjtu.iron.message.api.consume.decision.ConsumeDecision;
 import com.xjtu.iron.message.api.model.MessageEnvelope;
 
 /**

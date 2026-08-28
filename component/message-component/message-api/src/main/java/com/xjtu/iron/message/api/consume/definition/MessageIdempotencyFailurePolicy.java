@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.api.consume;
+package com.xjtu.iron.message.api.consume.definition;
 
 /**
  * 幂等执行被拒绝或超过最大尝试次数后的处理策略。

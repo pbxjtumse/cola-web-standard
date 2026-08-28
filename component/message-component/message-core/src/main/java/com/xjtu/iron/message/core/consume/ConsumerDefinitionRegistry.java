@@ -1,6 +1,6 @@
 package com.xjtu.iron.message.core.consume;
 
-import com.xjtu.iron.message.api.consume.ConsumerDefinition;
+import com.xjtu.iron.message.api.consume.definition.ConsumerDefinition;
 import com.xjtu.iron.message.api.model.MessageDestination;
 
 import java.util.Optional;

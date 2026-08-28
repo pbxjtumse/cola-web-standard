@@ -1,6 +1,6 @@
 package com.xjtu.iron.message.integration.rocketmq.consume;
 
-import com.xjtu.iron.message.api.consume.ConsumeDecision;
+import com.xjtu.iron.message.api.consume.decision.ConsumeDecision;
 
 /** RocketMQ 4 消费决策映射说明类。 */
 public final class RocketMqConsumeDecisionMapper {

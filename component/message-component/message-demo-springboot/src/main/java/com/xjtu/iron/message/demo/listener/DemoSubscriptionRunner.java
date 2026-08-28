@@ -1,10 +1,10 @@
 package com.xjtu.iron.message.demo.listener;
 
-import com.xjtu.iron.message.api.consume.ConsumeDecision;
-import com.xjtu.iron.message.api.consume.ConsumerDefinition;
+import com.xjtu.iron.message.api.consume.decision.ConsumeDecision;
+import com.xjtu.iron.message.api.consume.definition.ConsumerDefinition;
 import com.xjtu.iron.message.api.model.MessageDestination;
 import com.xjtu.iron.message.api.model.MessageEnvelope;
-import com.xjtu.iron.message.api.consume.MessageSubscription;
+import com.xjtu.iron.message.api.consume.handler.MessageSubscription;
 import com.xjtu.iron.message.core.MessageTemplate;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageProperties;
 import org.springframework.boot.ApplicationArguments;
