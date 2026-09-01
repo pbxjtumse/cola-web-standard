@@ -95,6 +95,7 @@ public final class DefaultReliableMessageSender implements MessageSendExecutor {
 
     @Override
     public CompletionStage<SendResult> sendAsync(PreparedMessageSend prepared) {
+        //此处增加异步操作 调用send方法
         return CompletableFuture.supplyAsync(() -> send(prepared), asyncExecutor);
     }
 
@@ -106,9 +107,7 @@ public final class DefaultReliableMessageSender implements MessageSendExecutor {
             // 每个 attempt 只调用一次 Provider。Provider 内部负责和 Kafka/Pulsar/RocketMQ 客户端交互。
             CompletionStage<ProviderSendResult> providerStage = prepared.provider().send(prepared.request());
             if (providerStage == null) {
-                return ProviderSendResult.failed(
-                        SendStatus.FAILED,
-                        SendFailureType.CLIENT_ERROR,
+                return ProviderSendResult.failed(SendStatus.FAILED, SendFailureType.CLIENT_ERROR,
                         "provider returned null completion stage");
             }
             // confirmTimeout 控制单次 attempt 等待 Broker 确认的最长时间；超时后返回 UNKNOWN，默认不继续重试。

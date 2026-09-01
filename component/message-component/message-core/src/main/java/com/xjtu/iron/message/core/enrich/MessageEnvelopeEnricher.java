@@ -32,12 +32,8 @@ public final class MessageEnvelopeEnricher {
             StringIdGenerator messageIdGenerator,
             MessageContextAccessor contextAccessor) {
         this.options = Objects.requireNonNull(options, "options must not be null");
-        this.messageIdGenerator = Objects.requireNonNull(
-                messageIdGenerator,
-                "messageIdGenerator must not be null");
-        this.contextAccessor = Objects.requireNonNull(
-                contextAccessor,
-                "contextAccessor must not be null");
+        this.messageIdGenerator = Objects.requireNonNull(messageIdGenerator, "messageIdGenerator must not be null");
+        this.contextAccessor = Objects.requireNonNull(contextAccessor, "contextAccessor must not be null");
     }
 
     /** 补齐一次发送需要的稳定字段，业务已显式设置的字段优先。 */
@@ -49,21 +45,13 @@ public final class MessageEnvelopeEnricher {
         Instant createdAt = metadata.createdAt() == null ? now : metadata.createdAt();
         Instant occurredAt = metadata.occurredAt() == null ? createdAt : metadata.occurredAt();
         String schemaVersion = firstText(metadata.schemaVersion(), options.defaultSchemaVersion());
-
         CurrentMessage current = contextAccessor.current().orElse(null);
         MessageContext explicit = message.context();
-        MessageContext parent = current == null
-                ? MessageContext.empty()
-                : current.envelope().context();
+        MessageContext parent = current == null ? MessageContext.empty() : current.envelope().context();
         String source = firstText(explicit.source(), options.applicationName());
-        String correlationId = firstText(
-                explicit.correlationId(),
-                firstText(parent.correlationId(), messageId));
-        String causationId = firstText(
-                explicit.causationId(),
-                current == null ? null : current.envelope().messageId());
+        String correlationId = firstText(explicit.correlationId(), firstText(parent.correlationId(), messageId));
+        String causationId = firstText(explicit.causationId(), current == null ? null : current.envelope().messageId());
         String tenantId = firstText(explicit.tenantId(), parent.tenantId());
-
         return message.toBuilder()
                 .messageId(messageId)
                 .schemaVersion(schemaVersion)

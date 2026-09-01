@@ -2,7 +2,7 @@ package com.xjtu.iron.message.api.model;
 import java.util.Objects;
 
 /**
- * 表示需要跨消息边界传播的稳定业务上下文。
+ * 表示需要跨消息边界传播的稳定业务上下文。描述的是 【当前这次处理环境是什么】
  *
  * <p>Trace、Span、MDC 等技术上下文不在这里固化字段，而是通过消息头传播，
  * 这样消息 API 不会绑定 OpenTelemetry、Brave、SkyWalking 等具体实现。</p>

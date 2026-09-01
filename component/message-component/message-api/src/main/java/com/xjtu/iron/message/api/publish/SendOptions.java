@@ -6,6 +6,7 @@ import java.util.Objects;
 
 /**
  * 表示一次普通消息发送的调用选项。
+ * 发送有三个时间 1 Provider确认超时 2 Retry 总耗时 3 业务调用总超时
  *
  * <p>{@code confirmTimeout}：等待发送确认的最大时间；为空时使用组件默认值</p>
  */

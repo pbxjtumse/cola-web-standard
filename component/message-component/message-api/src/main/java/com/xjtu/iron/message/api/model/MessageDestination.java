@@ -4,10 +4,9 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * 表示业务使用的逻辑消息目的地。
+ * 表示业务使用的【逻辑消息目的地】。
  *
- * <p>Event 或 Command 属于消息命名和业务契约规范，不再作为一期强制分类字段。
- * Provider 和物理 Topic 由 core 路由解析。</p>
+ * <p>Event 或 Command 属于消息命名和业务契约规范，不再作为一期强制分类字段。Provider 和物理 Topic 由 core 路由解析。</p>
  *
  * <p>{@code namespace}：业务域或限界上下文，例如 trade</p>
  * <p>{@code name}：逻辑消息名称，例如 order-paid 或 close-order</p>

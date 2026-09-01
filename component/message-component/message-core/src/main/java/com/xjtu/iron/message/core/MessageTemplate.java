@@ -53,7 +53,7 @@ import java.util.concurrent.CompletionStage;
  * 也不直接处理 retry-component 的内部算法，而是负责把一次业务调用拆成几个稳定阶段：</p>
  *
  * <ol>
- *   <li>校验逻辑目的地、消息信封和发送选项；</li>
+ *   <li>校验【逻辑目的地、消息信封和发送选项】；</li>
  *   <li>通过 {@code MessageEnvelopeEnricher} 补齐 messageId、时间、上下文等公共元数据；</li>
  *   <li>通过 {@code DestinationResolver} 把逻辑目的地解析为 Provider 和物理 Topic；</li>
  *   <li>通过 {@code MessageProviderRegistry} 获取目标 Provider，并检查其发布/消费能力；</li>
@@ -231,9 +231,7 @@ public final class MessageTemplate
     }
 
     @Override
-    public <T> MessageSubscription subscribe(
-            ConsumerDefinition<T> definition,
-            MessageHandler<T> handler) {
+    public <T> MessageSubscription subscribe(ConsumerDefinition<T> definition, MessageHandler<T> handler) {
         Objects.requireNonNull(definition, "definition must not be null");
         Objects.requireNonNull(handler, "handler must not be null");
         ProviderDestination providerDestination = destinationResolver.resolve(definition.destination());

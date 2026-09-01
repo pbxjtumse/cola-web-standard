@@ -21,9 +21,7 @@ public final class ConsumeExecutionTemplate {
         this(new NoopMessageIdempotencyExecutor(), new DefaultConsumeExceptionClassifier());
     }
 
-    public ConsumeExecutionTemplate(
-            MessageIdempotencyExecutor idempotencyExecutor,
-            ConsumeExceptionClassifier exceptionClassifier) {
+    public ConsumeExecutionTemplate(MessageIdempotencyExecutor idempotencyExecutor, ConsumeExceptionClassifier exceptionClassifier) {
         this.idempotencyExecutor = Objects.requireNonNull(idempotencyExecutor, "idempotencyExecutor must not be null");
         this.exceptionClassifier = Objects.requireNonNull(exceptionClassifier, "exceptionClassifier must not be null");
     }
