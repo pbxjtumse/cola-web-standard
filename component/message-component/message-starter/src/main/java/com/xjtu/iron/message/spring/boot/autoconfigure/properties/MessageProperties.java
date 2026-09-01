@@ -64,6 +64,14 @@ public class MessageProperties {
     private Reliability reliability = new Reliability();
 
     /**
+     * 消费侧默认配置。
+     *
+     * <p>原来工程中已经存在 MessageConsumeProperties，但没有挂到根配置对象，
+     * 导致 xjtu.iron.message.consume.* 实际不会被 Spring Boot 绑定。这里补齐根入口。</p>
+     */
+    private MessageConsumeProperties consume = new MessageConsumeProperties();
+
+    /**
      * 逻辑目的地到 Provider 物理目的地的精确路由表。
      */
     private List<MessageRouteProperties> routes = new ArrayList<>();
@@ -127,6 +135,14 @@ public class MessageProperties {
 
     public void setReliability(Reliability reliability) {
         this.reliability = reliability == null ? new Reliability() : reliability;
+    }
+
+    public MessageConsumeProperties getConsume() {
+        return consume;
+    }
+
+    public void setConsume(MessageConsumeProperties consume) {
+        this.consume = consume == null ? new MessageConsumeProperties() : consume;
     }
 
     public List<MessageRouteProperties> getRoutes() {

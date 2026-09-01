@@ -3,7 +3,7 @@ server:
 
 spring:
   application:
-    name: cola-web-standard
+    name: iron-components-java
 
   datasource:
     url: ${MYSQL_URL:jdbc:mysql://127.0.0.1:3306/test?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}

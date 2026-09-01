@@ -6,6 +6,18 @@ import com.xjtu.iron.foundation.id.registry.StringIdGeneratorRegistry;
 import com.xjtu.iron.foundation.serialization.Serializer;
 import com.xjtu.iron.foundation.serialization.jackson.JacksonJsonSerializer;
 import com.xjtu.iron.message.core.MessageComponentOptions;
+import com.xjtu.iron.message.core.consume.ConsumeExceptionClassifier;
+import com.xjtu.iron.message.core.consume.ConsumeExecutionTemplate;
+import com.xjtu.iron.message.core.consume.DefaultConsumeExceptionClassifier;
+import com.xjtu.iron.message.core.consume.idempotency.DefaultMessageIdempotencyExecutor;
+import com.xjtu.iron.message.core.consume.idempotency.DefaultMessageIdempotencyKeyResolver;
+import com.xjtu.iron.message.core.consume.idempotency.DefaultMessageIdempotencySceneResolver;
+import com.xjtu.iron.message.core.consume.idempotency.MessageIdempotencyExecutor;
+import com.xjtu.iron.message.core.consume.idempotency.MessageIdempotencyOwnerTokenGenerator;
+import com.xjtu.iron.message.core.consume.idempotency.MessageIdempotentOperations;
+import com.xjtu.iron.message.core.consume.idempotency.NoopMessageIdempotencyExecutor;
+import com.xjtu.iron.message.core.consume.transaction.MessageConsumeTransactionExecutor;
+import com.xjtu.iron.message.core.consume.transaction.NoopMessageConsumeTransactionExecutor;
 import com.xjtu.iron.message.core.send.reliability.DefaultReliableMessageSender;
 import com.xjtu.iron.message.core.routing.DestinationRoute;
 import com.xjtu.iron.message.core.routing.DestinationRouteRegistry;
@@ -15,6 +27,8 @@ import com.xjtu.iron.message.core.send.MessageSendExecutor;
 import com.xjtu.iron.message.core.send.MessageSendReliabilityOptions;
 import com.xjtu.iron.message.core.MessageTemplate;
 import com.xjtu.iron.message.spi.MessageProvider;
+import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageConsumeIdempotencyProperties;
+import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageConsumeTransactionProperties;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageProperties;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageRouteProperties;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageSendReliabilityProperties;
@@ -176,6 +190,103 @@ public class MessageAutoConfiguration {
 
 
     /**
+     * 创建消费异常分类器。
+     *
+     * <p>默认策略非常保守：业务异常转换为 RETRY。业务项目可以声明自己的
+     * {@code ConsumeExceptionClassifier} Bean 覆盖默认分类，例如把参数错误转 DISCARD 或 DEAD_LETTER。</p>
+     *
+     * @return 消费异常分类器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public ConsumeExceptionClassifier consumeExceptionClassifier() {
+        return new DefaultConsumeExceptionClassifier();
+    }
+
+    /**
+     * 创建消费事务执行器。
+     *
+     * <p>message-core 不依赖 Spring 事务，也不直接依赖 transaction-component 的实现。
+     * 如果业务系统或后续 integration 模块提供了真正的事务执行器，本方法会被
+     * {@code @ConditionalOnMissingBean} 跳过；否则默认使用 Noop。
+     * 当配置要求事务必须存在时，启动期直接失败，避免“配置开启事务但实际没生效”。</p>
+     *
+     * @param properties 消息组件配置
+     * @return 消费事务执行器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public MessageConsumeTransactionExecutor messageConsumeTransactionExecutor(MessageProperties properties) {
+        MessageConsumeTransactionProperties transaction = properties.getConsume().getTransaction();
+        if (transaction.isEnabled() && transaction.isRequired()) {
+            throw new IllegalStateException(
+                    "xjtu.iron.message.consume.transaction.enabled=true and required=true, "
+                            + "but MessageConsumeTransactionExecutor is missing. "
+                            + "Please add a transaction integration bean or disable required.");
+        }
+        return new NoopMessageConsumeTransactionExecutor();
+    }
+
+    /**
+     * 创建消费幂等执行器。
+     *
+     * <p>只要存在 {@code MessageIdempotentOperations}，就装配真实消费幂等执行器，
+     * 让单个 ConsumerDefinition 可以独立开启幂等。不存在幂等存储适配时默认使用 Noop；
+     * 但全局配置显式开启消费幂等时必须失败，防止业务误以为已经具备 EFFECTIVELY_ONCE 能力。</p>
+     *
+     * @param properties 消息组件配置
+     * @param operationsProvider 消费幂等存储操作适配
+     * @param transactionExecutor 消费事务执行器
+     * @param options 组件运行参数
+     * @return 消费幂等执行器
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public MessageIdempotencyExecutor messageIdempotencyExecutor(
+            MessageProperties properties,
+            ObjectProvider<MessageIdempotentOperations> operationsProvider,
+            MessageConsumeTransactionExecutor transactionExecutor,
+            MessageComponentOptions options) {
+        MessageConsumeIdempotencyProperties idempotency = properties.getConsume().getIdempotency();
+        MessageIdempotentOperations operations = operationsProvider.getIfAvailable();
+        if (operations == null) {
+            if (idempotency.isEnabled()) {
+                throw new IllegalStateException(
+                        "xjtu.iron.message.consume.idempotency.enabled=true, "
+                                + "but MessageIdempotentOperations is missing. "
+                                + "Please add idempotent integration or disable consume idempotency.");
+            }
+            return new NoopMessageIdempotencyExecutor();
+        }
+        return new DefaultMessageIdempotencyExecutor(
+                operations,
+                new DefaultMessageIdempotencySceneResolver(),
+                new DefaultMessageIdempotencyKeyResolver(),
+                new MessageIdempotencyOwnerTokenGenerator(),
+                transactionExecutor,
+                options.clock());
+    }
+
+    /**
+     * 创建消费执行模板。
+     *
+     * <p>这个 Bean 是消费可靠性能力真正进入 MessageTemplate 的装配点，解决原来
+     * {@code MessageTemplate} 内部直接 new {@code ConsumeExecutionTemplate} 导致幂等和事务无法替换的问题。</p>
+     *
+     * @param idempotencyExecutor 消费幂等执行器
+     * @param exceptionClassifier 消费异常分类器
+     * @return 消费执行模板
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public ConsumeExecutionTemplate consumeExecutionTemplate(
+            MessageIdempotencyExecutor idempotencyExecutor,
+            ConsumeExceptionClassifier exceptionClassifier) {
+        return new ConsumeExecutionTemplate(idempotencyExecutor, exceptionClassifier);
+    }
+
+
+    /**
      * 创建默认消息 ID 生成器。
      *
      * <p>message-component 直接复用 foundation-id。优先使用业务声明的 {@code StringIdGeneratorRegistry}
@@ -241,13 +352,15 @@ public class MessageAutoConfiguration {
             Serializer payloadSerializer,
             @Qualifier("messageStringIdGenerator")
             StringIdGenerator messageIdGenerator,
-            MessageSendExecutor sendExecutor) {
+            MessageSendExecutor sendExecutor,
+            ConsumeExecutionTemplate consumeExecutionTemplate) {
         return MessageTemplate.create(
                 options,
                 providerRegistry,
                 routeRegistry,
                 payloadSerializer,
                 messageIdGenerator,
-                sendExecutor);
+                sendExecutor,
+                consumeExecutionTemplate);
     }
 }
