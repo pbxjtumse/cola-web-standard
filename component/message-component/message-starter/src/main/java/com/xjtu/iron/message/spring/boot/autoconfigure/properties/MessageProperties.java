@@ -8,18 +8,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 消息组件 Spring Boot 通用配置属性。
- *
- * <p>该类只承载 message-core 的通用配置，不保存 Kafka、RocketMQ、Pulsar 的原生连接参数。
- * Provider 专属参数由对应 integration 模块自己的 Properties 类绑定。</p>
- */
-@ConfigurationProperties(prefix = "xjtu.iron.message")
-/**
  * message-component 的 Spring Boot 根配置属性。
  *
  * <p>该类承接 {@code xjtu.iron.message.*} 下的公共配置，包括默认 Provider、路由列表、demo 配置
  * 以及二期发送可靠性配置。payload 序列化统一由 foundation-serialization 的 Serializer Bean 承接。</p>
  */
+@ConfigurationProperties(prefix = "xjtu.iron.message")
 public class MessageProperties {
 
     /**

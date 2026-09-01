@@ -1,6 +1,5 @@
 package com.xjtu.iron.message.core;
 
-import com.xjtu.iron.message.api.consume.decision.ConsumeFailureType;
 import com.xjtu.iron.message.core.codec.MessageWireCodec;
 import com.xjtu.iron.message.core.context.CurrentMessage;
 import com.xjtu.iron.message.core.context.MessageContextAccessor;
@@ -13,7 +12,7 @@ import com.xjtu.iron.message.core.routing.DestinationRouteRegistry;
 import com.xjtu.iron.message.core.send.DirectMessageSender;
 import com.xjtu.iron.message.core.send.MessageSendExecutor;
 import com.xjtu.iron.message.core.send.PreparedMessageSend;
-import com.xjtu.iron.message.core.consume.ConsumeExecutionTemplate;
+import com.xjtu.iron.message.core.consume.MessageConsumerAdapter;
 
 import com.xjtu.iron.message.api.consume.decision.ConsumeDecision;
 import com.xjtu.iron.message.api.consume.definition.ConsumerDefinition;
@@ -82,21 +81,18 @@ public final class MessageTemplate
 
     /** 线级消息映射器。 */
     private final MessageWireCodec wireCodec;
-
-    /** 当前消息上下文访问器。 */
-    private final MessageContextAccessor contextAccessor;
+    
 
     /** 发送执行器。 */
     private final MessageSendExecutor sendExecutor;
 
-    /** 消费执行模板。 */
-    private final ConsumeExecutionTemplate consumeExecutionTemplate;
+    private final MessageConsumerAdapter messageConsumerAdapter;
 
     /**
      * 创建完整可插拔的 MessageTemplate。
      *
      * <p>发送侧由 {@code MessageSendExecutor} 承接直发或可靠发送；消费侧由
-     * {@code ConsumeExecutionTemplate} 承接幂等、事务和异常分类。这样 core 仍然是纯 Java，
+     * {@code MessageConsumerAdapter} 承接 MQ 入站适配，具体消费执行由其内部的消费执行器完成。这样 core 仍然是纯 Java，
      * Spring Boot Starter 只负责装配，不会把 Spring 依赖下沉到核心执行链。</p>
      */
     public MessageTemplate(
@@ -107,7 +103,7 @@ public final class MessageTemplate
             MessageWireCodec wireCodec,
             MessageContextAccessor contextAccessor,
             MessageSendExecutor sendExecutor,
-            ConsumeExecutionTemplate consumeExecutionTemplate) {
+            MessageConsumerAdapter messageConsumerAdapter) {
         this.options = Objects.requireNonNull(options, "options must not be null");
         this.providerRegistry = Objects.requireNonNull(providerRegistry, "providerRegistry must not be null");
         this.destinationResolver = Objects.requireNonNull(destinationResolver, "destinationResolver must not be null");
@@ -115,7 +111,7 @@ public final class MessageTemplate
         this.wireCodec = Objects.requireNonNull(wireCodec, "wireCodec must not be null");
         this.contextAccessor = Objects.requireNonNull(contextAccessor, "contextAccessor must not be null");
         this.sendExecutor = Objects.requireNonNull(sendExecutor, "sendExecutor must not be null");
-        this.consumeExecutionTemplate = Objects.requireNonNull(consumeExecutionTemplate, "consumeExecutionTemplate must not be null");
+        this.messageConsumerAdapter = Objects.requireNonNull(messageConsumerAdapter, "messageConsumerAdapter must not be null");
     }
 
     /**
@@ -128,7 +124,7 @@ public final class MessageTemplate
             Serializer payloadSerializer,
             StringIdGenerator messageIdGenerator,
             MessageSendExecutor sendExecutor,
-            ConsumeExecutionTemplate consumeExecutionTemplate) {
+            MessageConsumerAdapter messageConsumerAdapter) {
         ThreadLocalMessageContextAccessor contextAccessor = new ThreadLocalMessageContextAccessor();
         DefaultDestinationResolver destinationResolver = new DefaultDestinationResolver(
                 routeRegistry,
@@ -147,7 +143,7 @@ public final class MessageTemplate
                 wireCodec,
                 contextAccessor,
                 sendExecutor,
-                consumeExecutionTemplate);
+                consumerAdapter);
     }
 
     @Override
@@ -196,7 +192,7 @@ public final class MessageTemplate
         ProviderSubscriptionRequest providerRequest = new ProviderSubscriptionRequest(
                 providerDestination,
                 definition.consumerGroup(),
-                inbound -> handleInbound(definition, handler, providerDestination, inbound));
+                inbound -> messageConsumerAdapter.consume(definition, handler, providerDestination, inbound));
         ProviderSubscription providerSubscription = provider.subscribe(providerRequest);
         if (providerSubscription == null) {
             throw new IllegalStateException("provider returned null subscription");
@@ -309,40 +305,6 @@ public final class MessageTemplate
                 request,
                 confirmTimeout,
                 startedAt);
-    }
-
-    @SuppressWarnings("try")
-    private <T> ProviderConsumeResult handleInbound(
-            ConsumerDefinition<T> definition,
-            MessageHandler<T> handler,
-            ProviderDestination providerDestination,
-            ProviderInboundMessage inbound) {
-        MessageWireCodec.DecodedInbound<T> decoded;
-        try {
-            decoded = wireCodec.decode(
-                    definition,
-                    providerDestination,
-                    inbound);
-        } catch (RuntimeException exception) {
-            // 解码阶段失败通常属于消息协议问题，不能伪装成业务 Handler 异常。
-            return ProviderConsumeResult.retry(
-                    ConsumeFailureType.DECODE_ERROR,
-                    exception.getMessage());
-        }
-        try (MessageContextAccessor.Scope ignored = contextAccessor.open(
-                new CurrentMessage(decoded.envelope(), decoded.consumeContext()))) {
-            ConsumeDecision decision = consumeExecutionTemplate.execute(
-                    definition,
-                    decoded.envelope(),
-                    decoded.consumeContext(),
-                    handler);
-            return ProviderConsumeResult.of(decision);
-        } catch (RuntimeException exception) {
-            // 执行链异常包括幂等存储、事务模板和业务 Handler 异常，统一交给 Provider 后续重试。
-            return ProviderConsumeResult.retry(
-                    ConsumeFailureType.HANDLER_ERROR,
-                    exception.getMessage());
-        }
     }
 
     private static void requireCapability(

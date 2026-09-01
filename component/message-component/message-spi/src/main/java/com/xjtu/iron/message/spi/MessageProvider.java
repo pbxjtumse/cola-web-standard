@@ -4,7 +4,7 @@ import java.util.Set;
 import java.util.concurrent.CompletionStage;
 /**
  * 具体消息中间件适配层必须实现的 Provider SPI。
- *
+ * core稳定 ,Provider扩展简单 ,多MQ共存
  * <p>message-core 只面向这个接口编程，不直接依赖 Kafka、Pulsar、RocketMQ 客户端。
  * Provider 的职责是把统一的 {@code ProviderSendRequest} 转换成原生消息发送，
  * 并把原生发送结果、异常、订阅回调统一映射回 SPI 模型。</p>

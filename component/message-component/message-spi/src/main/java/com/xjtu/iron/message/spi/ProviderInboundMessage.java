@@ -8,13 +8,16 @@ import java.util.Objects;
 
 /**
  * Provider 交给 core 的原始入站消息。
- *
+ * 为什么需要 ？ 把不同 MQ 的原始消息，转换成统一内部消息
  * <p>该类可以作为公共基类使用。Kafka、Pulsar、RocketMQ 等 Provider 可以继承它，保存自己的原生位置对象，
  * 但 core 只依赖这里的公共字段。</p>
  */
 public class ProviderInboundMessage {
     private final String providerName;
     private final String physicalDestination;
+    /**
+     * 注意 这里是中间件返回的消息id
+     */
     private final String providerMessageId;
     private final String messageKey;
     private final Map<String, String> headers;

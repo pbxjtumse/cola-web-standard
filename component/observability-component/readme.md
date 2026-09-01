@@ -338,7 +338,7 @@ curl -i http://localhost:8080/biz-error
 
 curl -i http://localhost:8080/system-error
 
--javaagent:/Users/faywong/IdeaProjects/cola-web-standard/component/observability-parent/tools/otel/opentelemetry-javaagent.jar -Dotel.service.name=observability-demo-app
+-javaagent:/Users/faywong/IdeaProjects/iron-components-java/component/observability-parent/tools/otel/opentelemetry-javaagent.jar -Dotel.service.name=observability-demo-app
 -Dotel.traces.exporter=otlp
 -Dotel.exporter.otlp.endpoint=http://localhost:4318
 -Dotel.exporter.otlp.protocol=http/protobuf

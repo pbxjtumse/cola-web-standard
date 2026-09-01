@@ -14,17 +14,12 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Demo 使用的内存接收消息仓库。
- *
- * <p>只用于页面或接口观察消费结果，不提供持久化能力。</p>
- */
-@Component
-/**
  * Demo 使用的内存接收结果存储。
  *
  * <p>它只服务于本地验证，不保证持久化和分布式一致性。通过它可以快速观察每个 Provider 消费到了哪些消息，
  * 以及三 Provider 并行发送后是否都成功回流到 demo 应用。</p>
  */
+@Component
 public class InMemoryReceivedMessageStore {
 
     /** 最多保留的消息数量。 */

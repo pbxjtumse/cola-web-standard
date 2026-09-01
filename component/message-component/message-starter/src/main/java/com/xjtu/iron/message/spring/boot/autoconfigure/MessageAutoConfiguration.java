@@ -6,32 +6,27 @@ import com.xjtu.iron.foundation.id.registry.StringIdGeneratorRegistry;
 import com.xjtu.iron.foundation.serialization.Serializer;
 import com.xjtu.iron.foundation.serialization.jackson.JacksonJsonSerializer;
 import com.xjtu.iron.message.core.MessageComponentOptions;
+import com.xjtu.iron.message.core.MessageTemplate;
+import com.xjtu.iron.message.core.codec.MessageWireCodec;
 import com.xjtu.iron.message.core.consume.ConsumeExceptionClassifier;
-import com.xjtu.iron.message.core.consume.ConsumeExecutionTemplate;
 import com.xjtu.iron.message.core.consume.DefaultConsumeExceptionClassifier;
-import com.xjtu.iron.message.core.consume.idempotency.DefaultMessageIdempotencyExecutor;
-import com.xjtu.iron.message.core.consume.idempotency.DefaultMessageIdempotencyKeyResolver;
-import com.xjtu.iron.message.core.consume.idempotency.DefaultMessageIdempotencySceneResolver;
-import com.xjtu.iron.message.core.consume.idempotency.MessageIdempotencyExecutor;
-import com.xjtu.iron.message.core.consume.idempotency.MessageIdempotencyOwnerTokenGenerator;
-import com.xjtu.iron.message.core.consume.idempotency.MessageIdempotentOperations;
-import com.xjtu.iron.message.core.consume.idempotency.NoopMessageIdempotencyExecutor;
+import com.xjtu.iron.message.core.consume.MessageConsumeExecutor;
+import com.xjtu.iron.message.core.consume.MessageConsumerAdapter;
+import com.xjtu.iron.message.core.consume.handler.MessageHandlerInvoker;
+import com.xjtu.iron.message.core.consume.idempotency.*;
+import com.xjtu.iron.message.core.consume.strategy.DefaultIdempotencyStrategy;
+import com.xjtu.iron.message.core.consume.strategy.NoopTransactionStrategy;
 import com.xjtu.iron.message.core.consume.transaction.MessageConsumeTransactionExecutor;
 import com.xjtu.iron.message.core.consume.transaction.NoopMessageConsumeTransactionExecutor;
-import com.xjtu.iron.message.core.send.reliability.DefaultReliableMessageSender;
+import com.xjtu.iron.message.core.provider.MessageProviderRegistry;
 import com.xjtu.iron.message.core.routing.DestinationRoute;
 import com.xjtu.iron.message.core.routing.DestinationRouteRegistry;
 import com.xjtu.iron.message.core.send.DirectMessageSender;
-import com.xjtu.iron.message.core.provider.MessageProviderRegistry;
 import com.xjtu.iron.message.core.send.MessageSendExecutor;
 import com.xjtu.iron.message.core.send.MessageSendReliabilityOptions;
-import com.xjtu.iron.message.core.MessageTemplate;
+import com.xjtu.iron.message.core.send.reliability.DefaultReliableMessageSender;
 import com.xjtu.iron.message.spi.MessageProvider;
-import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageConsumeIdempotencyProperties;
-import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageConsumeTransactionProperties;
-import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageProperties;
-import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageRouteProperties;
-import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageSendReliabilityProperties;
+import com.xjtu.iron.message.spring.boot.autoconfigure.properties.*;
 import com.xjtu.iron.retry.api.execution.RetryExecutor;
 import com.xjtu.iron.retry.api.policy.RetryPolicyRegistry;
 import org.springframework.beans.factory.ListableBeanFactory;
@@ -271,7 +266,7 @@ public class MessageAutoConfiguration {
      * 创建消费执行模板。
      *
      * <p>这个 Bean 是消费可靠性能力真正进入 MessageTemplate 的装配点，解决原来
-     * {@code MessageTemplate} 内部直接 new {@code ConsumeExecutionTemplate} 导致幂等和事务无法替换的问题。</p>
+     * {@code MessageTemplate} 内部直接 new {@code MessageConsumeExecutor} 导致幂等和事务无法替换的问题。</p>
      *
      * @param idempotencyExecutor 消费幂等执行器
      * @param exceptionClassifier 消费异常分类器
@@ -279,10 +274,60 @@ public class MessageAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public ConsumeExecutionTemplate consumeExecutionTemplate(
+    public MessageConsumeExecutor messageConsumeExecutor(
             MessageIdempotencyExecutor idempotencyExecutor,
             ConsumeExceptionClassifier exceptionClassifier) {
-        return new ConsumeExecutionTemplate(idempotencyExecutor, exceptionClassifier);
+        return new MessageConsumeExecutor(
+                new DefaultIdempotencyStrategy(idempotencyExecutor),
+                new NoopTransactionStrategy(),
+                new MessageHandlerInvoker(exceptionClassifier));
+    }
+
+
+
+    @Bean
+    @ConditionalOnMissingBean
+    public MessageConsumerAdapter messageConsumerAdapter(
+            MessageWireCodec wireCodec,
+            MessageConsumeExecutor consumeExecutor) {
+        return new MessageConsumerAdapter(
+                wireCodec,
+                consumeExecutor
+        );
+    }
+
+
+
+    /**
+     * 创建统一消息模板。
+     *
+     * @param options 组件运行参数
+     * @param providerRegistry Provider 注册表
+     * @param routeRegistry 路由注册表
+     * @param payloadSerializer 消息体序列化器
+     * @param sendExecutor 发送执行器
+     * @return 统一消息模板
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(MessageProviderRegistry.class)
+    public MessageTemplate messageTemplate(
+            MessageComponentOptions options,
+            MessageProviderRegistry providerRegistry,
+            DestinationRouteRegistry routeRegistry,
+            Serializer payloadSerializer,
+            @Qualifier("messageStringIdGenerator")
+            StringIdGenerator messageIdGenerator,
+            MessageSendExecutor sendExecutor,
+            MessageConsumerAdapter consumerAdapter) {
+        return MessageTemplate.create(
+                options,
+                providerRegistry,
+                routeRegistry,
+                payloadSerializer,
+                messageIdGenerator,
+                sendExecutor,
+                consumerAdapter);
     }
 
 
@@ -332,35 +377,5 @@ public class MessageAutoConfiguration {
         return null;
     }
 
-    /**
-     * 创建统一消息模板。
-     *
-     * @param options 组件运行参数
-     * @param providerRegistry Provider 注册表
-     * @param routeRegistry 路由注册表
-     * @param payloadSerializer 消息体序列化器
-     * @param sendExecutor 发送执行器
-     * @return 统一消息模板
-     */
-    @Bean
-    @ConditionalOnMissingBean
-    @ConditionalOnBean(MessageProviderRegistry.class)
-    public MessageTemplate messageTemplate(
-            MessageComponentOptions options,
-            MessageProviderRegistry providerRegistry,
-            DestinationRouteRegistry routeRegistry,
-            Serializer payloadSerializer,
-            @Qualifier("messageStringIdGenerator")
-            StringIdGenerator messageIdGenerator,
-            MessageSendExecutor sendExecutor,
-            ConsumeExecutionTemplate consumeExecutionTemplate) {
-        return MessageTemplate.create(
-                options,
-                providerRegistry,
-                routeRegistry,
-                payloadSerializer,
-                messageIdGenerator,
-                sendExecutor,
-                consumeExecutionTemplate);
-    }
+
 }
