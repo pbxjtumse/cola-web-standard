@@ -1,5 +1,6 @@
 package com.xjtu.iron.message.core;
 
+import com.xjtu.iron.message.api.consume.decision.ConsumeFailureType;
 import com.xjtu.iron.message.core.codec.MessageWireCodec;
 import com.xjtu.iron.message.core.context.CurrentMessage;
 import com.xjtu.iron.message.core.context.MessageContextAccessor;
@@ -91,6 +92,13 @@ public final class MessageTemplate
     /** 消费执行模板。 */
     private final ConsumeExecutionTemplate consumeExecutionTemplate;
 
+    /**
+     * 创建完整可插拔的 MessageTemplate。
+     *
+     * <p>发送侧由 {@code MessageSendExecutor} 承接直发或可靠发送；消费侧由
+     * {@code ConsumeExecutionTemplate} 承接幂等、事务和异常分类。这样 core 仍然是纯 Java，
+     * Spring Boot Starter 只负责装配，不会把 Spring 依赖下沉到核心执行链。</p>
+     */
     public MessageTemplate(
             MessageComponentOptions options,
             MessageProviderRegistry providerRegistry,
@@ -98,7 +106,8 @@ public final class MessageTemplate
             MessageEnvelopeEnricher envelopeEnricher,
             MessageWireCodec wireCodec,
             MessageContextAccessor contextAccessor,
-            MessageSendExecutor sendExecutor) {
+            MessageSendExecutor sendExecutor,
+            ConsumeExecutionTemplate consumeExecutionTemplate) {
         this.options = Objects.requireNonNull(options, "options must not be null");
         this.providerRegistry = Objects.requireNonNull(providerRegistry, "providerRegistry must not be null");
         this.destinationResolver = Objects.requireNonNull(destinationResolver, "destinationResolver must not be null");
@@ -106,66 +115,11 @@ public final class MessageTemplate
         this.wireCodec = Objects.requireNonNull(wireCodec, "wireCodec must not be null");
         this.contextAccessor = Objects.requireNonNull(contextAccessor, "contextAccessor must not be null");
         this.sendExecutor = Objects.requireNonNull(sendExecutor, "sendExecutor must not be null");
-        this.consumeExecutionTemplate = new ConsumeExecutionTemplate();
+        this.consumeExecutionTemplate = Objects.requireNonNull(consumeExecutionTemplate, "consumeExecutionTemplate must not be null");
     }
 
     /**
-     * 兼容一期的构造器。
-     */
-    public MessageTemplate(
-            MessageComponentOptions options,
-            MessageProviderRegistry providerRegistry,
-            DestinationResolver destinationResolver,
-            MessageEnvelopeEnricher envelopeEnricher,
-            MessageWireCodec wireCodec,
-            MessageContextAccessor contextAccessor) {
-        this(
-                options,
-                providerRegistry,
-                destinationResolver,
-                envelopeEnricher,
-                wireCodec,
-                contextAccessor,
-                new DirectMessageSender(options.clock()));
-    }
-
-    /**
-     * 创建默认 MessageTemplate。
-     */
-    public static MessageTemplate create(
-            MessageComponentOptions options,
-            MessageProviderRegistry providerRegistry,
-            DestinationRouteRegistry routeRegistry,
-            Serializer payloadSerializer) {
-        return create(
-                options,
-                providerRegistry,
-                routeRegistry,
-                payloadSerializer,
-                new NanoIdStringIdGenerator(),
-                new DirectMessageSender(options.clock()));
-    }
-
-    /**
-     * 创建指定发送执行器的 MessageTemplate。
-     */
-    public static MessageTemplate create(
-            MessageComponentOptions options,
-            MessageProviderRegistry providerRegistry,
-            DestinationRouteRegistry routeRegistry,
-            Serializer payloadSerializer,
-            MessageSendExecutor sendExecutor) {
-        return create(
-                options,
-                providerRegistry,
-                routeRegistry,
-                payloadSerializer,
-                new NanoIdStringIdGenerator(),
-                sendExecutor);
-    }
-
-    /**
-     * 创建指定消息 ID 生成器和发送执行器的 MessageTemplate。
+     * 创建同时指定发送执行器和消费执行模板的 MessageTemplate。
      */
     public static MessageTemplate create(
             MessageComponentOptions options,
@@ -173,7 +127,8 @@ public final class MessageTemplate
             DestinationRouteRegistry routeRegistry,
             Serializer payloadSerializer,
             StringIdGenerator messageIdGenerator,
-            MessageSendExecutor sendExecutor) {
+            MessageSendExecutor sendExecutor,
+            ConsumeExecutionTemplate consumeExecutionTemplate) {
         ThreadLocalMessageContextAccessor contextAccessor = new ThreadLocalMessageContextAccessor();
         DefaultDestinationResolver destinationResolver = new DefaultDestinationResolver(
                 routeRegistry,
@@ -191,7 +146,8 @@ public final class MessageTemplate
                 envelopeEnricher,
                 wireCodec,
                 contextAccessor,
-                sendExecutor);
+                sendExecutor,
+                consumeExecutionTemplate);
     }
 
     @Override
@@ -240,7 +196,7 @@ public final class MessageTemplate
         ProviderSubscriptionRequest providerRequest = new ProviderSubscriptionRequest(
                 providerDestination,
                 definition.consumerGroup(),
-                inbound -> ProviderConsumeResult.of(handleInbound(definition, handler, providerDestination, inbound)));
+                inbound -> handleInbound(definition, handler, providerDestination, inbound));
         ProviderSubscription providerSubscription = provider.subscribe(providerRequest);
         if (providerSubscription == null) {
             throw new IllegalStateException("provider returned null subscription");
@@ -356,22 +312,36 @@ public final class MessageTemplate
     }
 
     @SuppressWarnings("try")
-    private <T> ConsumeDecision handleInbound(
+    private <T> ProviderConsumeResult handleInbound(
             ConsumerDefinition<T> definition,
             MessageHandler<T> handler,
             ProviderDestination providerDestination,
             ProviderInboundMessage inbound) {
+        MessageWireCodec.DecodedInbound<T> decoded;
         try {
-            MessageWireCodec.DecodedInbound<T> decoded = wireCodec.decode(
+            decoded = wireCodec.decode(
                     definition,
                     providerDestination,
                     inbound);
-            try (MessageContextAccessor.Scope ignored = contextAccessor.open(
-                    new CurrentMessage(decoded.envelope(), decoded.consumeContext()))) {
-                return consumeExecutionTemplate.execute(definition, decoded.envelope(), decoded.consumeContext(), handler);
-            }
         } catch (RuntimeException exception) {
-            return ConsumeDecision.RETRY;
+            // 解码阶段失败通常属于消息协议问题，不能伪装成业务 Handler 异常。
+            return ProviderConsumeResult.retry(
+                    ConsumeFailureType.DECODE_ERROR,
+                    exception.getMessage());
+        }
+        try (MessageContextAccessor.Scope ignored = contextAccessor.open(
+                new CurrentMessage(decoded.envelope(), decoded.consumeContext()))) {
+            ConsumeDecision decision = consumeExecutionTemplate.execute(
+                    definition,
+                    decoded.envelope(),
+                    decoded.consumeContext(),
+                    handler);
+            return ProviderConsumeResult.of(decision);
+        } catch (RuntimeException exception) {
+            // 执行链异常包括幂等存储、事务模板和业务 Handler 异常，统一交给 Provider 后续重试。
+            return ProviderConsumeResult.retry(
+                    ConsumeFailureType.HANDLER_ERROR,
+                    exception.getMessage());
         }
     }
 
