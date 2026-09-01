@@ -1,6 +1,5 @@
 package com.xjtu.iron.message.core;
 
-import com.xjtu.iron.message.api.consume.decision.ConsumeFailureType;
 import com.xjtu.iron.message.core.codec.MessageWireCodec;
 import com.xjtu.iron.message.core.context.CurrentMessage;
 import com.xjtu.iron.message.core.context.MessageContextAccessor;
@@ -326,7 +325,7 @@ public final class MessageTemplate
         } catch (RuntimeException exception) {
             // 解码阶段失败通常属于消息协议问题，不能伪装成业务 Handler 异常。
             return ProviderConsumeResult.retry(
-                    ConsumeFailureType.DECODE_ERROR,
+                    com.xjtu.iron.message.api.consume.decision.ConsumeFailureType.DECODE_ERROR,
                     exception.getMessage());
         }
         try (MessageContextAccessor.Scope ignored = contextAccessor.open(
@@ -340,7 +339,7 @@ public final class MessageTemplate
         } catch (RuntimeException exception) {
             // 执行链异常包括幂等存储、事务模板和业务 Handler 异常，统一交给 Provider 后续重试。
             return ProviderConsumeResult.retry(
-                    ConsumeFailureType.HANDLER_ERROR,
+                    com.xjtu.iron.message.api.consume.decision.ConsumeFailureType.HANDLER_ERROR,
                     exception.getMessage());
         }
     }

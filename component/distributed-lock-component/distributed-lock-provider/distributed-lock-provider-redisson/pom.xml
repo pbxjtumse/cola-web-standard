@@ -27,7 +27,7 @@
         </dependency>
         <!--
             Redisson 是第三方基础库，版本不要写在子模块。
-            由 cola-web-standard 根 POM dependencyManagement 统一管理。
+            由 iron-components-java根 POM dependencyManagement 统一管理。
             当前实现针对 Redisson 4.7.0 API。
         -->
         <dependency>
