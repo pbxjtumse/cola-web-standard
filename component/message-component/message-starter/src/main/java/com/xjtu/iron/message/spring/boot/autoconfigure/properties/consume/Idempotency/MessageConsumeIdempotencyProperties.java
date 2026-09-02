@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.spring.boot.autoconfigure.properties.consume.idempotency;
+package com.xjtu.iron.message.spring.boot.autoconfigure.properties.consume.Idempotency;
 
 import com.xjtu.iron.message.api.consume.definition.MessageIdempotencyFailurePolicy;
 import com.xjtu.iron.message.api.consume.definition.MessageIdempotencyMode;
