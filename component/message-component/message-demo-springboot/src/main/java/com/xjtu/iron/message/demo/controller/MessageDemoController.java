@@ -35,18 +35,18 @@ public class MessageDemoController {
     }
 
     @PostMapping("/send")
-    public SendResult send(@RequestBody SendMessageRequest request) {
-        MessageEnvelope<Map<String, Object>> envelope = MessageEnvelope.builder(
-                        request.getEventType() == null ? "DemoMessage" : request.getEventType(),
-                        request.getPayload() == null ?  Map.<String, Object>of() : request.getPayload())
-                .messageKey(request.getBusinessKey())
-                .headers(request.getHeaders())
-                .build();
+    public SendResult send(
+            @RequestBody SendMessageRequest request) {
+
+        Map<String,Object> payload = request.getPayload() == null ? Map.of() : request.getPayload();
+
+        MessageEnvelope<Map<String,Object>> envelope =
+                MessageEnvelope.builder("DemoMessage", payload)
+                        .messageKey(request.getBusinessKey())
+                        .build();
 
         return messageTemplate.send(
-                MessageDestination.of("demo", request.getTopic() == null ? "message" : request.getTopic()),
-                envelope,
-                SendOptions.defaults());
+                MessageDestination.of("demo", "message"), envelope, SendOptions.defaults());
     }
 
     @GetMapping("/received")
