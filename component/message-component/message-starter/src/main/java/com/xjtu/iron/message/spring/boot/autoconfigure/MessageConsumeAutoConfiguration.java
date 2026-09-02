@@ -20,8 +20,8 @@ import com.xjtu.iron.message.core.consume.transaction.MessageConsumeTransactionE
 import com.xjtu.iron.message.core.consume.transaction.NoopMessageConsumeTransactionExecutor;
 import com.xjtu.iron.message.core.context.MessageContextAccessor;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.MessageProperties;
+import com.xjtu.iron.message.spring.boot.autoconfigure.properties.consume.Idempotency.MessageConsumeIdempotencyProperties;
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.consume.MessageConsumeTransactionProperties;
-import com.xjtu.iron.message.spring.boot.autoconfigure.properties.consume.idempotency.MessageConsumeIdempotencyProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
