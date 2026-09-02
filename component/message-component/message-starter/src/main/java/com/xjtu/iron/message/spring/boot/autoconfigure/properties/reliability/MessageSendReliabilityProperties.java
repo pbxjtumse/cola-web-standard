@@ -1,9 +1,11 @@
-package com.xjtu.iron.message.spring.boot.autoconfigure.properties;
+package com.xjtu.iron.message.spring.boot.autoconfigure.properties.reliability;
 
 /**
- * Spring Boot 层发送可靠性配置。
+ * 发送可靠性配置。
+ *
+ * <p>对应 {@code xjtu.iron.message.reliability.send.*}。</p>
  */
-public class MessageSendReliabilityProperties {
+public final class MessageSendReliabilityProperties {
 
     /** 是否启用发送可靠性增强。 */
     private boolean enabled = true;
@@ -14,7 +16,7 @@ public class MessageSendReliabilityProperties {
     /**
      * 发送结果 UNKNOWN 时是否允许继续重试。
      *
-     * <p>V1 默认 false，避免重复消息。</p>
+     * <p>默认 false，避免 Provider 已经写入 Broker 但客户端未收到确认时造成重复消息。</p>
      */
     private boolean retryWhenUnknown = false;
 

@@ -55,8 +55,8 @@ package "Core Send" #FFF3E0 {
 }
 
 package "Core Consume" #FFF3E0 {
-  class MessageConsumeDispatcher
-  class ConsumeExecutionTemplate
+  class MessageConsumerAdapter
+  class MessageConsumeExecutor
   class DefaultConsumeContextFactory
   interface ConsumerDefinitionRegistry
   class DefaultConsumerDefinitionRegistry
@@ -102,7 +102,7 @@ package "Providers" #FFEBEE {
 }
 
 package "Starter / Config" #F3E8FF {
-  class MessageAutoConfiguration
+  class MessageTemplateAutoConfiguration
   class MessageConsumeAutoConfiguration
   class MessageIdempotencyAutoConfiguration
   class MessageConsumeTransactionAutoConfiguration
@@ -128,7 +128,7 @@ MessageTemplate --> MessageEnvelopeEnricher
 MessageTemplate --> DefaultDestinationResolver
 MessageTemplate --> MessageWireCodec
 MessageTemplate --> MessageSendExecutor
-MessageTemplate --> MessageConsumeDispatcher
+MessageTemplate --> MessageConsumerAdapter
 MessageTemplate --> MessageProviderRegistry
 
 MessageSendExecutor <|.. DirectMessageSender
@@ -143,13 +143,13 @@ MessageProvider --> ProviderSendRequest
 MessageProvider --> ProviderSendResult
 SendResult --> SendReliabilityInfo
 
-MessageConsumeDispatcher ..|> ProviderMessageListener
-MessageConsumeDispatcher --> ConsumerDefinitionRegistry
-MessageConsumeDispatcher --> MessageWireCodec
-MessageConsumeDispatcher --> DefaultConsumeContextFactory
-MessageConsumeDispatcher --> ConsumeExecutionTemplate
-ConsumeExecutionTemplate --> MessageIdempotencyExecutor
-ConsumeExecutionTemplate --> ConsumeExceptionClassifier
+MessageConsumerAdapter ..|> ProviderMessageListener
+MessageConsumerAdapter --> ConsumerDefinitionRegistry
+MessageConsumerAdapter --> MessageWireCodec
+MessageConsumerAdapter --> DefaultConsumeContextFactory
+MessageConsumerAdapter --> MessageConsumeExecutor
+MessageConsumeExecutor --> MessageIdempotencyExecutor
+MessageConsumeExecutor --> ConsumeExceptionClassifier
 ConsumerDefinition --> MessageHandler
 ConsumerDefinition --> MessageIdempotencyOptions
 ConsumerDefinition --> MessageConsumeTransactionOptions
@@ -176,7 +176,7 @@ KafkaMessageProvider --> KafkaConsumeDecisionMapper
 PulsarMessageProvider --> PulsarConsumeDecisionMapper
 RocketMqMessageProvider --> RocketMqConsumeDecisionMapper
 
-MessageAutoConfiguration --> MessageProperties
+MessageTemplateAutoConfiguration --> MessageProperties
 MessageConsumeAutoConfiguration --> MessageConsumeProperties
 MessageIdempotencyAutoConfiguration --> IdempotentExecutor
 MessageConsumeTransactionAutoConfiguration --> TransactionTemplateFacade

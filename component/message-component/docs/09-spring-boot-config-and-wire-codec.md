@@ -1,36 +1,64 @@
 # 09 Spring Boot 配置结构与消息线级协议
 
-## 1. 配置类分层
+## 1. AutoConfiguration 分层
 
-本版本将 Spring Boot 配置类按职责拆分：
+message-starter 不再使用一个巨大的 `MessageTemplateAutoConfiguration` 承接所有 Bean，而是按职责拆成五个自动配置类：
 
 ```text
 message-starter
 └── com.xjtu.iron.message.spring.boot.autoconfigure
-    ├── MessageAutoConfiguration
-    └── properties
-        ├── MessageProperties
-        ├── MessageRouteProperties
-        ├── foundation SerializerProperties
-        └── MessageDemoProperties
-
-message-integrations
-├── message-integration-kafka
-├── message-integration-pulsar
-└── message-integration-rocketmq
+    ├── MessageCoreAutoConfiguration
+    ├── MessageProviderAutoConfiguration
+    ├── MessageSendAutoConfiguration
+    ├── MessageConsumeAutoConfiguration
+    └── MessageTemplateAutoConfiguration
 ```
 
-`MessageProperties` 只描述 message-core 的通用配置，例如默认 Provider、应用名、确认超时、路由模式和逻辑目的地路由表。
+分层职责：
 
-各 Provider properties 只描述对应 MQ 的原生连接配置，例如 Kafka bootstrapServers、Pulsar serviceUrl、RocketMQ nameServer。
+| 自动配置类 | 负责内容 |
+|---|---|
+| `MessageCoreAutoConfiguration` | `MessageProperties`、`Serializer`、`MessageComponentOptions`、`MessageWireCodec`、`MessageContextAccessor`、`MessageEnvelopeEnricher`、消息 ID 生成器 |
+| `MessageProviderAutoConfiguration` | `DestinationRouteRegistry`、`DestinationResolver`、`MessageProviderRegistry` |
+| `MessageSendAutoConfiguration` | `MessageSendReliabilityOptions`、`MessageSendExecutor` |
+| `MessageConsumeAutoConfiguration` | `ConsumeExceptionClassifier`、消费事务执行器、消费幂等执行器、`MessageConsumeExecutor`、`MessageConsumerAdapter` |
+| `MessageTemplateAutoConfiguration` | 最终组装 `MessageTemplate` 门面 |
 
-因此 Demo 或业务应用的 `application.yml` 应该放在应用模块中，而不是放在 starter 中。Starter 只提供字段定义和自动装配逻辑。
+这样拆分以后，starter 的职责边界更清楚：core 对象由 core 配置类负责，发送链由 send 配置类负责，消费链由 consume 配置类负责，最终门面由 template 配置类负责。
 
-## 2. application.yml 跳转
+## 2. Properties 分包
 
-IDEA 对 `application.yml` 的跳转依赖 Spring Boot 配置元数据。
+整个组件仍然只有一个配置绑定入口：
 
-当前两个模块都已声明：
+```java
+@ConfigurationProperties(prefix = "xjtu.iron.message")
+public final class MessageProperties
+```
+
+其它配置类都是它下面的嵌套配置对象，不再单独声明 `@ConfigurationProperties`。这可以保证业务配置入口始终只有一个：`xjtu.iron.message.*`。
+
+```text
+properties
+├── MessageProperties
+├── consume
+│   ├── MessageConsumeProperties
+│   ├── MessageConsumeTransactionProperties
+│   └── idempotency
+│       └── MessageConsumeIdempotencyProperties
+├── reliability
+│   ├── MessageReliabilityProperties
+│   └── MessageSendReliabilityProperties
+├── route
+│   └── MessageRouteProperties
+└── serializer
+    └── MessageSerializerProperties
+```
+
+Demo 配置不放在 starter 的 properties 包中。Demo 是业务应用示例，它的配置应直接放在 `message-demo-springboot/application.yml` 或 demo 自己的配置类里。
+
+## 3. application.yml 跳转
+
+IDEA 对 `application.yml` 的跳转依赖 Spring Boot 配置元数据。starter 保留：
 
 ```xml
 <dependency>
@@ -46,20 +74,14 @@ IDEA 对 `application.yml` 的跳转依赖 Spring Boot 配置元数据。
 mvn clean compile -DskipTests
 ```
 
-之后应生成：
+之后应生成配置元数据。IDEA 重新加载 Maven 后，`xjtu.iron.message.*`、`xjtu.iron.message.kafka.*`、`xjtu.iron.message.pulsar.*`、`xjtu.iron.message.rocketmq.*` 应能提示和跳转。
 
-```text
-META-INF/spring-configuration-metadata.json
-```
-
-IDEA 重新加载 Maven 后，`xjtu.iron.message.*`、`xjtu.iron.message.kafka.*`、`xjtu.iron.message.pulsar.*`、`xjtu.iron.message.rocketmq.*` 应能提示和跳转。
-
-## 3. 消息线级协议与 payload 序列化
+## 4. 消息线级协议与 payload 序列化
 
 消息组件刻意区分两层：
 
 ```text
-foundation Serializer
+Serializer
     只负责 payload <-> byte[]
 
 MessageWireCodec
@@ -81,24 +103,4 @@ MessageWireCodec
 - `x-iron-destination-name`
 - `content-type`
 
-因此后续即使 payload 序列化改为 foundation-component，`MessageWireCodec` 也不能删除。
-
-## 4. foundation-component 序列化接入方式
-
-当前代码保留 `foundation Serializer` 作为消息组件的 payload 序列化端口。
-
-`Jacksonfoundation Serializer` 已合并到 `message-core.codec`。Starter 默认提供 Jackson 实现，并使用 `@ConditionalOnMissingBean`。因此业务或后续 foundation 序列化适配模块只要提供一个 `foundation Serializer` Bean，默认 Jackson Bean 就会自动让位。
-
-推荐后续接入方式：
-
-```text
-foundation-serialization
-    ↓
-Foundationfoundation Serializer implements foundation Serializer
-    ↓
-MessageWireCodec
-    ↓
-ProviderSendRequest / ProviderInboundMessage
-```
-
-当前版本允许 core 持有默认 Jackson 实现，但不应该让业务代码直接依赖 Jackson。后续如果 foundation-serialization 完全稳定，可以通过 `foundation Serializer` Bean 替换默认实现。
+因此 payload 序列化器可以替换，但 `MessageWireCodec` 不能删除。

@@ -4,7 +4,7 @@
 title Consume L2 - Message Idempotency Executor Flow
 
 box "Core Consume" #FFF3E0
-participant ConsumeExecutionTemplate
+participant MessageConsumeExecutor
 participant MessageIdempotencyExecutor
 participant MessageIdempotencySceneResolver
 participant MessageIdempotencyKeyResolver
@@ -17,7 +17,7 @@ box "Business" #E8F5E9
 participant MessageHandler
 end box
 
-ConsumeExecutionTemplate -> MessageIdempotencyExecutor: execute(envelope, context, invocation)
+MessageConsumeExecutor -> MessageIdempotencyExecutor: execute(envelope, context, invocation)
 MessageIdempotencyExecutor -> MessageIdempotencySceneResolver: resolveScene(envelope, context)
 MessageIdempotencyExecutor -> MessageIdempotencyKeyResolver: resolveKey(envelope, context)
 MessageIdempotencyExecutor -> MessageIdempotencyOwnerTokenGenerator: generate(context)
@@ -33,8 +33,8 @@ alt ACQUIRED
     MessageIdempotencyExecutor -> IdempotentExecutor: markFailed(ownerToken, error)
   end
 else DUPLICATE_SUCCESS / DUPLICATE_DISCARDED
-  MessageIdempotencyExecutor --> ConsumeExecutionTemplate: ACK without handler
+  MessageIdempotencyExecutor --> MessageConsumeExecutor: ACK without handler
 else PROCESSING / STORAGE_ERROR
-  MessageIdempotencyExecutor --> ConsumeExecutionTemplate: RETRY without handler
+  MessageIdempotencyExecutor --> MessageConsumeExecutor: RETRY without handler
 end
 @enduml

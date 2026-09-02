@@ -42,17 +42,6 @@ xjtu:
           provider: rocketmq
           physical-name: message-demo-topic
 
-      demo:
-        auto-subscribe: true
-        destination-namespace: demo
-        destination-name: message
-        consumer-group: message-demo-consumer-group
-        # 三 Provider 并行订阅和 /send/all 的目标 Provider 列表。
-        providers:
-          - kafka
-          - pulsar
-          - rocketmq
-
       kafka:
         enabled: true
         bootstrap-servers: www.xjtu-iron.online:31959,www.xjtu-iron.online:31934,www.xjtu-iron.online:31100

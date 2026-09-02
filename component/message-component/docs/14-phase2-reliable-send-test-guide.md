@@ -45,7 +45,7 @@ attempts=1
 
 ```bash
 mvn -pl :message-core -am test -Dtest=DefaultReliableMessageSenderTest,MessageSendRetryClassifierTest
-mvn -pl :message-starter -am test -Dtest=MessageAutoConfigurationTest
+mvn -pl :message-starter -am test -Dtest=MessageTemplateAutoConfigurationTest
 mvn -pl :message-demo-springboot -am clean package -DskipTests
 ```
 

@@ -1,44 +1,31 @@
 package com.xjtu.iron.message.core;
 
-import com.xjtu.iron.message.core.codec.MessageWireCodec;
-import com.xjtu.iron.message.core.context.CurrentMessage;
-import com.xjtu.iron.message.core.context.MessageContextAccessor;
-import com.xjtu.iron.message.core.context.ThreadLocalMessageContextAccessor;
-import com.xjtu.iron.message.core.enrich.MessageEnvelopeEnricher;
-import com.xjtu.iron.message.core.provider.MessageProviderRegistry;
-import com.xjtu.iron.message.core.routing.DefaultDestinationResolver;
-import com.xjtu.iron.message.core.routing.DestinationResolver;
-import com.xjtu.iron.message.core.routing.DestinationRouteRegistry;
-import com.xjtu.iron.message.core.send.DirectMessageSender;
-import com.xjtu.iron.message.core.send.MessageSendExecutor;
-import com.xjtu.iron.message.core.send.PreparedMessageSend;
-import com.xjtu.iron.message.core.consume.MessageConsumerAdapter;
-
-import com.xjtu.iron.message.api.consume.decision.ConsumeDecision;
 import com.xjtu.iron.message.api.consume.definition.ConsumerDefinition;
 import com.xjtu.iron.message.api.consume.handler.MessageConsumerRegistrar;
+import com.xjtu.iron.message.api.consume.handler.MessageHandler;
+import com.xjtu.iron.message.api.consume.handler.MessageSubscription;
 import com.xjtu.iron.message.api.model.MessageDestination;
 import com.xjtu.iron.message.api.model.MessageEnvelope;
-import com.xjtu.iron.message.api.consume.handler.MessageHandler;
 import com.xjtu.iron.message.api.publish.MessagePublisher;
-import com.xjtu.iron.foundation.id.api.StringIdGenerator;
-import com.xjtu.iron.foundation.id.nanoid.NanoIdStringIdGenerator;
-import com.xjtu.iron.foundation.serialization.Serializer;
-import com.xjtu.iron.message.api.consume.handler.MessageSubscription;
 import com.xjtu.iron.message.api.publish.SendFailureType;
 import com.xjtu.iron.message.api.publish.SendOptions;
 import com.xjtu.iron.message.api.publish.SendReliabilityInfo;
 import com.xjtu.iron.message.api.publish.SendResult;
 import com.xjtu.iron.message.api.publish.SendStage;
 import com.xjtu.iron.message.api.publish.SendStatus;
+import com.xjtu.iron.message.core.codec.MessageWireCodec;
+import com.xjtu.iron.message.core.consume.MessageConsumerAdapter;
+import com.xjtu.iron.message.core.enrich.MessageEnvelopeEnricher;
+import com.xjtu.iron.message.core.provider.MessageProviderRegistry;
+import com.xjtu.iron.message.core.routing.DestinationResolver;
+import com.xjtu.iron.message.core.send.MessageSendExecutor;
+import com.xjtu.iron.message.core.send.PreparedMessageSend;
 import com.xjtu.iron.message.spi.MessageCapability;
 import com.xjtu.iron.message.spi.MessageProvider;
 import com.xjtu.iron.message.spi.ProviderDestination;
-import com.xjtu.iron.message.spi.ProviderInboundMessage;
 import com.xjtu.iron.message.spi.ProviderSendRequest;
 import com.xjtu.iron.message.spi.ProviderSubscription;
 import com.xjtu.iron.message.spi.ProviderSubscriptionRequest;
-import com.xjtu.iron.message.spi.ProviderConsumeResult;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -46,6 +33,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+
 /**
  * message-component 的核心门面，统一承接业务侧的发送和订阅调用。
  *
@@ -101,7 +89,6 @@ public final class MessageTemplate
             DestinationResolver destinationResolver,
             MessageEnvelopeEnricher envelopeEnricher,
             MessageWireCodec wireCodec,
-            MessageContextAccessor contextAccessor,
             MessageSendExecutor sendExecutor,
             MessageConsumerAdapter messageConsumerAdapter) {
         this.options = Objects.requireNonNull(options, "options must not be null");
@@ -109,41 +96,8 @@ public final class MessageTemplate
         this.destinationResolver = Objects.requireNonNull(destinationResolver, "destinationResolver must not be null");
         this.envelopeEnricher = Objects.requireNonNull(envelopeEnricher, "envelopeEnricher must not be null");
         this.wireCodec = Objects.requireNonNull(wireCodec, "wireCodec must not be null");
-        this.contextAccessor = Objects.requireNonNull(contextAccessor, "contextAccessor must not be null");
         this.sendExecutor = Objects.requireNonNull(sendExecutor, "sendExecutor must not be null");
         this.messageConsumerAdapter = Objects.requireNonNull(messageConsumerAdapter, "messageConsumerAdapter must not be null");
-    }
-
-    /**
-     * 创建同时指定发送执行器和消费执行模板的 MessageTemplate。
-     */
-    public static MessageTemplate create(
-            MessageComponentOptions options,
-            MessageProviderRegistry providerRegistry,
-            DestinationRouteRegistry routeRegistry,
-            Serializer payloadSerializer,
-            StringIdGenerator messageIdGenerator,
-            MessageSendExecutor sendExecutor,
-            MessageConsumerAdapter messageConsumerAdapter) {
-        ThreadLocalMessageContextAccessor contextAccessor = new ThreadLocalMessageContextAccessor();
-        DefaultDestinationResolver destinationResolver = new DefaultDestinationResolver(
-                routeRegistry,
-                options.defaultProviderName(),
-                options.routingMode());
-        MessageEnvelopeEnricher envelopeEnricher = new MessageEnvelopeEnricher(
-                options,
-                messageIdGenerator,
-                contextAccessor);
-        MessageWireCodec wireCodec = new MessageWireCodec(payloadSerializer);
-        return new MessageTemplate(
-                options,
-                providerRegistry,
-                destinationResolver,
-                envelopeEnricher,
-                wireCodec,
-                contextAccessor,
-                sendExecutor,
-                consumerAdapter);
     }
 
     @Override

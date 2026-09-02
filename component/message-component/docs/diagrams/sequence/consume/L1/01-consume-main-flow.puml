@@ -1,7 +1,7 @@
 @startuml
 !include ../../../_common/style.puml
 
-title Consume L1 - Core Consume Main Flow
+title Consume L1 - Main Flow After Adapter Refactor
 
 box "Provider" #FFEBEE
 participant "Native Consumer" as NativeConsumer
@@ -10,12 +10,15 @@ end box
 box "SPI" #ECEFF1
 participant ProviderMessageListener
 end box
-box "Core Consume" #FFF3E0
-participant MessageConsumeDispatcher
-participant ConsumerDefinitionRegistry
+box "Core" #FFF3E0
+participant MessageTemplate
+participant MessageConsumerAdapter
 participant MessageWireCodec
-participant DefaultConsumeContextFactory
-participant ConsumeExecutionTemplate
+participant MessageContextAccessor
+participant MessageConsumeExecutor
+participant IdempotencyStrategy
+participant TransactionStrategy
+participant MessageHandlerInvoker
 end box
 box "Business" #E8F5E9
 participant MessageHandler
@@ -23,14 +26,20 @@ end box
 
 NativeConsumer -> Inbound: convert(nativeMessage)
 NativeConsumer -> ProviderMessageListener: onMessage(inbound)
-ProviderMessageListener -> MessageConsumeDispatcher: dispatch(inbound)
-MessageConsumeDispatcher -> ConsumerDefinitionRegistry: find(inbound)
-MessageConsumeDispatcher -> MessageWireCodec: decode(definition, destination, inbound)
-MessageConsumeDispatcher -> DefaultConsumeContextFactory: create(inbound, envelope, definition)
-MessageConsumeDispatcher -> ConsumeExecutionTemplate: execute(envelope, context, handler)
-ConsumeExecutionTemplate -> MessageHandler: handle(envelope, context)
-MessageHandler --> ConsumeExecutionTemplate: ConsumeDecision
-ConsumeExecutionTemplate --> MessageConsumeDispatcher: ConsumeDecision
-MessageConsumeDispatcher --> ProviderMessageListener: ProviderConsumeResult
+ProviderMessageListener -> MessageTemplate: subscription listener callback
+MessageTemplate -> MessageConsumerAdapter: consume(definition, handler, destination, inbound)
+MessageConsumerAdapter -> MessageWireCodec: decode(definition, destination, inbound)
+MessageConsumerAdapter -> MessageContextAccessor: open(CurrentMessage)
+MessageConsumerAdapter -> MessageConsumeExecutor: execute(definition, envelope, context, handler)
+MessageConsumeExecutor -> IdempotencyStrategy: execute(definition, envelope, context, invocation)
+IdempotencyStrategy -> TransactionStrategy: execute(definition, context, invocation)
+TransactionStrategy -> MessageHandlerInvoker: invoke(envelope, context, handler)
+MessageHandlerInvoker -> MessageHandler: handle(envelope, context)
+MessageHandler --> MessageHandlerInvoker: ConsumeDecision
+MessageHandlerInvoker --> TransactionStrategy: ConsumeDecision
+TransactionStrategy --> IdempotencyStrategy: ConsumeDecision
+IdempotencyStrategy --> MessageConsumeExecutor: ConsumeDecision
+MessageConsumeExecutor --> MessageConsumerAdapter: ConsumeDecision
+MessageConsumerAdapter --> ProviderMessageListener: ProviderConsumeResult
 ProviderMessageListener --> NativeConsumer: map decision to ack/retry/discard
 @enduml

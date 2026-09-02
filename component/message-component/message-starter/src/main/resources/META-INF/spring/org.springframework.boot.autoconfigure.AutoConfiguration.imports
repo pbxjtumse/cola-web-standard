@@ -1,1 +1,5 @@
-com.xjtu.iron.message.spring.boot.autoconfigure.MessageAutoConfiguration
+com.xjtu.iron.message.spring.boot.autoconfigure.MessageCoreAutoConfiguration
+com.xjtu.iron.message.spring.boot.autoconfigure.MessageProviderAutoConfiguration
+com.xjtu.iron.message.spring.boot.autoconfigure.MessageSendAutoConfiguration
+com.xjtu.iron.message.spring.boot.autoconfigure.MessageConsumeAutoConfiguration
+com.xjtu.iron.message.spring.boot.autoconfigure.MessageTemplateAutoConfiguration

@@ -1,104 +1,90 @@
 @startuml
 !include ../../_common/style.puml
 
-title Message Consume Full Class Diagram
+title Message Consume Class Diagram After Adapter Refactor
 left to right direction
 
 package "API Consume" #E3F2FD {
   interface MessageHandler
   class ConsumeContext
-  class ConsumeDecision
-  enum ConsumeDecisionType
+  enum ConsumeDecision
   enum ConsumeFailureType
   class ConsumerDefinition
   enum ConsumerReliabilityMode
-  enum MessageIdempotencyMode
   class MessageIdempotencyOptions
   class MessageConsumeTransactionOptions
 }
-package "Core Consume" #FFF3E0 {
-  class MessageConsumeDispatcher
-  class ConsumeExecutionTemplate
-  class DefaultConsumeContextFactory
-  interface ConsumerDefinitionRegistry
-  class DefaultConsumerDefinitionRegistry
-  interface ConsumeExceptionClassifier
-  class DefaultConsumeExceptionClassifier
-  interface MessageIdempotencyExecutor
-  class NoopMessageIdempotencyExecutor
-  class DefaultMessageIdempotencyExecutor
-  interface MessageIdempotencyKeyResolver
-  class DefaultMessageIdempotencyKeyResolver
-  interface MessageIdempotencySceneResolver
-  class DefaultMessageIdempotencySceneResolver
-  class MessageIdempotencyOwnerTokenGenerator
-  interface MessageConsumeTransactionExecutor
-  class NoopMessageConsumeTransactionExecutor
-  class MessageConsumeTransactionContext
-}
+
 package "SPI Consume" #ECEFF1 {
-  interface ProviderMessageListener
-  interface ProviderInboundMessage
+  class ProviderInboundMessage
   interface ProviderMessagePosition
   class ProviderConsumeResult
   class ProviderSubscriptionRequest
   interface ProviderSubscription
 }
-package "Starter Adapters" #F3E8FF {
-  class IdempotentComponentMessageIdempotencyExecutor
-  class TransactionComponentMessageConsumeTransactionExecutor
-  class MessageConsumerDefinitionValidator
-}
-package "Providers" #FFEBEE {
-  class KafkaProviderInboundMessage
-  class KafkaMessagePosition
-  class KafkaConsumeDecisionMapper
-  class KafkaConsumerDispatcherAdapter
-  class PulsarProviderInboundMessage
-  class PulsarMessagePosition
-  class PulsarConsumeDecisionMapper
-  class PulsarConsumerDispatcherAdapter
-  class RocketMqProviderInboundMessage
-  class RocketMqMessagePosition
-  class RocketMqConsumeDecisionMapper
-  class RocketMqConsumerDispatcherAdapter
-}
-package "External Components" #FCE4EC {
-  interface IdempotentExecutor
-  interface TransactionTemplateFacade
+
+package "Core Facade" #FFFDE7 {
+  class MessageTemplate
 }
 
-MessageConsumeDispatcher ..|> ProviderMessageListener
-MessageConsumeDispatcher --> ConsumerDefinitionRegistry
-MessageConsumeDispatcher --> DefaultConsumeContextFactory
-MessageConsumeDispatcher --> ConsumeExecutionTemplate
-ConsumeExecutionTemplate --> MessageIdempotencyExecutor
-ConsumeExecutionTemplate --> ConsumeExceptionClassifier
+package "Core Consume" #FFF3E0 {
+  class MessageConsumerAdapter
+  class MessageConsumeExecutor
+  class MessageHandlerInvoker
+  interface IdempotencyStrategy
+  class DefaultIdempotencyStrategy
+  class NoopIdempotencyStrategy
+  interface TransactionStrategy
+  class NoopTransactionStrategy
+  interface ConsumeExceptionClassifier
+  class DefaultConsumeExceptionClassifier
+  interface MessageIdempotencyExecutor
+  class NoopMessageIdempotencyExecutor
+  class DefaultMessageIdempotencyExecutor
+  interface MessageIdempotentOperations
+  interface MessageConsumeTransactionExecutor
+  class NoopMessageConsumeTransactionExecutor
+}
+
+package "Codec/Context" #E0F7FA {
+  class MessageWireCodec
+  interface MessageContextAccessor
+  class ThreadLocalMessageContextAccessor
+  class CurrentMessage
+}
+
+package "Providers" #FFEBEE {
+  class KafkaMessagePosition
+  class PulsarMessagePosition
+  class RocketMqMessagePosition
+  class KafkaConsumeDecisionMapper
+  class PulsarConsumeDecisionMapper
+  class RocketMqConsumeDecisionMapper
+}
+
+MessageTemplate --> MessageConsumerAdapter
+MessageConsumerAdapter --> MessageWireCodec
+MessageConsumerAdapter --> MessageContextAccessor
+MessageConsumerAdapter --> MessageConsumeExecutor
+MessageContextAccessor --> CurrentMessage
+MessageConsumeExecutor --> IdempotencyStrategy
+MessageConsumeExecutor --> TransactionStrategy
+MessageConsumeExecutor --> MessageHandlerInvoker
+MessageHandlerInvoker --> ConsumeExceptionClassifier
+IdempotencyStrategy <|.. DefaultIdempotencyStrategy
+IdempotencyStrategy <|.. NoopIdempotencyStrategy
+DefaultIdempotencyStrategy --> MessageIdempotencyExecutor
 MessageIdempotencyExecutor <|.. NoopMessageIdempotencyExecutor
 MessageIdempotencyExecutor <|.. DefaultMessageIdempotencyExecutor
-DefaultMessageIdempotencyExecutor --> MessageIdempotencyKeyResolver
-DefaultMessageIdempotencyExecutor --> MessageIdempotencySceneResolver
-DefaultMessageIdempotencyExecutor --> MessageIdempotencyOwnerTokenGenerator
+DefaultMessageIdempotencyExecutor --> MessageIdempotentOperations
 DefaultMessageIdempotencyExecutor --> MessageConsumeTransactionExecutor
-DefaultMessageIdempotencyExecutor --> IdempotentExecutor
 MessageConsumeTransactionExecutor <|.. NoopMessageConsumeTransactionExecutor
-MessageConsumeTransactionExecutor <|.. TransactionComponentMessageConsumeTransactionExecutor
-IdempotentComponentMessageIdempotencyExecutor ..|> MessageIdempotencyExecutor
-IdempotentComponentMessageIdempotencyExecutor --> IdempotentExecutor
-TransactionComponentMessageConsumeTransactionExecutor --> TransactionTemplateFacade
-ProviderMessageListener --> ProviderInboundMessage
-ProviderMessageListener --> ProviderConsumeResult
+TransactionStrategy <|.. NoopTransactionStrategy
 ProviderInboundMessage --> ProviderMessagePosition
-ProviderInboundMessage <|.. KafkaProviderInboundMessage
-ProviderInboundMessage <|.. PulsarProviderInboundMessage
-ProviderInboundMessage <|.. RocketMqProviderInboundMessage
 ProviderMessagePosition <|.. KafkaMessagePosition
 ProviderMessagePosition <|.. PulsarMessagePosition
 ProviderMessagePosition <|.. RocketMqMessagePosition
-KafkaConsumerDispatcherAdapter --> KafkaConsumeDecisionMapper
-PulsarConsumerDispatcherAdapter --> PulsarConsumeDecisionMapper
-RocketMqConsumerDispatcherAdapter --> RocketMqConsumeDecisionMapper
-ConsumerDefinition --> MessageHandler
 ConsumerDefinition --> MessageIdempotencyOptions
 ConsumerDefinition --> MessageConsumeTransactionOptions
+MessageHandlerInvoker --> MessageHandler
 @enduml

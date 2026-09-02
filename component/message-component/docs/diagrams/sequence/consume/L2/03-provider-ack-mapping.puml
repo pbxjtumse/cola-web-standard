@@ -4,7 +4,7 @@
 title Consume L2 - ConsumeDecision Provider Ack Mapping
 
 box "Core Consume" #FFF3E0
-participant MessageConsumeDispatcher
+participant MessageConsumerAdapter
 end box
 box "Provider" #FFEBEE
 participant KafkaConsumeDecisionMapper
@@ -12,20 +12,20 @@ participant PulsarConsumeDecisionMapper
 participant RocketMqConsumeDecisionMapper
 end box
 
-MessageConsumeDispatcher -> KafkaConsumeDecisionMapper: map(ACK)
-KafkaConsumeDecisionMapper --> MessageConsumeDispatcher: commit offset + 1
-MessageConsumeDispatcher -> KafkaConsumeDecisionMapper: map(RETRY)
-KafkaConsumeDecisionMapper --> MessageConsumeDispatcher: no commit / seek current
-MessageConsumeDispatcher -> KafkaConsumeDecisionMapper: map(DISCARD)
-KafkaConsumeDecisionMapper --> MessageConsumeDispatcher: commit offset + 1
+MessageConsumerAdapter -> KafkaConsumeDecisionMapper: map(ACK)
+KafkaConsumeDecisionMapper --> MessageConsumerAdapter: commit offset + 1
+MessageConsumerAdapter -> KafkaConsumeDecisionMapper: map(RETRY)
+KafkaConsumeDecisionMapper --> MessageConsumerAdapter: no commit / seek current
+MessageConsumerAdapter -> KafkaConsumeDecisionMapper: map(DISCARD)
+KafkaConsumeDecisionMapper --> MessageConsumerAdapter: commit offset + 1
 
-MessageConsumeDispatcher -> PulsarConsumeDecisionMapper: map(ACK / DISCARD)
-PulsarConsumeDecisionMapper --> MessageConsumeDispatcher: acknowledge
-MessageConsumeDispatcher -> PulsarConsumeDecisionMapper: map(RETRY)
-PulsarConsumeDecisionMapper --> MessageConsumeDispatcher: negativeAcknowledge
+MessageConsumerAdapter -> PulsarConsumeDecisionMapper: map(ACK / DISCARD)
+PulsarConsumeDecisionMapper --> MessageConsumerAdapter: acknowledge
+MessageConsumerAdapter -> PulsarConsumeDecisionMapper: map(RETRY)
+PulsarConsumeDecisionMapper --> MessageConsumerAdapter: negativeAcknowledge
 
-MessageConsumeDispatcher -> RocketMqConsumeDecisionMapper: map(ACK / DISCARD)
-RocketMqConsumeDecisionMapper --> MessageConsumeDispatcher: CONSUME_SUCCESS
-MessageConsumeDispatcher -> RocketMqConsumeDecisionMapper: map(RETRY)
-RocketMqConsumeDecisionMapper --> MessageConsumeDispatcher: RECONSUME_LATER
+MessageConsumerAdapter -> RocketMqConsumeDecisionMapper: map(ACK / DISCARD)
+RocketMqConsumeDecisionMapper --> MessageConsumerAdapter: CONSUME_SUCCESS
+MessageConsumerAdapter -> RocketMqConsumeDecisionMapper: map(RETRY)
+RocketMqConsumeDecisionMapper --> MessageConsumerAdapter: RECONSUME_LATER
 @enduml

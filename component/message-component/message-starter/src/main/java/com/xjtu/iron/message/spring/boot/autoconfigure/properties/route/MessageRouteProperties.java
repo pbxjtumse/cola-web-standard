@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.spring.boot.autoconfigure.properties;
+package com.xjtu.iron.message.spring.boot.autoconfigure.properties.route;
 
 /**
  * 一条逻辑目的地到 Provider 物理目的地的路由配置。

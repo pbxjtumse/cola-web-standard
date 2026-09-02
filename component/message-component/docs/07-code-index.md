@@ -91,8 +91,11 @@
 
 | 类 | 说明 |
 |---|---|
-| `MessageAutoConfiguration` | message-component 自动装配入口 |
+| `MessageCoreAutoConfiguration` | 基础 Bean 与根配置绑定 |
+| `MessageProviderAutoConfiguration` | Provider 注册表与路由装配 |
+| `MessageSendAutoConfiguration` | 发送执行链装配 |
+| `MessageConsumeAutoConfiguration` | 消费执行链和入站适配装配 |
+| `MessageTemplateAutoConfiguration` | MessageTemplate 门面装配 |
 | `MessageProperties` | `xjtu.iron.message` 配置根 |
-| `MessageSendReliabilityProperties` | `xjtu.iron.message.reliability.send` 配置 |
-| `MessageRouteProperties` | routes 配置 |
-| `MessageDemoProperties` | demo 配置 |
+| `reliability.MessageSendReliabilityProperties` | `xjtu.iron.message.reliability.send` 配置 |
+| `route.MessageRouteProperties` | routes 配置 |

@@ -1,4 +1,4 @@
-package com.xjtu.iron.message.spring.boot.autoconfigure.properties;
+package com.xjtu.iron.message.spring.boot.autoconfigure.properties.serializer;
 
 /**
  * 消息体序列化配置。

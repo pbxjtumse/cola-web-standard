@@ -18,16 +18,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 验证 starter 层关于可靠发送执行器的自动装配保护。
- *
- * <p>二期发送可靠性的一个重要约束是：配置上启用可靠发送时，不能因为缺少 retry-component Bean
- * 就静默退回直发模式。这个测试不启动完整 Spring Boot 应用，只直接调用自动配置方法，锁定该保护逻辑。</p>
+ * 验证发送自动配置关于可靠发送执行器的保护逻辑。
  */
-class MessageAutoConfigurationTest {
+class MessageSendAutoConfigurationTest {
 
     @Test
     void shouldFailFastWhenSendReliabilityEnabledButRetryBeansAreMissing() {
-        MessageAutoConfiguration configuration = new MessageAutoConfiguration();
+        MessageSendAutoConfiguration configuration = new MessageSendAutoConfiguration();
         DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
         ObjectProvider<RetryExecutor> retryExecutorProvider = beanFactory.getBeanProvider(RetryExecutor.class);
         ObjectProvider<RetryPolicyRegistry> retryPolicyRegistryProvider = beanFactory.getBeanProvider(RetryPolicyRegistry.class);
@@ -44,7 +41,7 @@ class MessageAutoConfigurationTest {
 
     @Test
     void shouldUseDirectSenderWhenSendReliabilityIsDisabledEvenIfRetryBeansAreMissing() {
-        MessageAutoConfiguration configuration = new MessageAutoConfiguration();
+        MessageSendAutoConfiguration configuration = new MessageSendAutoConfiguration();
         DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
         ObjectProvider<RetryExecutor> retryExecutorProvider = beanFactory.getBeanProvider(RetryExecutor.class);
         ObjectProvider<RetryPolicyRegistry> retryPolicyRegistryProvider = beanFactory.getBeanProvider(RetryPolicyRegistry.class);
