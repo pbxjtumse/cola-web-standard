@@ -3,24 +3,22 @@ package com.xjtu.iron.message.core.consume.idempotency;
 import com.xjtu.iron.message.api.consume.decision.ConsumeDecision;
 import com.xjtu.iron.message.api.consume.definition.MessageIdempotencyFailurePolicy;
 import com.xjtu.iron.message.core.consume.ConsumeInvocation;
-import com.xjtu.iron.message.core.consume.transaction.MessageConsumeTransactionContext;
-import com.xjtu.iron.message.core.consume.transaction.MessageConsumeTransactionExecutor;
 
 import java.util.Objects;
 
 /**
  * 根据 acquire 结果决定后续幂等行为。
+ *
+ * <p>V4 后不再负责事务。事务属于 MessageConsumeExecutor 的执行策略。
+ * 这里仅关注幂等状态推进。</p>
  */
 public final class MessageIdempotencyDecisionHandler {
 
     private final MessageIdempotencyStateManager stateManager;
-    private final MessageConsumeTransactionExecutor transactionExecutor;
 
     public MessageIdempotencyDecisionHandler(
-            MessageIdempotencyStateManager stateManager,
-            MessageConsumeTransactionExecutor transactionExecutor) {
+            MessageIdempotencyStateManager stateManager) {
         this.stateManager = Objects.requireNonNull(stateManager);
-        this.transactionExecutor = Objects.requireNonNull(transactionExecutor);
     }
 
     public ConsumeDecision handle(
@@ -39,20 +37,16 @@ public final class MessageIdempotencyDecisionHandler {
             MessageIdempotencyContext context,
             ConsumeInvocation invocation) {
         try {
-            return transactionExecutor.execute(
-                    new MessageConsumeTransactionContext(context.consumeContext(), context),
-                    () -> {
-                        ConsumeDecision decision = invocation.invoke();
-                        if (decision == ConsumeDecision.ACK) {
-                            stateManager.markSuccess(context);
-                            return decision;
-                        }
-                        if (decision == ConsumeDecision.DISCARD) {
-                            stateManager.markDiscarded(context);
-                            return decision;
-                        }
-                        throw new RuntimeException("consume requested retry");
-                    });
+            ConsumeDecision decision = invocation.invoke();
+            if (decision == ConsumeDecision.ACK) {
+                stateManager.markSuccess(context);
+                return decision;
+            }
+            if (decision == ConsumeDecision.DISCARD) {
+                stateManager.markDiscarded(context);
+                return decision;
+            }
+            return ConsumeDecision.RETRY;
         } catch (RuntimeException exception) {
             try {
                 stateManager.markFailed(context, exception);

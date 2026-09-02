@@ -18,6 +18,7 @@ import com.xjtu.iron.message.spring.boot.autoconfigure.properties.consume.Idempo
 import com.xjtu.iron.message.spring.boot.autoconfigure.properties.consume.MessageConsumeTransactionProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -63,24 +64,20 @@ public class MessageConsumeAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnBean(MessageIdempotentOperations.class)
     @ConditionalOnMissingBean
     public MessageIdempotencyStateManager messageIdempotencyStateManager(
-            ObjectProvider<MessageIdempotentOperations> operationsProvider) {
-        MessageIdempotentOperations operations = operationsProvider.getIfAvailable();
-        if (operations == null) {
-            return null;
-        }
+            MessageIdempotentOperations operations) {
         return new DefaultMessageIdempotencyStateManager(operations);
     }
 
     @Bean
+    @ConditionalOnBean(MessageIdempotencyStateManager.class)
     @ConditionalOnMissingBean
     public MessageIdempotencyDecisionHandler messageIdempotencyDecisionHandler(
-            MessageIdempotencyStateManager stateManager,
-            MessageConsumeTransactionExecutor transactionExecutor) {
+            MessageIdempotencyStateManager stateManager) {
         return new MessageIdempotencyDecisionHandler(
-                stateManager,
-                transactionExecutor);
+                stateManager);
     }
 
     /**
@@ -97,10 +94,15 @@ public class MessageConsumeAutoConfiguration {
         if (operations == null) {
             return new NoopMessageIdempotencyExecutor();
         }
+        MessageIdempotencyStateManager stateManager = stateManagerProvider.getIfAvailable();
+        MessageIdempotencyDecisionHandler decisionHandler = decisionHandlerProvider.getIfAvailable();
+        if (stateManager == null || decisionHandler == null) {
+            return new NoopMessageIdempotencyExecutor();
+        }
         return new DefaultMessageIdempotencyExecutor(
                 contextFactory,
-                stateManagerProvider.getIfAvailable(),
-                decisionHandlerProvider.getIfAvailable());
+                stateManager,
+                decisionHandler);
     }
 
     @Bean
