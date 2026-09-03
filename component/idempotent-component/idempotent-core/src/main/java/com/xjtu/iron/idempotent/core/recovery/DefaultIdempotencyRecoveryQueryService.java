@@ -31,6 +31,9 @@ public final class DefaultIdempotencyRecoveryQueryService implements Idempotency
 
     /**
      * 使用 policyName 查询 candidate，确保扫描链路和正常 execute() 使用同一 namespace / mode / Repository。
+     *
+     * <p>V2 调用方只负责指定 storeName + scanBucket + now + limit；namespace 仍从 Policy 获取，
+     * 避免任务配置和正常执行配置漂移。</p>
      */
     @Override
     public List<IdempotencyRecoveryCandidate> findCandidates(String policyName, IdempotencyRecoveryQuery query) {
@@ -40,9 +43,8 @@ public final class DefaultIdempotencyRecoveryQueryService implements Idempotency
         IdempotencyPolicy policy = policyRegistry.resolve(policyName, null);
         IdempotencyRepository repository = repositoryRegistry.resolve(policy.getMode(), policy.getRepositoryName());
 
-        // routeKey / now / limit 是本次扫描条件；namespace 必须来自 Policy，避免任务配置和正常执行配置漂移。
         IdempotencyRecoveryQuery effectiveQuery = new IdempotencyRecoveryQuery(
-                policy.getNamespace(), query.getRouteKey(), query.getNow(), query.getLimit());
+                query.getStoreName(), policy.getNamespace(), query.getScanBucket(), query.getNow(), query.getLimit());
         return query(repository, effectiveQuery);
     }
 
