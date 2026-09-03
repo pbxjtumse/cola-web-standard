@@ -16,6 +16,9 @@ public enum IdempotencyResultStatus {
     /** 记录已经 SUCCESS，本次没有重执业务，而是返回历史结果/历史成功语义。 */
     REPLAYED,
 
+    /** 历史记录已经 DISCARDED，本次不再执行业务。 */
+    PREVIOUS_DISCARDED,
+
     /** 已有 PROCESSING 且执行权仍未过期。 */
     PROCESSING,
 
