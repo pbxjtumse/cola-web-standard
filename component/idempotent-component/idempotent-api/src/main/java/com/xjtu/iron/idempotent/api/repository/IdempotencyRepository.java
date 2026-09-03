@@ -9,6 +9,7 @@ import com.xjtu.iron.idempotent.api.repository.write.IdempotencyDiscardRequest;
 import com.xjtu.iron.idempotent.api.repository.write.IdempotencyFailureRequest;
 import com.xjtu.iron.idempotent.api.repository.write.IdempotencySuccessRequest;
 import com.xjtu.iron.idempotent.api.repository.write.IdempotencyWriteResult;
+import com.xjtu.iron.idempotent.api.storage.IdempotencyStorageContext;
 
 import java.util.Optional;
 
@@ -35,9 +36,7 @@ public interface IdempotencyRepository {
     /** Provider 能力声明。Core 不通过 providerName 猜测 WINDOWED/DURABLE/事务/Recovery 能力。 */
     IdempotencyRepositoryCapabilities capabilities();
 
-    default boolean supports(IdempotencyMode mode) {
-        return capabilities().supports(mode);
-    }
+    default boolean supports(IdempotencyMode mode) { return capabilities().supports(mode); }
 
     default boolean supportsBusinessTransactionParticipation() {
         return capabilities().isBusinessTransactionParticipationSupported();
@@ -58,6 +57,8 @@ public interface IdempotencyRepository {
     /** 当前 generation 明确进入 DISCARDED 终态，后续重复请求不得重新执行业务。 */
     IdempotencyWriteResult markDiscarded(IdempotencyDiscardRequest request);
 
-    /** 只读查询，不授予执行权。 */
-    Optional<IdempotencyRecord> find(String namespace, String key);
+    /**
+     * 只读查询，不授予执行权。V2 必须携带 StorageContext，避免不同 storeName 下相同 namespace/key 被错误查询到。
+     */
+    Optional<IdempotencyRecord> find(IdempotencyStorageContext storageContext, String namespace, String key);
 }
