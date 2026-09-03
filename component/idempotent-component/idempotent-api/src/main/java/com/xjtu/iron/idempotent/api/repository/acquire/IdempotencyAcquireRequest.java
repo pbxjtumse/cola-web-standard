@@ -1,8 +1,9 @@
 package com.xjtu.iron.idempotent.api.repository.acquire;
 
 import com.xjtu.iron.idempotent.api.policy.IdempotencyMode;
-import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryMode;
 import com.xjtu.iron.idempotent.api.policy.IdempotencyWindowPolicy;
+import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryMode;
+import com.xjtu.iron.idempotent.api.storage.IdempotencyStorageContext;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -10,6 +11,7 @@ import java.time.Instant;
 /** Repository 普通抢占请求。 */
 public final class IdempotencyAcquireRequest {
 
+    private final IdempotencyStorageContext storageContext;
     private final String namespace;
     private final String key;
     private final String requestHash;
@@ -23,19 +25,11 @@ public final class IdempotencyAcquireRequest {
     private final IdempotencyRecoveryMode recoveryMode;
     private final Instant now;
 
-    public IdempotencyAcquireRequest(
-            String namespace,
-            String key,
-            String requestHash,
-            String routeKey,
-            String ownerToken,
-            IdempotencyMode mode,
-            Duration processingTimeout,
-            Duration idempotencyWindow,
-            IdempotencyWindowPolicy windowPolicy,
-            Duration recordRetentionTtl,
-            IdempotencyRecoveryMode recoveryMode,
-            Instant now) {
+    public IdempotencyAcquireRequest(IdempotencyStorageContext storageContext, String namespace, String key, String requestHash, String routeKey,
+                                     String ownerToken, IdempotencyMode mode, Duration processingTimeout, Duration idempotencyWindow,
+                                     IdempotencyWindowPolicy windowPolicy, Duration recordRetentionTtl,
+                                     IdempotencyRecoveryMode recoveryMode, Instant now) {
+        this.storageContext = storageContext;
         this.namespace = namespace;
         this.key = key;
         this.requestHash = requestHash;
@@ -50,6 +44,7 @@ public final class IdempotencyAcquireRequest {
         this.now = now;
     }
 
+    public IdempotencyStorageContext getStorageContext() { return storageContext; }
     public String getNamespace() { return namespace; }
     public String getKey() { return key; }
     public String getRequestHash() { return requestHash; }
