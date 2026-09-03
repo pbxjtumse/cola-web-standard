@@ -11,6 +11,9 @@ public enum IdempotencyRecoveryStatus {
     /** 记录已经 SUCCESS，不需要恢复。 */
     SUCCESS,
 
+    /** 记录已经 DISCARDED，不允许恢复。 */
+    DISCARDED,
+
     /** PROCESSING 仍然有效，不能接管。 */
     PROCESSING_ACTIVE,
 
