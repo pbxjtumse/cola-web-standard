@@ -6,7 +6,6 @@ title Consume L3 - Kafka Partition Ordered Consume
 box "Provider" #FFEBEE
 participant KafkaConsumer
 participant KafkaConsumerDispatcherAdapter
-participant KafkaConsumeDecisionMapper
 end box
 box "Core Consume" #FFF3E0
 participant ProviderMessageListener
@@ -18,12 +17,10 @@ KafkaConsumerDispatcherAdapter -> KafkaConsumerDispatcherAdapter: groupByTopicPa
 loop each partition, offset order
   KafkaConsumerDispatcherAdapter -> ProviderMessageListener: onMessage(inbound)
   ProviderMessageListener --> KafkaConsumerDispatcherAdapter: ProviderConsumeResult
-  alt ACK / DISCARD
-    KafkaConsumerDispatcherAdapter -> KafkaConsumeDecisionMapper: map(result, position)
-    KafkaConsumeDecisionMapper --> KafkaConsumerDispatcherAdapter: commit offset + 1
-  else RETRY
-    KafkaConsumerDispatcherAdapter -> KafkaConsumeDecisionMapper: map(result, position)
-    KafkaConsumeDecisionMapper --> KafkaConsumerDispatcherAdapter: no commit / seek current
+  alt result.decision().shouldAcknowledge()
+    KafkaConsumerDispatcherAdapter -> KafkaConsumerDispatcherAdapter: commit offset + 1
+  else RETRY / DEAD_LETTER
+    KafkaConsumerDispatcherAdapter -> KafkaConsumerDispatcherAdapter: no commit / seek current offset
     KafkaConsumerDispatcherAdapter -> KafkaConsumerDispatcherAdapter: stop current partition
   end
 end

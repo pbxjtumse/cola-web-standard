@@ -1,6 +1,6 @@
 # State Diagram Enum Audit
 
-本次基于 `cola-web-standard(10).zip` 中的真实代码枚举重新整理 message-component 状态图。
+本次基于当前 message-component 真实代码枚举重新整理状态图。
 
 ## 本版状态图标注规则
 
@@ -85,15 +85,20 @@ RetryFailureCategory:
 UNKNOWN, TRANSIENT, THROTTLING, CONCURRENCY_CONFLICT, DEPENDENCY_UNAVAILABLE, RESULT_NOT_READY, NON_RETRYABLE
 ```
 
-## Provider consume action 枚举
+## Provider consume action
+
+Provider 消费确认动作现在不再抽成 `KafkaConsumeDecisionMapper`、`PulsarConsumeDecisionMapper`、`RocketMqConsumeDecisionMapper` 这类薄包装说明类。
+
+Provider 直接根据 `ProviderConsumeResult.decision().shouldAcknowledge()` 执行原生动作：
 
 ```text
-KafkaConsumeAction:
-COMMIT_NEXT_OFFSET, RETRY_WITHOUT_COMMIT
+ACK / DISCARD:
+Kafka    -> commit next offset
+Pulsar   -> acknowledge
+RocketMQ -> CONSUME_SUCCESS
 
-PulsarConsumeAction:
-ACKNOWLEDGE, NEGATIVE_ACKNOWLEDGE
-
-RocketMqConsumeAction:
-CONSUME_SUCCESS, RECONSUME_LATER
+RETRY / DEAD_LETTER:
+Kafka    -> no commit / seek current offset
+Pulsar   -> negativeAcknowledge
+RocketMQ -> RECONSUME_LATER
 ```

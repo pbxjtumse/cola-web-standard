@@ -58,9 +58,7 @@ state "RETRY_POLICY\nMessageIdempotencyFailurePolicy.RETRY" as P_FAILURE_RETRY
 state "DISCARD_POLICY\nMessageIdempotencyFailurePolicy.DISCARD" as P_FAILURE_DISCARD
 state "DEAD_LETTER_POLICY\nMessageIdempotencyFailurePolicy.DEAD_LETTER" as P_FAILURE_DLQ
 
-state "KAFKA_COMMIT_NEXT_OFFSET\nKafkaConsumeAction.COMMIT_NEXT_OFFSET" as P_KAFKA_COMMIT
-state "PULSAR_ACKNOWLEDGE\nPulsarConsumeAction.ACKNOWLEDGE" as P_PULSAR_ACK
-state "ROCKETMQ_CONSUME_SUCCESS\nRocketMqConsumeAction.CONSUME_SUCCESS" as P_ROCKET_SUCCESS
+state "PROVIDER_ACK\nPROVIDER ACTION\nKafka commit / Pulsar ack / RocketMQ success" as P_PROVIDER_ACK
 state "PROVIDER_RETRY\nPROVIDER ACTION\nKafka no commit / Pulsar negativeAck / RocketMQ reconsume" as P_PROVIDER_RETRY
 
 [*] --> R_PROVIDER_RECEIVED
@@ -125,19 +123,18 @@ DB_FAILED --> D_RETRY
 R_TX_COMMITTED --> D_ACK : handler ACK + SUCCESS stored
 R_TX_COMMITTED --> D_DISCARD : handler DISCARD + discarded semantic stored
 
-D_ACK --> P_KAFKA_COMMIT
-D_ACK --> P_PULSAR_ACK
-D_ACK --> P_ROCKET_SUCCESS
-D_DISCARD --> P_KAFKA_COMMIT
-D_DISCARD --> P_PULSAR_ACK
-D_DISCARD --> P_ROCKET_SUCCESS
+D_ACK --> P_PROVIDER_ACK
+D_DISCARD --> P_PROVIDER_ACK
 D_RETRY --> P_PROVIDER_RETRY
 
-P_KAFKA_COMMIT --> [*]
-P_PULSAR_ACK --> [*]
-P_ROCKET_SUCCESS --> [*]
+P_PROVIDER_ACK --> [*]
 P_PROVIDER_RETRY --> [*]
 D_DEAD_LETTER --> [*] : reserved
+
+note right of P_PROVIDER_ACK
+  Provider 直接根据 ProviderConsumeResult.decision().shouldAcknowledge() 执行原生确认动作。
+  Kafka commit next offset，Pulsar acknowledge，RocketMQ CONSUME_SUCCESS。
+end note
 
 note right of M_DISCARDED
   这是消息消费语义：markDiscarded / DUPLICATE_DISCARDED。

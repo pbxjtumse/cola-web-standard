@@ -6,7 +6,6 @@ title Consume L3 - Pulsar Consume Flow
 box "Provider" #FFEBEE
 participant PulsarConsumer
 participant PulsarConsumerDispatcherAdapter
-participant PulsarConsumeDecisionMapper
 end box
 box "Core Consume" #FFF3E0
 participant ProviderMessageListener
@@ -15,11 +14,9 @@ end box
 PulsarConsumer -> PulsarConsumerDispatcherAdapter: received(message)
 PulsarConsumerDispatcherAdapter -> ProviderMessageListener: onMessage(inbound)
 ProviderMessageListener --> PulsarConsumerDispatcherAdapter: ProviderConsumeResult
-alt ACK / DISCARD
-  PulsarConsumerDispatcherAdapter -> PulsarConsumeDecisionMapper: map(result, message)
-  PulsarConsumeDecisionMapper -> PulsarConsumer: acknowledge(message)
-else RETRY
-  PulsarConsumerDispatcherAdapter -> PulsarConsumeDecisionMapper: map(result, message)
-  PulsarConsumeDecisionMapper -> PulsarConsumer: negativeAcknowledge(message)
+alt result.decision().shouldAcknowledge()
+  PulsarConsumerDispatcherAdapter -> PulsarConsumer: acknowledge(message)
+else RETRY / DEAD_LETTER
+  PulsarConsumerDispatcherAdapter -> PulsarConsumer: negativeAcknowledge(message)
 end
 @enduml

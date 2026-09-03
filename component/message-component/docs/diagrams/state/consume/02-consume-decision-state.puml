@@ -53,12 +53,8 @@ state "MARK_SUCCESS_FAILED\n[CAUSE]\nmarkSuccess failed or ownerToken mismatch" 
 state "MARK_DISCARDED_FAILED\n[CAUSE]\nmarkDiscarded failed" as C_MARK_DISCARDED_FAILED
 state "TRANSACTION_ROLLBACK\n[CAUSE]\ntransaction rollback" as C_TX_ROLLBACK
 
-state "KAFKA_COMMIT_NEXT_OFFSET\nKafkaConsumeAction.COMMIT_NEXT_OFFSET" as P_KAFKA_COMMIT
-state "KAFKA_RETRY_WITHOUT_COMMIT\nKafkaConsumeAction.RETRY_WITHOUT_COMMIT" as P_KAFKA_RETRY
-state "PULSAR_ACKNOWLEDGE\nPulsarConsumeAction.ACKNOWLEDGE" as P_PULSAR_ACK
-state "PULSAR_NEGATIVE_ACKNOWLEDGE\nPulsarConsumeAction.NEGATIVE_ACKNOWLEDGE" as P_PULSAR_NEG
-state "ROCKETMQ_CONSUME_SUCCESS\nRocketMqConsumeAction.CONSUME_SUCCESS" as P_ROCKET_SUCCESS
-state "ROCKETMQ_RECONSUME_LATER\nRocketMqConsumeAction.RECONSUME_LATER" as P_ROCKET_RETRY
+state "PROVIDER_ACK\nPROVIDER ACTION\nKafka commit / Pulsar ack / RocketMQ success" as P_PROVIDER_ACK
+state "PROVIDER_RETRY\nPROVIDER ACTION\nKafka no commit / Pulsar negativeAck / RocketMQ reconsume" as P_PROVIDER_RETRY
 
 [*] --> C_PENDING
 
@@ -116,31 +112,21 @@ C_PENDING --> C_TX_ROLLBACK
 C_TX_ROLLBACK --> F_TRANSACTION_ERROR
 F_TRANSACTION_ERROR --> D_RETRY
 
-D_ACK --> P_KAFKA_COMMIT
-D_ACK --> P_PULSAR_ACK
-D_ACK --> P_ROCKET_SUCCESS
-D_DISCARD --> P_KAFKA_COMMIT
-D_DISCARD --> P_PULSAR_ACK
-D_DISCARD --> P_ROCKET_SUCCESS
-D_RETRY --> P_KAFKA_RETRY
-D_RETRY --> P_PULSAR_NEG
-D_RETRY --> P_ROCKET_RETRY
+D_ACK --> P_PROVIDER_ACK
+D_DISCARD --> P_PROVIDER_ACK
+D_RETRY --> P_PROVIDER_RETRY
 D_DEAD_LETTER --> [*] : v13 reserved, full DLQ later
 
-P_KAFKA_COMMIT --> [*]
-P_PULSAR_ACK --> [*]
-P_ROCKET_SUCCESS --> [*]
-P_KAFKA_RETRY --> [*]
-P_PULSAR_NEG --> [*]
-P_ROCKET_RETRY --> [*]
+P_PROVIDER_ACK --> [*]
+P_PROVIDER_RETRY --> [*]
 
 note right of D_ACK
   ConsumeDecision.ACK 代表“Provider 可以确认消息”。
   它可能来自业务成功，也可能来自 DUPLICATE_SUCCESS / DUPLICATE_DISCARDED。
 end note
 
-note right of D_DISCARD
-  DISCARD 是 ConsumeDecision 枚举。
-  Provider 侧通常与 ACK 一样确认消息，但业务语义是明确忽略。
+note right of P_PROVIDER_ACK
+  Provider 直接根据 decision.shouldAcknowledge() 做原生确认。
+  ACK 和 DISCARD 对 Broker 都是确认语义。
 end note
 @enduml

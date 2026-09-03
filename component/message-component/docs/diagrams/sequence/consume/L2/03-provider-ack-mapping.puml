@@ -4,28 +4,35 @@
 title Consume L2 - ConsumeDecision Provider Ack Mapping
 
 box "Core Consume" #FFF3E0
-participant MessageConsumerAdapter
+participant ProviderMessageListener
 end box
 box "Provider" #FFEBEE
-participant KafkaConsumeDecisionMapper
-participant PulsarConsumeDecisionMapper
-participant RocketMqConsumeDecisionMapper
+participant KafkaMessageProvider
+participant PulsarMessageProvider
+participant RocketMqMessageProvider
 end box
 
-MessageConsumerAdapter -> KafkaConsumeDecisionMapper: map(ACK)
-KafkaConsumeDecisionMapper --> MessageConsumerAdapter: commit offset + 1
-MessageConsumerAdapter -> KafkaConsumeDecisionMapper: map(RETRY)
-KafkaConsumeDecisionMapper --> MessageConsumerAdapter: no commit / seek current
-MessageConsumerAdapter -> KafkaConsumeDecisionMapper: map(DISCARD)
-KafkaConsumeDecisionMapper --> MessageConsumerAdapter: commit offset + 1
+KafkaMessageProvider -> ProviderMessageListener: onMessage(inbound)
+ProviderMessageListener --> KafkaMessageProvider: ProviderConsumeResult
+alt result.decision().shouldAcknowledge()
+  KafkaMessageProvider -> KafkaMessageProvider: commit offset + 1
+else RETRY / DEAD_LETTER
+  KafkaMessageProvider -> KafkaMessageProvider: no commit / seek current offset
+end
 
-MessageConsumerAdapter -> PulsarConsumeDecisionMapper: map(ACK / DISCARD)
-PulsarConsumeDecisionMapper --> MessageConsumerAdapter: acknowledge
-MessageConsumerAdapter -> PulsarConsumeDecisionMapper: map(RETRY)
-PulsarConsumeDecisionMapper --> MessageConsumerAdapter: negativeAcknowledge
+PulsarMessageProvider -> ProviderMessageListener: onMessage(inbound)
+ProviderMessageListener --> PulsarMessageProvider: ProviderConsumeResult
+alt result.decision().shouldAcknowledge()
+  PulsarMessageProvider -> PulsarMessageProvider: acknowledge(message)
+else RETRY / DEAD_LETTER
+  PulsarMessageProvider -> PulsarMessageProvider: negativeAcknowledge(message)
+end
 
-MessageConsumerAdapter -> RocketMqConsumeDecisionMapper: map(ACK / DISCARD)
-RocketMqConsumeDecisionMapper --> MessageConsumerAdapter: CONSUME_SUCCESS
-MessageConsumerAdapter -> RocketMqConsumeDecisionMapper: map(RETRY)
-RocketMqConsumeDecisionMapper --> MessageConsumerAdapter: RECONSUME_LATER
+RocketMqMessageProvider -> ProviderMessageListener: onMessage(inbound)
+ProviderMessageListener --> RocketMqMessageProvider: ProviderConsumeResult
+alt result.decision().shouldAcknowledge()
+  RocketMqMessageProvider -> RocketMqMessageProvider: return CONSUME_SUCCESS
+else RETRY / DEAD_LETTER
+  RocketMqMessageProvider -> RocketMqMessageProvider: return RECONSUME_LATER
+end
 @enduml

@@ -102,9 +102,6 @@ package "Providers" #FFEBEE {
   class KafkaProviderInboundMessage
   class PulsarProviderInboundMessage
   class RocketMqProviderInboundMessage
-  class KafkaConsumeDecisionMapper
-  class PulsarConsumeDecisionMapper
-  class RocketMqConsumeDecisionMapper
 }
 
 package "Starter / Config" #F3E8FF {
@@ -184,9 +181,9 @@ ProviderInboundMessage <|.. RocketMqProviderInboundMessage
 MessageProvider <|.. KafkaMessageProvider
 MessageProvider <|.. PulsarMessageProvider
 MessageProvider <|.. RocketMqMessageProvider
-KafkaMessageProvider --> KafkaConsumeDecisionMapper
-PulsarMessageProvider --> PulsarConsumeDecisionMapper
-RocketMqMessageProvider --> RocketMqConsumeDecisionMapper
+KafkaMessageProvider --> ProviderConsumeResult : decision.shouldAcknowledge()
+PulsarMessageProvider --> ProviderConsumeResult : decision.shouldAcknowledge()
+RocketMqMessageProvider --> ProviderConsumeResult : decision.shouldAcknowledge()
 
 MessageTemplateAutoConfiguration --> MessageProperties
 MessageConsumeAutoConfiguration --> MessageConsumeProperties
