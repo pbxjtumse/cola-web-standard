@@ -1,14 +1,16 @@
 package com.xjtu.iron.idempotent.api.execution;
 
 import com.xjtu.iron.idempotent.api.policy.IdempotencyPolicy;
+import com.xjtu.iron.idempotent.api.storage.IdempotencyStorageContext;
 
 /**
- * 普通幂等执行请求，只描述“这一次逻辑请求是谁”。
+ * 普通幂等执行请求，只描述“这一次逻辑请求是谁以及应该落到哪个逻辑存储位置”。
  *
  * <ul>
  *     <li>{@code key}：逻辑请求身份证；同一次 HTTP 重试/MQ 重投必须保持相同；</li>
  *     <li>{@code requestHash}：业务内容指纹，防止同 key 被不同参数错误复用；</li>
- *     <li>{@code routeKey}：分库分表/恢复任务路由元数据，不替代 idempotency key；</li>
+ *     <li>{@code routeKey}：业务路由元数据，例如租户/商户路由；它不再承担存储分片职责；</li>
+ *     <li>{@code storeName / shardKey / scanBucket}：V2 Shard-Ready Storage 元数据；</li>
  *     <li>{@code policyName / policy}：选择“这一类业务应该怎么做幂等”。</li>
  * </ul>
  *
@@ -19,6 +21,9 @@ public final class IdempotencyRequest {
     private final String key;
     private final String requestHash;
     private final String routeKey;
+    private final String storeName;
+    private final long shardKey;
+    private final int scanBucket;
     private final String policyName;
     private final IdempotencyPolicy policy;
 
@@ -26,6 +31,9 @@ public final class IdempotencyRequest {
         this.key = builder.key;
         this.requestHash = builder.requestHash;
         this.routeKey = builder.routeKey;
+        this.storeName = normalizeStoreName(builder.storeName);
+        this.shardKey = builder.shardKey;
+        this.scanBucket = builder.scanBucket;
         this.policyName = builder.policyName;
         this.policy = builder.policy;
     }
@@ -37,22 +45,44 @@ public final class IdempotencyRequest {
     public String getKey() { return key; }
     public String getRequestHash() { return requestHash; }
     public String getRouteKey() { return routeKey; }
+    public String getStoreName() { return storeName; }
+    public long getShardKey() { return shardKey; }
+    public int getScanBucket() { return scanBucket; }
     public String getPolicyName() { return policyName; }
     public IdempotencyPolicy getPolicy() { return policy; }
+
+    public IdempotencyStorageContext storageContext() {
+        return IdempotencyStorageContext.of(storeName, shardKey, scanBucket);
+    }
+
+    private static String normalizeStoreName(String value) {
+        return value == null || value.isBlank() ? IdempotencyStorageContext.DEFAULT_STORE_NAME : value.trim();
+    }
 
     public static final class Builder {
         private String key;
         private String requestHash;
         private String routeKey;
+        private String storeName = IdempotencyStorageContext.DEFAULT_STORE_NAME;
+        private long shardKey;
+        private int scanBucket;
         private String policyName;
         private IdempotencyPolicy policy;
 
         public Builder key(String value) { this.key = value; return this; }
         public Builder requestHash(String value) { this.requestHash = value; return this; }
         public Builder routeKey(String value) { this.routeKey = value; return this; }
+        public Builder storeName(String value) { this.storeName = value; return this; }
+        public Builder shardKey(long value) { this.shardKey = value; return this; }
+        public Builder scanBucket(int value) { this.scanBucket = value; return this; }
         public Builder policyName(String value) { this.policyName = value; return this; }
         public Builder policy(IdempotencyPolicy value) { this.policy = value; return this; }
 
-        public IdempotencyRequest build() { return new IdempotencyRequest(this); }
+        public IdempotencyRequest build() {
+            if (scanBucket < 0) {
+                throw new IllegalArgumentException("scanBucket must not be negative");
+            }
+            return new IdempotencyRequest(this);
+        }
     }
 }
