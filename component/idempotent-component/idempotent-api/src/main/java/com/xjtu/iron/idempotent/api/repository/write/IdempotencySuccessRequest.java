@@ -2,12 +2,15 @@ package com.xjtu.iron.idempotent.api.repository.write;
 
 import com.xjtu.iron.idempotent.api.policy.IdempotencyMode;
 import com.xjtu.iron.idempotent.api.policy.IdempotencyWindowPolicy;
+import com.xjtu.iron.idempotent.api.storage.IdempotencyStorageContext;
 
 import java.time.Duration;
 import java.time.Instant;
 
 /** PROCESSING -> SUCCESS 条件写请求。 */
 public final class IdempotencySuccessRequest {
+
+    private final IdempotencyStorageContext storageContext;
     private final String namespace;
     private final String key;
     private final String ownerToken;
@@ -19,17 +22,10 @@ public final class IdempotencySuccessRequest {
     private final Duration recordRetentionTtl;
     private final Instant now;
 
-    public IdempotencySuccessRequest(
-            String namespace,
-            String key,
-            String ownerToken,
-            long version,
-            String resultPayload,
-            IdempotencyMode mode,
-            Duration idempotencyWindow,
-            IdempotencyWindowPolicy windowPolicy,
-            Duration recordRetentionTtl,
-            Instant now) {
+    public IdempotencySuccessRequest(IdempotencyStorageContext storageContext, String namespace, String key, String ownerToken, long version,
+                                     String resultPayload, IdempotencyMode mode, Duration idempotencyWindow,
+                                     IdempotencyWindowPolicy windowPolicy, Duration recordRetentionTtl, Instant now) {
+        this.storageContext = storageContext;
         this.namespace = namespace;
         this.key = key;
         this.ownerToken = ownerToken;
@@ -42,6 +38,7 @@ public final class IdempotencySuccessRequest {
         this.now = now;
     }
 
+    public IdempotencyStorageContext getStorageContext() { return storageContext; }
     public String getNamespace() { return namespace; }
     public String getKey() { return key; }
     public String getOwnerToken() { return ownerToken; }
