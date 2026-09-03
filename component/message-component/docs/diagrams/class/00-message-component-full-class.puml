@@ -57,9 +57,11 @@ package "Core Send" #FFF3E0 {
 package "Core Consume" #FFF3E0 {
   class MessageConsumerAdapter
   class MessageConsumeExecutor
-  class DefaultConsumeContextFactory
-  interface ConsumerDefinitionRegistry
-  class DefaultConsumerDefinitionRegistry
+  class MessageHandlerInvoker
+  interface IdempotencyStrategy
+  class DefaultIdempotencyStrategy
+  interface TransactionStrategy
+  class DefaultTransactionStrategy
   interface ConsumeExceptionClassifier
   class DefaultConsumeExceptionClassifier
   interface MessageIdempotencyExecutor
@@ -73,6 +75,10 @@ package "Core Consume" #FFF3E0 {
   interface MessageConsumeTransactionExecutor
   class NoopMessageConsumeTransactionExecutor
   class MessageConsumeTransactionContext
+  interface MessageIdempotencyContextFactory
+  interface MessageIdempotencyStateManager
+  class MessageIdempotencyDecisionHandler
+  interface MessageIdempotentOperations
 }
 
 package "SPI" #ECEFF1 {
@@ -148,20 +154,26 @@ MessageConsumerAdapter --> ConsumerDefinitionRegistry
 MessageConsumerAdapter --> MessageWireCodec
 MessageConsumerAdapter --> DefaultConsumeContextFactory
 MessageConsumerAdapter --> MessageConsumeExecutor
-MessageConsumeExecutor --> MessageIdempotencyExecutor
-MessageConsumeExecutor --> ConsumeExceptionClassifier
+MessageConsumeExecutor --> IdempotencyStrategy
+MessageConsumeExecutor --> TransactionStrategy
+MessageConsumeExecutor --> MessageHandlerInvoker
+MessageHandlerInvoker --> ConsumeExceptionClassifier
+IdempotencyStrategy <|.. DefaultIdempotencyStrategy
+DefaultIdempotencyStrategy --> MessageIdempotencyExecutor
+TransactionStrategy <|.. DefaultTransactionStrategy
 ConsumerDefinition --> MessageHandler
 ConsumerDefinition --> MessageIdempotencyOptions
 ConsumerDefinition --> MessageConsumeTransactionOptions
 MessageIdempotencyExecutor <|.. NoopMessageIdempotencyExecutor
 MessageIdempotencyExecutor <|.. DefaultMessageIdempotencyExecutor
-DefaultMessageIdempotencyExecutor --> MessageIdempotencyKeyResolver
-DefaultMessageIdempotencyExecutor --> MessageIdempotencySceneResolver
-DefaultMessageIdempotencyExecutor --> MessageIdempotencyOwnerTokenGenerator
-DefaultMessageIdempotencyExecutor --> MessageConsumeTransactionExecutor
-DefaultMessageIdempotencyExecutor --> IdempotentExecutor
+DefaultMessageIdempotencyExecutor --> MessageIdempotencyContextFactory
+DefaultMessageIdempotencyExecutor --> MessageIdempotencyStateManager
+DefaultMessageIdempotencyExecutor --> MessageIdempotencyDecisionHandler
+MessageIdempotencyDecisionHandler --> MessageIdempotencyStateManager
+MessageIdempotencyStateManager --> MessageIdempotentOperations
+DefaultTransactionStrategy --> MessageConsumeTransactionExecutor
 MessageConsumeTransactionExecutor <|.. NoopMessageConsumeTransactionExecutor
-MessageConsumeTransactionExecutor --> MessageConsumeTransactionContext
+DefaultTransactionStrategy --> MessageConsumeTransactionContext
 
 ProviderMessageListener --> ProviderInboundMessage
 ProviderMessageListener --> ProviderConsumeResult

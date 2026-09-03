@@ -7,9 +7,22 @@ import com.xjtu.iron.message.core.consume.DefaultConsumeExceptionClassifier;
 import com.xjtu.iron.message.core.consume.MessageConsumeExecutor;
 import com.xjtu.iron.message.core.consume.MessageConsumerAdapter;
 import com.xjtu.iron.message.core.consume.handler.MessageHandlerInvoker;
-import com.xjtu.iron.message.core.consume.idempotency.*;
+import com.xjtu.iron.message.core.consume.idempotency.DefaultMessageIdempotencyContextFactory;
+import com.xjtu.iron.message.core.consume.idempotency.DefaultMessageIdempotencyKeyResolver;
+import com.xjtu.iron.message.core.consume.idempotency.DefaultMessageIdempotencySceneResolver;
+import com.xjtu.iron.message.core.consume.idempotency.DefaultMessageIdempotencyExecutor;
+import com.xjtu.iron.message.core.consume.idempotency.DefaultMessageIdempotencyStateManager;
+import com.xjtu.iron.message.core.consume.idempotency.MessageIdempotencyContextFactory;
+import com.xjtu.iron.message.core.consume.idempotency.MessageIdempotencyDecisionHandler;
+import com.xjtu.iron.message.core.consume.idempotency.MessageIdempotencyExecutor;
+import com.xjtu.iron.message.core.consume.idempotency.MessageIdempotencyOwnerTokenGenerator;
+import com.xjtu.iron.message.core.consume.idempotency.MessageIdempotencyStateManager;
+import com.xjtu.iron.message.core.consume.idempotency.MessageIdempotentOperations;
+import com.xjtu.iron.message.core.consume.idempotency.NoopMessageIdempotencyExecutor;
 import com.xjtu.iron.message.core.consume.strategy.DefaultIdempotencyStrategy;
-import com.xjtu.iron.message.core.consume.strategy.NoopTransactionStrategy;
+import com.xjtu.iron.message.core.consume.strategy.DefaultTransactionStrategy;
+import com.xjtu.iron.message.core.consume.strategy.IdempotencyStrategy;
+import com.xjtu.iron.message.core.consume.strategy.TransactionStrategy;
 import com.xjtu.iron.message.core.consume.transaction.MessageConsumeTransactionExecutor;
 import com.xjtu.iron.message.core.consume.transaction.NoopMessageConsumeTransactionExecutor;
 import com.xjtu.iron.message.core.context.MessageContextAccessor;
@@ -21,14 +34,15 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
 /**
  * 消息消费自动配置。
+ *
+ * <p>V4 后消费侧 Bean 装配关系固定为：IdempotencyStrategy、TransactionStrategy、
+ * MessageHandlerInvoker 共同组成 MessageConsumeExecutor。幂等执行器不再直接依赖事务执行器。</p>
  */
 @AutoConfiguration(after = MessageCoreAutoConfiguration.class)
-@EnableConfigurationProperties(MessageProperties.class)
 @ConditionalOnProperty(prefix = "xjtu.iron.message", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class MessageConsumeAutoConfiguration {
 
@@ -36,6 +50,12 @@ public class MessageConsumeAutoConfiguration {
     @ConditionalOnMissingBean
     public ConsumeExceptionClassifier consumeExceptionClassifier() {
         return new DefaultConsumeExceptionClassifier();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public MessageHandlerInvoker messageHandlerInvoker(ConsumeExceptionClassifier exceptionClassifier) {
+        return new MessageHandlerInvoker(exceptionClassifier);
     }
 
     @Bean
@@ -51,7 +71,11 @@ public class MessageConsumeAutoConfiguration {
         return new NoopMessageConsumeTransactionExecutor();
     }
 
-
+    @Bean
+    @ConditionalOnMissingBean
+    public TransactionStrategy transactionStrategy(MessageConsumeTransactionExecutor transactionExecutor) {
+        return new DefaultTransactionStrategy(transactionExecutor);
+    }
 
     @Bean
     @ConditionalOnMissingBean
@@ -76,27 +100,29 @@ public class MessageConsumeAutoConfiguration {
     @ConditionalOnMissingBean
     public MessageIdempotencyDecisionHandler messageIdempotencyDecisionHandler(
             MessageIdempotencyStateManager stateManager) {
-        return new MessageIdempotencyDecisionHandler(
-                stateManager);
+        return new MessageIdempotencyDecisionHandler(stateManager);
     }
 
     /**
-     * 当没有 idempotent-component 存储实现时，消费仍然可以启动，只是不启用真实幂等。
+     * 没有 idempotent-component 存储实现时，默认使用 Noop；如果配置显式要求全局幂等，则启动失败。
      */
     @Bean
     @ConditionalOnMissingBean
     public MessageIdempotencyExecutor messageIdempotencyExecutor(
-            ObjectProvider<MessageIdempotentOperations> operationsProvider,
+            MessageProperties properties,
             MessageIdempotencyContextFactory contextFactory,
             ObjectProvider<MessageIdempotencyStateManager> stateManagerProvider,
             ObjectProvider<MessageIdempotencyDecisionHandler> decisionHandlerProvider) {
-        MessageIdempotentOperations operations = operationsProvider.getIfAvailable();
-        if (operations == null) {
-            return new NoopMessageIdempotencyExecutor();
-        }
+        MessageConsumeIdempotencyProperties idempotency = properties.getConsume().getIdempotency();
         MessageIdempotencyStateManager stateManager = stateManagerProvider.getIfAvailable();
         MessageIdempotencyDecisionHandler decisionHandler = decisionHandlerProvider.getIfAvailable();
         if (stateManager == null || decisionHandler == null) {
+            if (idempotency.isEnabled()) {
+                throw new IllegalStateException(
+                        "xjtu.iron.message.consume.idempotency.enabled=true, "
+                                + "but MessageIdempotentOperations is missing. "
+                                + "Please add an idempotent integration bean or disable consume idempotency.");
+            }
             return new NoopMessageIdempotencyExecutor();
         }
         return new DefaultMessageIdempotencyExecutor(
@@ -107,13 +133,20 @@ public class MessageConsumeAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public IdempotencyStrategy idempotencyStrategy(MessageIdempotencyExecutor idempotencyExecutor) {
+        return new DefaultIdempotencyStrategy(idempotencyExecutor);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public MessageConsumeExecutor messageConsumeExecutor(
-            MessageIdempotencyExecutor idempotencyExecutor,
-            ConsumeExceptionClassifier exceptionClassifier) {
+            IdempotencyStrategy idempotencyStrategy,
+            TransactionStrategy transactionStrategy,
+            MessageHandlerInvoker handlerInvoker) {
         return new MessageConsumeExecutor(
-                new DefaultIdempotencyStrategy(idempotencyExecutor),
-                new NoopTransactionStrategy(),
-                new MessageHandlerInvoker(exceptionClassifier));
+                idempotencyStrategy,
+                transactionStrategy,
+                handlerInvoker);
     }
 
     @Bean

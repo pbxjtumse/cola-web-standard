@@ -17,7 +17,7 @@ endlegend
 state "FIRST_DELIVERY\nRUNTIME\nBroker delivers message first time" as R_FIRST_DELIVERY
 state "ACQUIRED\nIdempotentAcquireStatus.ACQUIRED" as A_ACQUIRED
 state "PROCESSING\nIdempotencyStatus.PROCESSING" as DB_PROCESSING
-state "TRANSACTION_RUNNING\nRUNTIME\nbusiness + markSuccess transaction" as R_TX_RUNNING
+state "TRANSACTION_RUNNING\nRUNTIME\nbusiness transaction\nfinal mark after transaction" as R_TX_RUNNING
 state "BUSINESS_DONE\nRUNTIME\nhandler returns ACK" as R_BUSINESS_DONE
 state "SUCCESS\nIdempotencyStatus.SUCCESS" as DB_SUCCESS
 state "TRANSACTION_COMMITTED\nRUNTIME\nlocal transaction committed" as R_TX_COMMITTED

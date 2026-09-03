@@ -1,31 +1,39 @@
-# Idempotency Bean Assembly Final V1
+# Idempotency Bean Assembly Final
 
-修复消费幂等 Spring 装配边界。
+## No idempotent storage
 
-规则：
-
-## 无 idempotent-component
-
-```
+```text
 No MessageIdempotentOperations
         |
-        v
 NoopMessageIdempotencyExecutor
+        |
+DefaultIdempotencyStrategy
 ```
 
-## 有 idempotent-component
+If `xjtu.iron.message.consume.idempotency.enabled=true`, startup fails fast when `MessageIdempotentOperations` is missing.
 
-```
+## With idempotent storage
+
+```text
 MessageIdempotentOperations
         |
-        v
 MessageIdempotencyStateManager
         |
-        v
 MessageIdempotencyDecisionHandler
         |
-        v
 DefaultMessageIdempotencyExecutor
+        |
+DefaultIdempotencyStrategy
 ```
 
-不允许 Bean 方法返回 null。
+## V4 boundary
+
+`MessageIdempotencyExecutor` only handles idempotency state.
+
+Transaction is handled by:
+
+```text
+TransactionStrategy
+        |
+MessageConsumeTransactionExecutor
+```

@@ -1,17 +1,21 @@
 @startuml
 !include ../../../_common/style.puml
 
-title Consume L2 - Transaction Boundary
+title Consume L2 - Transaction Boundary V4
 
 box "Core Consume" #FFF3E0
+participant MessageConsumeExecutor
+participant IdempotencyStrategy
 participant MessageIdempotencyExecutor
+participant TransactionStrategy
 participant MessageConsumeTransactionExecutor
+participant MessageHandlerInvoker
 end box
 box "Business" #E8F5E9
 participant MessageHandler
 end box
 box "Idempotent Component" #FCE4EC
-participant IdempotentExecutor
+participant MessageIdempotentOperations
 end box
 box "Transaction Component" #E0F2F1
 participant TransactionTemplate
@@ -20,21 +24,30 @@ box "Provider" #FFEBEE
 participant ProviderAckMapper
 end box
 
-MessageIdempotencyExecutor -> IdempotentExecutor: acquire(request)
-IdempotentExecutor --> MessageIdempotencyExecutor: ACQUIRED
-MessageIdempotencyExecutor -> MessageConsumeTransactionExecutor: execute(context, callback)
+MessageConsumeExecutor -> IdempotencyStrategy: execute(definition, message, context, invocation)
+IdempotencyStrategy -> MessageIdempotencyExecutor: execute(message, context, options, invocation)
+MessageIdempotencyExecutor -> MessageIdempotentOperations: acquire(context)
+MessageIdempotentOperations --> MessageIdempotencyExecutor: ACQUIRED
+MessageIdempotencyExecutor -> TransactionStrategy: invocation.invoke()
+TransactionStrategy -> MessageConsumeTransactionExecutor: execute(transactionContext, callback)
 MessageConsumeTransactionExecutor -> TransactionTemplate: execute(callback)
-TransactionTemplate -> MessageHandler: handle(envelope, context)
-alt handler ACK
-  MessageHandler --> TransactionTemplate: ACK
-  TransactionTemplate -> IdempotentExecutor: markSuccess(ownerToken, result)
+TransactionTemplate -> MessageHandlerInvoker: invoke(message, context, handler)
+MessageHandlerInvoker -> MessageHandler: handle(envelope, context)
+alt ACK / DISCARD
+  MessageHandler --> MessageHandlerInvoker: ACK / DISCARD
+  MessageHandlerInvoker --> TransactionTemplate: ACK / DISCARD
   TransactionTemplate --> MessageConsumeTransactionExecutor: commit
-  MessageConsumeTransactionExecutor --> MessageIdempotencyExecutor: ACK
-  MessageIdempotencyExecutor -> ProviderAckMapper: complete(ACK)
-else handler exception / RETRY
-  MessageHandler --> TransactionTemplate: exception / RETRY
+  MessageConsumeTransactionExecutor --> TransactionStrategy: ACK / DISCARD
+  TransactionStrategy --> MessageIdempotencyExecutor: ACK / DISCARD
+  MessageIdempotencyExecutor -> MessageIdempotentOperations: markSuccess / markDiscarded
+  MessageIdempotencyExecutor -> ProviderAckMapper: complete(ACK / DISCARD)
+else RETRY / DEAD_LETTER
+  MessageHandler --> MessageHandlerInvoker: exception or failure decision
+  MessageHandlerInvoker --> TransactionStrategy: RETRY / DEAD_LETTER
+  TransactionStrategy -> MessageConsumeTransactionExecutor: throw internal rollback exception
   TransactionTemplate --> MessageConsumeTransactionExecutor: rollback
-  MessageIdempotencyExecutor -> IdempotentExecutor: markFailed(ownerToken, error)
-  MessageIdempotencyExecutor -> ProviderAckMapper: complete(RETRY)
+  TransactionStrategy --> MessageIdempotencyExecutor: original decision
+  MessageIdempotencyExecutor -> MessageIdempotentOperations: markFailed(best effort)
+  MessageIdempotencyExecutor -> ProviderAckMapper: complete(RETRY / DEAD_LETTER)
 end
 @enduml

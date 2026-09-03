@@ -13,7 +13,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
 import java.util.concurrent.ForkJoinPool;
@@ -22,7 +21,6 @@ import java.util.concurrent.ForkJoinPool;
  * 消息发送自动配置。
  */
 @AutoConfiguration(after = MessageCoreAutoConfiguration.class)
-@EnableConfigurationProperties(MessageProperties.class)
 @ConditionalOnProperty(prefix = "xjtu.iron.message", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class MessageSendAutoConfiguration {
 

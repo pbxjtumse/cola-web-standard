@@ -1,31 +1,38 @@
-# Transaction Move V4
+# Transaction Strategy Move V4 Final
 
-本版本完成消费事务边界调整。
+## Final Consumer Flow
 
-## Before
-
-```
-MessageIdempotencyDecisionHandler
+```text
+ProviderInboundMessage
         |
-        +-- TransactionExecutor
-```
-
-## After
-
-```
+MessageConsumerAdapter
+        |
 MessageConsumeExecutor
         |
         +-- IdempotencyStrategy
+        |       |
+        |       +-- MessageIdempotencyExecutor
         |
         +-- TransactionStrategy
+        |       |
+        |       +-- MessageConsumeTransactionExecutor
         |
-        +-- HandlerInvoker
-
-MessageIdempotencyExecutor
-        |
-        +-- ContextFactory
-        +-- StateManager
-        +-- DecisionHandler
+        +-- MessageHandlerInvoker
+                |
+                +-- MessageHandler
 ```
 
-事务不再属于幂等能力。
+## Key Decision
+
+`MessageIdempotencyExecutor` no longer depends on `MessageConsumeTransactionExecutor`.
+
+Transaction is now explicitly assembled by `MessageConsumeExecutor` through `TransactionStrategy`.
+
+## Rollback Rule
+
+When transaction is enabled:
+
+- `ACK` and `DISCARD` allow commit.
+- `RETRY` and `DEAD_LETTER` are converted to an internal runtime exception to trigger rollback, then converted back to the original `ConsumeDecision`.
+
+This avoids the issue where `MessageHandlerInvoker` catches a business exception and converts it to `RETRY`, causing a real transaction executor to mistakenly commit.

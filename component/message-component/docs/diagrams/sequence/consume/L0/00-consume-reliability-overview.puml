@@ -1,7 +1,7 @@
 @startuml
 !include ../../../_common/style.puml
 
-title Consume L0 - Reliable Consume Overview
+title Consume L0 - Reliable Consume Overview V4
 left to right direction
 
 package "Broker" #FFFDE7 {
@@ -22,14 +22,17 @@ package "SPI" #ECEFF1 {
 package "Core Consume" #FFF3E0 {
   [MessageConsumerAdapter]
   [MessageConsumeExecutor]
+  [IdempotencyStrategy]
   [MessageIdempotencyExecutor]
+  [TransactionStrategy]
   [MessageConsumeTransactionExecutor]
+  [MessageHandlerInvoker]
 }
 package "Business" #E8F5E9 {
   [MessageHandler]
 }
 package "Idempotent Component" #FCE4EC {
-  [IdempotentExecutor]
+  [MessageIdempotentOperations]
   [IdempotentStorage]
 }
 package "Transaction Component" #E0F2F1 {
@@ -45,11 +48,14 @@ package "Transaction Component" #E0F2F1 {
 [ProviderInboundMessage] --> [ProviderMessageListener]
 [ProviderMessageListener] --> [MessageConsumerAdapter]
 [MessageConsumerAdapter] --> [MessageConsumeExecutor]
-[MessageConsumeExecutor] --> [MessageIdempotencyExecutor]
-[MessageIdempotencyExecutor] --> [IdempotentExecutor]
-[MessageIdempotencyExecutor] --> [MessageConsumeTransactionExecutor]
+[MessageConsumeExecutor] --> [IdempotencyStrategy]
+[IdempotencyStrategy] --> [MessageIdempotencyExecutor]
+[MessageIdempotencyExecutor] --> [MessageIdempotentOperations]
+[MessageIdempotencyExecutor] --> [TransactionStrategy]
+[TransactionStrategy] --> [MessageConsumeTransactionExecutor]
 [MessageConsumeTransactionExecutor] --> [TransactionTemplate]
-[MessageIdempotencyExecutor] --> [MessageHandler]
-[IdempotentExecutor] --> [IdempotentStorage]
+[TransactionStrategy] --> [MessageHandlerInvoker]
+[MessageHandlerInvoker] --> [MessageHandler]
+[MessageIdempotentOperations] --> [IdempotentStorage]
 [MessageConsumerAdapter] --> [ProviderConsumeResult]
 @enduml

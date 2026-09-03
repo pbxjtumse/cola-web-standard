@@ -1,7 +1,7 @@
 @startuml
 !include ../../_common/style.puml
 
-title Message Consume Class Diagram After Adapter Refactor
+title Message Consume Class Diagram - V4 Final
 left to right direction
 
 package "API Consume" #E3F2FD {
@@ -31,19 +31,23 @@ package "Core Consume" #FFF3E0 {
   class MessageConsumerAdapter
   class MessageConsumeExecutor
   class MessageHandlerInvoker
+  interface ConsumeExceptionClassifier
+  class DefaultConsumeExceptionClassifier
   interface IdempotencyStrategy
   class DefaultIdempotencyStrategy
   class NoopIdempotencyStrategy
   interface TransactionStrategy
-  class NoopTransactionStrategy
-  interface ConsumeExceptionClassifier
-  class DefaultConsumeExceptionClassifier
+  class DefaultTransactionStrategy
   interface MessageIdempotencyExecutor
   class NoopMessageIdempotencyExecutor
   class DefaultMessageIdempotencyExecutor
+  interface MessageIdempotencyContextFactory
+  class MessageIdempotencyDecisionHandler
+  interface MessageIdempotencyStateManager
   interface MessageIdempotentOperations
   interface MessageConsumeTransactionExecutor
   class NoopMessageConsumeTransactionExecutor
+  class MessageConsumeTransactionContext
 }
 
 package "Codec/Context" #E0F7FA {
@@ -54,12 +58,12 @@ package "Codec/Context" #E0F7FA {
 }
 
 package "Providers" #FFEBEE {
+  class KafkaMessageProvider
+  class PulsarMessageProvider
+  class RocketMqMessageProvider
   class KafkaMessagePosition
   class PulsarMessagePosition
   class RocketMqMessagePosition
-  class KafkaConsumeDecisionMapper
-  class PulsarConsumeDecisionMapper
-  class RocketMqConsumeDecisionMapper
 }
 
 MessageTemplate --> MessageConsumerAdapter
@@ -76,10 +80,15 @@ IdempotencyStrategy <|.. NoopIdempotencyStrategy
 DefaultIdempotencyStrategy --> MessageIdempotencyExecutor
 MessageIdempotencyExecutor <|.. NoopMessageIdempotencyExecutor
 MessageIdempotencyExecutor <|.. DefaultMessageIdempotencyExecutor
-DefaultMessageIdempotencyExecutor --> MessageIdempotentOperations
-DefaultMessageIdempotencyExecutor --> MessageConsumeTransactionExecutor
+DefaultMessageIdempotencyExecutor --> MessageIdempotencyContextFactory
+DefaultMessageIdempotencyExecutor --> MessageIdempotencyStateManager
+DefaultMessageIdempotencyExecutor --> MessageIdempotencyDecisionHandler
+MessageIdempotencyDecisionHandler --> MessageIdempotencyStateManager
+MessageIdempotencyStateManager --> MessageIdempotentOperations
+TransactionStrategy <|.. DefaultTransactionStrategy
+DefaultTransactionStrategy --> MessageConsumeTransactionExecutor
 MessageConsumeTransactionExecutor <|.. NoopMessageConsumeTransactionExecutor
-TransactionStrategy <|.. NoopTransactionStrategy
+DefaultTransactionStrategy --> MessageConsumeTransactionContext
 ProviderInboundMessage --> ProviderMessagePosition
 ProviderMessagePosition <|.. KafkaMessagePosition
 ProviderMessagePosition <|.. PulsarMessagePosition

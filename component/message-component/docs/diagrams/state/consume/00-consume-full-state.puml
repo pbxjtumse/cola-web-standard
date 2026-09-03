@@ -37,7 +37,7 @@ state "SUCCESS\nIdempotencyStatus.SUCCESS" as DB_SUCCESS
 state "FAILED\nIdempotencyStatus.FAILED" as DB_FAILED
 state "DISCARDED\nMESSAGE SEMANTIC\nmarkDiscarded(...) semantic\ncurrent idempotent-api has no DISCARDED status" as M_DISCARDED
 
-state "TRANSACTION_RUNNING\nRUNTIME\nMessageConsumeTransactionExecutor.execute(...)" as R_TX_RUNNING
+state "TRANSACTION_RUNNING\nRUNTIME\nTransactionStrategy.execute(...)" as R_TX_RUNNING
 state "HANDLER_EXECUTING\nRUNTIME\nMessageHandler.handle(...)" as R_HANDLER_EXECUTING
 state "HANDLER_ACK\nRUNTIME\nhandler returns ConsumeDecision.ACK" as R_HANDLER_ACK
 state "HANDLER_RETRY\nRUNTIME\nhandler returns ConsumeDecision.RETRY" as R_HANDLER_RETRY

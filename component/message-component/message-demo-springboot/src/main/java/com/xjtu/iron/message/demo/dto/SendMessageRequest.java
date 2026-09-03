@@ -9,8 +9,11 @@ import java.util.Map;
  */
 public final class SendMessageRequest {
 
-    /** 逻辑消息名称；Demo 中会映射为 namespace=demo 下的 name。 */
+    /** 逻辑消息名称；Demo 中固定映射到 namespace=demo 下。 */
     private String topic;
+
+    /** 可选 Provider 名称；为空时使用组件默认 Provider。 */
+    private String provider;
 
     /** 业务实体键，对应 MessageEnvelope 的 messageKey。 */
     private String businessKey;
@@ -30,6 +33,14 @@ public final class SendMessageRequest {
 
     public void setTopic(String topic) {
         this.topic = topic;
+    }
+
+    public String getProvider() {
+        return provider;
+    }
+
+    public void setProvider(String provider) {
+        this.provider = provider;
     }
 
     public String getBusinessKey() {
