@@ -3,9 +3,8 @@ package com.xjtu.iron.idempotent.provider.redis.key;
 /**
  * Redis 幂等记录物理 Key 构造器。
  *
- * <p>使用 Redis Cluster hash-tag：{@code prefix:{namespace:key}}。
- * 这样同一幂等记录后续所有 Lua 操作都稳定落到同一个 slot，
- * 为未来脚本扩展多个关联 Key 留出一致的分片基础。</p>
+ * <p>V2 使用 {@code storeName + namespace + key} 作为逻辑存储身份，并继续使用 Redis Cluster hash-tag：
+ * {@code prefix:{storeName:namespace:key}}。storeName 不是 jdbc/redis Provider 名，而是 message-consume/payment 这类逻辑 Store。</p>
  */
 public final class RedisIdempotencyKeyBuilder {
 
@@ -18,12 +17,8 @@ public final class RedisIdempotencyKeyBuilder {
         this.prefix = prefix;
     }
 
-    /**
-     * @param namespace 业务隔离域
-     * @param key       逻辑幂等 Key
-     * @return Redis 中实际使用的物理 Key
-     */
-    public String build(String namespace, String key) {
-        return prefix + ":{" + namespace + ":" + key + "}";
+    /** @return Redis 中实际使用的物理 Key。 */
+    public String build(String storeName, String namespace, String key) {
+        return prefix + ":{" + storeName + ":" + namespace + ":" + key + "}";
     }
 }
