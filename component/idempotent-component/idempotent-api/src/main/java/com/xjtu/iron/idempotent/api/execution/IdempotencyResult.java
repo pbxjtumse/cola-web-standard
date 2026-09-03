@@ -20,12 +20,24 @@ import java.util.Optional;
  */
 public final class IdempotencyResult<T> {
 
+    /** 本次调用最终状态，区别于数据库里的持久状态。 */
     private final IdempotencyResultStatus status;
+
+    /** 结果产生的阶段，用于定位是在校验、抢占、执行业务、完成状态还是回放时结束。 */
     private final IdempotencyStage stage;
+
+    /** 业务返回值；只有 EXECUTED / RECOVERED / REPLAYED 且策略可回放时通常非空。 */
     private final T value;
+
+    /** 调用结束时观察到的幂等记录快照。 */
     private final IdempotencyRecord record;
+
+    /** 本次调用关联异常，可能是业务异常、事务异常或 Provider 异常。 */
     private final Throwable error;
+
+    /** true 表示短锁不可用/失败后按配置退化为 Repository 原子状态判断。 */
     private final boolean lockFallback;
+
     /** true 表示本次 ACQUIRED/RECOVERY_ACQUIRED 执行启用了 Tx-B 事务闭环。 */
     private final boolean transactionApplied;
 
@@ -95,12 +107,25 @@ public final class IdempotencyResult<T> {
     public boolean transactionApplied() { return transactionApplied; }
 
     public static final class Builder<T> {
+        /** 本次调用最终状态。 */
         private IdempotencyResultStatus status;
+
+        /** 结果产生阶段。 */
         private IdempotencyStage stage;
+
+        /** 业务返回值。 */
         private T value;
+
+        /** 幂等记录快照。 */
         private IdempotencyRecord record;
+
+        /** 关联异常。 */
         private Throwable error;
+
+        /** 是否发生短锁失败后的 Repository fallback。 */
         private boolean lockFallback;
+
+        /** 是否启用了 Tx-B 事务闭环。 */
         private boolean transactionApplied;
 
         public Builder<T> status(IdempotencyResultStatus value) { this.status = value; return this; }

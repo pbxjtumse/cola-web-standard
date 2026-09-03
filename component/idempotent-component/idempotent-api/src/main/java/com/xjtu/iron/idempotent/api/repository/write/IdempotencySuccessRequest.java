@@ -7,19 +7,45 @@ import com.xjtu.iron.idempotent.api.storage.IdempotencyStorageContext;
 import java.time.Duration;
 import java.time.Instant;
 
-/** PROCESSING -> SUCCESS 条件写请求。 */
+/**
+ * PROCESSING -> SUCCESS 条件写请求。
+ *
+ * <p>Provider 实现必须把 {@code status=PROCESSING && ownerToken && version} 放进条件更新。
+ * 如果更新 0 行，调用方需要知道是 stale owner、已经终态还是存储异常。</p>
+ */
 public final class IdempotencySuccessRequest {
 
+    /** 逻辑存储上下文。 */
     private final IdempotencyStorageContext storageContext;
+
+    /** 幂等隔离域。 */
     private final String namespace;
+
+    /** 逻辑幂等 Key。 */
     private final String key;
+
+    /** 当前 generation owner。 */
     private final String ownerToken;
+
+    /** 当前 generation version。 */
     private final long version;
+
+    /** 可选结果载荷，由 ResultPolicy capture 产生。 */
     private final String resultPayload;
+
+    /** 幂等模式。 */
     private final IdempotencyMode mode;
+
+    /** WINDOWED 语义窗口。 */
     private final Duration idempotencyWindow;
+
+    /** WINDOWED 窗口推进策略。 */
     private final IdempotencyWindowPolicy windowPolicy;
+
+    /** 语义窗口结束后的额外物理保留时间。 */
     private final Duration recordRetentionTtl;
+
+    /** Core 传入的统一当前时间。 */
     private final Instant now;
 
     public IdempotencySuccessRequest(IdempotencyStorageContext storageContext, String namespace, String key, String ownerToken, long version,

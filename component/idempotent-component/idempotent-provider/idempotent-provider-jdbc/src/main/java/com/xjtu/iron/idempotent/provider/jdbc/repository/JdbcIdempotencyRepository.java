@@ -33,7 +33,10 @@ public final class JdbcIdempotencyRepository implements IdempotencyRepository, I
 
     public static final String PROVIDER_NAME = "jdbc";
 
+    /** JDBC 执行适配器，负责普通连接、REQUIRES_NEW、当前事务参与等差异。 */
     private final JdbcExecutionManager jdbc;
+
+    /** 幂等记录表名，构造时已经做白名单校验，避免 SQL 拼接注入。 */
     private final String table;
 
     public JdbcIdempotencyRepository(DataSource dataSource, String table) {
@@ -137,12 +140,16 @@ public final class JdbcIdempotencyRepository implements IdempotencyRepository, I
         if (current == null) {
             return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.NOT_FOUND, null);
         }
+
+        // Recovery 只处理仍在幂等窗口内、且明确配置 EXTERNAL_TASK 的异常 generation。
         if (current.getRecoveryMode() != IdempotencyRecoveryMode.EXTERNAL_TASK || isWindowExpired(current, request.getNow())) {
             return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.NOT_RECOVERABLE, current);
         }
         if (storageConflict(current, storage)) {
             return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.KEY_CONFLICT, current);
         }
+
+        // 二次 CAS：candidate 发布到任务队列后，当前 owner/version 可能已经变化。
         if (request.getExpectedVersion() != null && request.getExpectedVersion().longValue() != current.getVersion()) {
             return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.STALE_CANDIDATE, current);
         }
@@ -165,12 +172,16 @@ public final class JdbcIdempotencyRepository implements IdempotencyRepository, I
             if (!request.isRecoverProcessingTimeout()) {
                 return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.NOT_RECOVERABLE, current);
             }
+
+            // 超时 PROCESSING 被允许恢复时，写入新 owner 并 version+1。
             return IdempotencyRecoveryResult.acquired(reacquire(connection, current, request), "PROCESSING_TIMEOUT");
         }
 
         if (!current.isFailureRetryable() || !request.isRecoverFailed()) {
             return IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.FAILED_FINAL, current);
         }
+
+        // retryable FAILED 被允许恢复时，同样通过 reacquire 开启下一代 generation。
         return IdempotencyRecoveryResult.acquired(reacquire(connection, current, request),
                 current.getFailureCode() == null ? "FAILED_RETRY" : current.getFailureCode());
     }
@@ -382,6 +393,8 @@ public final class JdbcIdempotencyRepository implements IdempotencyRepository, I
     private IdempotencyRecord restartWindow(Connection connection, IdempotencyRecord current, IdempotencyAcquireRequest request) throws SQLException {
         IdempotencyStorageContext storage = request.getStorageContext();
         WindowTimes times = initialWindowTimes(request);
+
+        // WINDOWED 语义窗口已结束：复用同一行，清空历史结果/失败信息，递增 version 开始新逻辑请求。
         String sql = "UPDATE " + table
                 + " SET route_key=?,request_hash=?,status=?,owner_token=?,version=?,result_payload=NULL,failure_code=NULL,"
                 + "failure_message=NULL,failure_retryable=FALSE,recovery_mode=?,window_policy=?,processing_expire_at=?,"
@@ -415,6 +428,8 @@ public final class JdbcIdempotencyRepository implements IdempotencyRepository, I
     private IdempotencyRecord reacquire(Connection connection, IdempotencyRecord previous,
                                         IdempotencyRecoveryAcquireRequest request) throws SQLException {
         IdempotencyStorageContext storage = request.getStorageContext();
+
+        // Recovery 接管不会新建记录，而是在当前行上替换 ownerToken 并 version+1。
         String sql = "UPDATE " + table
                 + " SET status=?,owner_token=?,version=?,processing_expire_at=?,failure_code=NULL,failure_message=NULL,"
                 + "failure_retryable=FALSE,result_payload=NULL,completed_at=NULL,updated_at=?"
@@ -442,6 +457,8 @@ public final class JdbcIdempotencyRepository implements IdempotencyRepository, I
                 || request.getIdempotencyWindow() == null) {
             return current;
         }
+
+        // 滑动窗口只延长窗口/保留时间，不改变 status、owner 或 version。
         WindowTimes next = new WindowTimes(request.getNow().plus(request.getIdempotencyWindow()),
                 request.getNow().plus(request.getIdempotencyWindow()).plus(request.getRecordRetentionTtl()));
         String sql = "UPDATE " + table
@@ -467,9 +484,12 @@ public final class JdbcIdempotencyRepository implements IdempotencyRepository, I
             return WindowTimes.none();
         }
         if (policy == IdempotencyWindowPolicy.SLIDING_ON_ACCESS) {
+            // SUCCESS/FAILED/DISCARDED 也算一次访问，滑动窗口在完成时重新延长。
             Instant windowAt = now.plus(window);
             return new WindowTimes(windowAt, windowAt.plus(retention));
         }
+
+        // 固定窗口保持首次 acquire 的过期时间，完成状态不重新计算。
         IdempotencyRecord current = select(connection, storage, namespace, key, false);
         return current == null ? WindowTimes.none() : new WindowTimes(current.getWindowExpireAt(), current.getRetentionExpireAt());
     }
@@ -488,6 +508,8 @@ public final class JdbcIdempotencyRepository implements IdempotencyRepository, I
         if (updated == 1) {
             return IdempotencyWriteResult.of(IdempotencyWriteStatus.UPDATED, current);
         }
+
+        // 条件更新 0 行需要细分原因，Core 才能区分 stale owner、终态冲突和真正 Provider 异常。
         if (current == null) {
             return IdempotencyWriteResult.of(IdempotencyWriteStatus.NOT_FOUND, null);
         }

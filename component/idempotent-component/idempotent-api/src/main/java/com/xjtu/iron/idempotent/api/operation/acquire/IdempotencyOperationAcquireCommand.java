@@ -10,12 +10,25 @@ import com.xjtu.iron.idempotent.api.storage.IdempotencyStorageContext;
  */
 public final class IdempotencyOperationAcquireCommand {
 
+    /** 逻辑幂等 Key。 */
     private final String key;
+
+    /** 业务内容指纹，用于冲突检测。 */
     private final String requestHash;
+
+    /** 业务路由元数据。 */
     private final String routeKey;
+
+    /** 逻辑存储上下文，低层调用方必须显式传入。 */
     private final IdempotencyStorageContext storageContext;
+
+    /** 调用方生成并持有的 owner；只有 ACQUIRED 返回后才成为当前 generation owner。 */
     private final String ownerToken;
+
+    /** 命名 Policy。 */
     private final String policyName;
+
+    /** 内联 Policy，优先于 policyName。 */
     private final IdempotencyPolicy policy;
 
     private IdempotencyOperationAcquireCommand(Builder builder) {
@@ -39,12 +52,25 @@ public final class IdempotencyOperationAcquireCommand {
     public IdempotencyPolicy getPolicy() { return policy; }
 
     public static final class Builder {
+        /** 逻辑幂等 Key。 */
         private String key;
+
+        /** 业务内容指纹。 */
         private String requestHash;
+
+        /** 业务路由元数据。 */
         private String routeKey;
+
+        /** 逻辑存储上下文。 */
         private IdempotencyStorageContext storageContext;
+
+        /** 调用方生成的 ownerToken。 */
         private String ownerToken;
+
+        /** 命名 Policy。 */
         private String policyName;
+
+        /** 内联 Policy。 */
         private IdempotencyPolicy policy;
 
         public Builder key(String value) { this.key = value; return this; }

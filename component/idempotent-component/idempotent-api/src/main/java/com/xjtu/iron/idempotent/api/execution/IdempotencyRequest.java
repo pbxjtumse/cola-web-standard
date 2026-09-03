@@ -18,13 +18,28 @@ import com.xjtu.iron.idempotent.api.storage.IdempotencyStorageContext;
  */
 public final class IdempotencyRequest {
 
+    /** 逻辑幂等 Key；同一次用户动作、消息或业务命令的重试必须保持一致。 */
     private final String key;
+
+    /** 请求业务内容指纹；用于识别同 key 携带不同参数的错误复用。 */
     private final String requestHash;
+
+    /** 业务路由元数据，例如租户、商户或订单路由；不等于幂等存储分片键。 */
     private final String routeKey;
+
+    /** 逻辑 Store 名称，用来隔离不同物理/逻辑存储域，默认 default。 */
     private final String storeName;
+
+    /** 在线点查/写入的稳定分片路由键，为后续分库分表预留。 */
     private final long shardKey;
+
+    /** Reliable Recovery 的逻辑扫描桶，必须和首次请求保持一致。 */
     private final int scanBucket;
+
+    /** 命名 Policy；为空时由 PolicyRegistry 选择默认策略。 */
     private final String policyName;
+
+    /** 调用级内联 Policy；存在时优先于 policyName。 */
     private final IdempotencyPolicy policy;
 
     private IdempotencyRequest(Builder builder) {
@@ -60,13 +75,28 @@ public final class IdempotencyRequest {
     }
 
     public static final class Builder {
+        /** 逻辑幂等 Key，必填，由 Executor 统一校验非空。 */
         private String key;
+
+        /** 可选请求指纹；建议用稳定序列化后的 SHA-256。 */
         private String requestHash;
+
+        /** 可选业务路由信息；Recovery 任务应原样沿用首次 routeKey。 */
         private String routeKey;
+
+        /** 逻辑 Store，默认 default；不要填写 jdbc/redis 这种 Provider 名称。 */
         private String storeName = IdempotencyStorageContext.DEFAULT_STORE_NAME;
+
+        /** 分片键，默认 0；业务接入分片后应使用稳定值。 */
         private long shardKey;
+
+        /** 扫描桶，默认 0；不能为负数。 */
         private int scanBucket;
+
+        /** 命名策略。 */
         private String policyName;
+
+        /** 内联策略，适合测试或少量调用级覆盖。 */
         private IdempotencyPolicy policy;
 
         public Builder key(String value) { this.key = value; return this; }

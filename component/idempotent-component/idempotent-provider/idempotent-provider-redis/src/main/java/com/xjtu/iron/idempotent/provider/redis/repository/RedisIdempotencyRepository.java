@@ -30,12 +30,25 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
 
     public static final String PROVIDER_NAME = "redis";
 
+    /** Spring Redis 字符串客户端，所有 Lua 脚本都以 Hash 结构读写幂等状态。 */
     private final StringRedisTemplate redis;
+
+    /** 统一构造 Redis key，避免 Provider 内多处拼接导致命名漂移。 */
     private final RedisIdempotencyKeyBuilder keyBuilder;
+
+    /** 普通 execute() 抢占/判定脚本。 */
     private final DefaultRedisScript<List> acquireScript;
+
+    /** 显式 recover() 二次 CAS 接管脚本。 */
     private final DefaultRedisScript<List> recoveryScript;
+
+    /** PROCESSING -> SUCCESS 条件写脚本。 */
     private final DefaultRedisScript<List> successScript;
+
+    /** PROCESSING -> FAILED 条件写脚本。 */
     private final DefaultRedisScript<List> failedScript;
+
+    /** PROCESSING -> DISCARDED 条件写脚本。 */
     private final DefaultRedisScript<List> discardedScript;
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -78,6 +91,8 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
         }
         try {
             IdempotencyStorageContext storage = requireStorage(request.getStorageContext());
+
+            // Lua 内一次完成 EXISTS/HGET/状态判断/HSET/PEXPIREAT，避免 Java 端读后再写的竞态。
             List<?> raw = redis.execute(
                     acquireScript,
                     Collections.singletonList(key(storage, request.getNamespace(), request.getKey())),
@@ -108,6 +123,8 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
         }
         try {
             IdempotencyStorageContext storage = requireStorage(request.getStorageContext());
+
+            // expectedOwner/expectedVersion 由脚本在 Redis 端校验，STALE_CANDIDATE 不回到 Java 再判断。
             List<?> raw = redis.execute(
                     recoveryScript,
                     Collections.singletonList(key(storage, request.getNamespace(), request.getKey())),
@@ -132,6 +149,8 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
     public IdempotencyWriteResult markSuccess(IdempotencySuccessRequest request) {
         try {
             IdempotencyStorageContext storage = requireStorage(request.getStorageContext());
+
+            // SUCCESS 写入仍是 owner/version 条件更新；锁是否存在不影响这里的最终裁决。
             List<?> raw = redis.execute(
                     successScript,
                     Collections.singletonList(key(storage, request.getNamespace(), request.getKey())),
@@ -148,6 +167,8 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
     public IdempotencyWriteResult markFailed(IdempotencyFailureRequest request) {
         try {
             IdempotencyStorageContext storage = requireStorage(request.getStorageContext());
+
+            // FAILED 记录业务失败语义；retryable 只影响外部 recover()，普通 execute() 不会自动重试。
             List<?> raw = redis.execute(
                     failedScript,
                     Collections.singletonList(key(storage, request.getNamespace(), request.getKey())),
@@ -165,6 +186,8 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
     public IdempotencyWriteResult markDiscarded(IdempotencyDiscardRequest request) {
         try {
             IdempotencyStorageContext storage = requireStorage(request.getStorageContext());
+
+            // DISCARDED 是明确终态，重复请求返回 PREVIOUS_DISCARDED，不进入结果回放分支。
             List<?> raw = redis.execute(
                     discardedScript,
                     Collections.singletonList(key(storage, request.getNamespace(), request.getKey())),
@@ -191,6 +214,8 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
         if (raw == null || raw.isEmpty()) {
             return IdempotencyAcquireResult.providerError(new IllegalStateException("empty acquire script result"));
         }
+
+        // Lua 返回数字协议，Java 侧只做状态枚举映射，不再重新解释业务规则。
         int code = Integer.parseInt(text(raw.get(0)));
         boolean rollover = raw.size() > 1 && "1".equals(text(raw.get(1)));
         IdempotencyRecord record = snapshot(raw, 2);
@@ -232,6 +257,8 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
         if (raw == null || raw.isEmpty()) {
             return IdempotencyWriteResult.providerError(new IllegalStateException("empty write script result"));
         }
+
+        // 写脚本同样返回语义状态，Core 依赖它区分 stale owner 与 already final。
         int code = Integer.parseInt(text(raw.get(0)));
         IdempotencyRecord record = raw.size() > 1 ? snapshot(raw, 1) : null;
         return switch (code) {
@@ -279,6 +306,7 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
     }
 
     private IdempotencyRecord fromMap(Map<Object, Object> values) {
+        // find() 是只读诊断/查询路径，直接把 Redis Hash 当前内容映射成统一 Record 快照。
         return IdempotencyRecord.builder()
                 .storeName(value(values, "store_name"))
                 .shardKey(Long.parseLong(value(values, "shard_key")))

@@ -35,8 +35,13 @@ import java.util.Objects;
  */
 public final class DefaultIdempotencyOperations implements IdempotencyOperations {
 
+    /** 低层操作仍按 Policy 选择 Repository，不允许调用方绕开 RepositoryRegistry。 */
     private final IdempotencyRepositoryRegistry repositoryRegistry;
+
+    /** 低层操作复用主链 Policy 解析规则，避免 message/task 与普通 execute() 策略漂移。 */
     private final IdempotencyPolicyRegistry policyRegistry;
+
+    /** 统一时间源。 */
     private final Clock clock;
 
     public DefaultIdempotencyOperations(IdempotencyRepositoryRegistry repositoryRegistry, IdempotencyPolicyRegistry policyRegistry, Clock clock) {
@@ -51,6 +56,7 @@ public final class DefaultIdempotencyOperations implements IdempotencyOperations
         IdempotencyPolicy policy = resolvePolicy(command.getPolicyName(), command.getPolicy());
         IdempotencyRepository repository = resolveRepository(policy);
 
+        // 这里只授予/查询状态，不执行 callback；调用方拿到 ACQUIRED 后自己负责编排业务动作。
         IdempotencyAcquireResult result = repository.tryAcquire(new IdempotencyAcquireRequest(
                 command.getStorageContext(), policy.getNamespace(), command.getKey(), normalize(command.getRequestHash()),
                 normalize(command.getRouteKey()), command.getOwnerToken(), policy.getMode(), policy.getProcessingTimeout(),
@@ -75,6 +81,8 @@ public final class DefaultIdempotencyOperations implements IdempotencyOperations
         validateCompletion(command);
         IdempotencyPolicy policy = resolvePolicy(command.getPolicyName(), command.getPolicy());
         IdempotencyRepository repository = resolveRepository(policy);
+
+        // 完成 SUCCESS 时必须带回 acquire 的 ownerToken/version，Repository 用它做 CAS。
         return mapWrite(repository.markSuccess(new IdempotencySuccessRequest(
                 command.getStorageContext(), policy.getNamespace(), command.getKey(), command.getOwnerToken(), command.getVersion(),
                 command.getResultPayload(), policy.getMode(), policy.getIdempotencyWindow(), policy.getWindowPolicy(),
@@ -86,6 +94,8 @@ public final class DefaultIdempotencyOperations implements IdempotencyOperations
         validateFailure(command);
         IdempotencyPolicy policy = resolvePolicy(command.getPolicyName(), command.getPolicy());
         IdempotencyRepository repository = resolveRepository(policy);
+
+        // FAILED 是状态收口，不等同于普通 execute() 自动重试；retryable 只留给显式恢复链路。
         return mapWrite(repository.markFailed(new IdempotencyFailureRequest(
                 command.getStorageContext(), policy.getNamespace(), command.getKey(), command.getOwnerToken(), command.getVersion(),
                 command.getFailure(), policy.getMode(), policy.getIdempotencyWindow(), policy.getWindowPolicy(),
@@ -97,6 +107,8 @@ public final class DefaultIdempotencyOperations implements IdempotencyOperations
         validateCompletion(command);
         IdempotencyPolicy policy = resolvePolicy(command.getPolicyName(), command.getPolicy());
         IdempotencyRepository repository = resolveRepository(policy);
+
+        // DISCARD 是业务主动放弃执行的终态，后续重复请求不会进入 replay。
         return mapWrite(repository.markDiscarded(new IdempotencyDiscardRequest(
                 command.getStorageContext(), policy.getNamespace(), command.getKey(), command.getOwnerToken(), command.getVersion(),
                 command.getResultPayload(), policy.getMode(), policy.getIdempotencyWindow(), policy.getWindowPolicy(),
@@ -107,6 +119,8 @@ public final class DefaultIdempotencyOperations implements IdempotencyOperations
         if (result.getStatus() == IdempotencyWriteStatus.PROVIDER_ERROR) {
             return IdempotencyOperationWriteResult.storageError(result.getError());
         }
+
+        // 对外暴露 operation 层状态，避免上层技术组件依赖 repository 内部枚举。
         IdempotencyOperationWriteStatus status = switch (result.getStatus()) {
             case UPDATED -> IdempotencyOperationWriteStatus.UPDATED;
             case STALE_OWNER -> IdempotencyOperationWriteStatus.STALE_OWNER;

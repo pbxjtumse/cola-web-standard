@@ -43,15 +43,34 @@ import java.util.Objects;
  */
 public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
 
+    /** Repository 路由表，按 mode 与 repositoryName 找到真正的 JDBC/Redis Provider。 */
     private final IdempotencyRepositoryRegistry repositoryRegistry;
+
+    /** Policy 路由表，负责把 policyName / inline policy / default policy 解析成稳定策略。 */
     private final IdempotencyPolicyRegistry policyRegistry;
+
+    /** 每次获得执行权时生成新的 ownerToken，和 version 一起组成 generation 身份。 */
     private final IdempotencyOwnerTokenGenerator ownerGenerator;
+
+    /** 将业务异常归类成可恢复/不可恢复失败，供 markFailed 持久化。 */
     private final IdempotencyFailureClassifier failureClassifier;
+
+    /** 可选短分布式锁客户端；只包裹 Repository 状态抢占，不包裹完整业务执行。 */
     private final DistributedLockClient lockClient;
+
+    /** 可选事务协调器；存在且 Repository 支持时，才能形成 Business + SUCCESS 的 Tx-B 闭环。 */
     private final IdempotencyTransactionCoordinator transactionCoordinator;
+
+    /** 纯状态机：把 Repository 原子返回翻译成 EXECUTE / REPLAY / RETURN。 */
     private final IdempotencyStateMachine stateMachine;
+
+    /** 幂等生命周期事件出口，默认 noop，不影响主链正确性。 */
     private final IdempotencyEventPublisher events;
+
+    /** 指标出口，默认 noop，只记录状态和耗时，不参与幂等判断。 */
     private final IdempotencyMetrics metrics;
+
+    /** 统一时间源，便于测试中固定 now，也避免各层自己取系统时间。 */
     private final Clock clock;
 
     public DefaultIdempotencyExecutor(IdempotencyRepositoryRegistry repositoryRegistry, IdempotencyPolicyRegistry policyRegistry,
@@ -87,9 +106,12 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
 
         IdempotencyPolicy policy = definition.policy();
         IdempotencyRepository repository = definition.repository();
+
+        // ownerToken 在一次 execute 尝试内固定；真正能否成为当前 generation 由 Repository.tryAcquire 原子决定。
         String ownerToken = ownerGenerator.generate(policy.getNamespace(), request.getKey());
         IdempotencyStorageContext storage = request.storageContext();
 
+        // Repository 入参携带完整策略快照，Provider 不再反向依赖 Starter 配置。
         IdempotencyAcquireRequest acquireRequest = new IdempotencyAcquireRequest(
                 storage, policy.getNamespace(), request.getKey(), normalize(request.getRequestHash()), normalize(request.getRouteKey()),
                 ownerToken, policy.getMode(), policy.getProcessingTimeout(), policy.getIdempotencyWindow(), policy.getWindowPolicy(),
@@ -125,11 +147,14 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
         IdempotencyPolicy policy = definition.policy();
         IdempotencyRepository repository = definition.repository();
         IdempotencyRecoveryPolicy recoveryPolicy = policy.getRecoveryPolicy();
+
+        // recover() 是显式可靠任务入口；Policy 未允许时，不能把普通超时请求自动升级为恢复执行。
         if (!recoveryPolicy.isExternalTaskEnabled()) {
             return simple(IdempotencyResultStatus.RECOVERY_NOT_ALLOWED, IdempotencyStage.RECOVER_STATE, null,
                     new IllegalStateException("recovery policy does not enable EXTERNAL_TASK"), false);
         }
 
+        // Recovery 会产生新的 owner；expectedOwner/expectedVersion 用来确认扫描 candidate 没有过期。
         String newOwner = ownerGenerator.generate(policy.getNamespace(), request.getKey());
         IdempotencyStorageContext storage = request.storageContext();
         IdempotencyRecoveryAcquireRequest recoveryRequest = new IdempotencyRecoveryAcquireRequest(
@@ -179,6 +204,8 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
         policy.validate();
         IdempotencyRepository repository = repositoryRegistry.resolve(policy.getMode(), policy.getRepositoryName());
         IdempotencyResultPolicy<T> resolved = resultPolicy == null ? IdempotencyResultPolicies.none() : resultPolicy;
+
+        // ResultPolicy 若需要持久化返回值，Provider 必须明确支持 result_payload，不能靠调用方假设。
         if (resolved.storesPayload() && !repository.capabilities().isResultPayloadSupported()) {
             throw new IllegalArgumentException("repository " + repository.providerName() + " does not support result payload storage");
         }
@@ -213,11 +240,13 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
         IdempotencyRepository repository = definition.repository();
         publish(IdempotencyEventType.EXECUTION_STARTED, IdempotencyStage.EXECUTE, policy, repository, null);
 
+        // Context 对业务可见，暴露的是当前 generation 身份；业务若传递恢复任务，应保留这些字段。
         IdempotencyContext context = new IdempotencyContext(
                 record.storageContext(), policy.getNamespace(), key, normalize(routeKey), record.getOwnerToken(), record.getVersion(),
                 policy.getMode(), recoveryExecution, record.getUpdatedAt() == null ? Instant.now(clock) : record.getUpdatedAt(),
                 record.getProcessingExpireAt());
 
+        // 只有 transactionCoordinator 存在且 Repository 能参与当前事务，才可把业务写入和 SUCCESS 写入放进同一 Tx-B。
         boolean transactionApplied = transactionCoordinator != null
                 && repository.capabilities().isBusinessTransactionParticipationSupported();
         if (transactionApplied) {
@@ -238,11 +267,13 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
         try {
             TransactionalCompletion<T> completion = transactionCoordinator.executeRequired(
                     transactionName(policy), normalize(routeKey), () -> {
+                        // Tx-B 内先执行业务，再捕获返回值，最后 owner/version 条件更新 SUCCESS。
                         T value = callback.doWithIdempotency(context);
                         String resultPayload = captureResult(value, definition.resultPolicy());
                         IdempotencyWriteResult write = repository.markSuccess(
                                 successRequest(key, policy, record, resultPayload, Instant.now(clock)));
                         if (write.getStatus() != IdempotencyWriteStatus.UPDATED) {
+                            // stale owner 或终态冲突必须抛出，让 Tx-B 回滚业务写入，避免旧 owner 泄漏提交。
                             throw new CompletionRejectedException(write);
                         }
                         return new TransactionalCompletion<>(value, write.getRecord());
@@ -290,6 +321,7 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
         IdempotencyPolicy policy = definition.policy();
         IdempotencyRepository repository = definition.repository();
         try {
+            // 无事务参与时，业务写入与 markSuccess 之间可能存在进程崩溃窗口；适用于能接受最终恢复的场景。
             T value = callback.doWithIdempotency(context);
             String resultPayload = captureResult(value, definition.resultPolicy());
             IdempotencyWriteResult write = repository.markSuccess(successRequest(key, policy, record, resultPayload, Instant.now(clock)));
@@ -329,6 +361,8 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
         try {
             String captured = resultPolicy.capture(value);
             if (captured == null) throw new IllegalStateException(resultPolicy.type() + " result policy returned null stored value");
+
+            // Envelope 保存策略类型，回放时可拒绝“历史 SNAPSHOT、当前 REFERENCE”这类错误混用。
             return StoredResultEnvelope.encode(resultPolicy.type(), captured);
         } catch (Exception error) {
             throw new ResultPolicyException(error);
@@ -340,6 +374,8 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                                                             boolean lockFallback, boolean transactionApplied) {
         if (businessError instanceof InterruptedException) Thread.currentThread().interrupt();
         IdempotencyFailureInfo failure = failureClassifier.classify(businessError, Instant.now(clock));
+
+        // 失败写入使用当前 owner/version，若 Recovery 已接管，旧 owner 的 FAILED 也会被 Repository 拒绝。
         IdempotencyWriteResult write = persistFailure(key, policy, repository, record, failure);
         attachProviderFailure(businessError, write);
         publish(IdempotencyEventType.EXECUTION_FAILED, IdempotencyStage.EXECUTE, policy, repository, businessError);
@@ -357,6 +393,7 @@ public final class DefaultIdempotencyExecutor implements IdempotencyExecutor {
                     policy, repository, startedAt, lockFallback, true);
         }
 
+        // 已确认 Tx-B 失败/回滚后，Tx-C 用独立事务记录 FAILED，便于后续观测或显式恢复。
         IdempotencyWriteResult write = persistFailure(key, policy, repository, record,
                 new IdempotencyFailureInfo("TRANSACTION_" + error.outcome().name(), safeMessage(error), true, Instant.now(clock)));
         attachProviderFailure(error, write);

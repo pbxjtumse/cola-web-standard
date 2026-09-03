@@ -14,15 +14,34 @@ import java.util.Objects;
  */
 public final class IdempotencyContext {
 
+    /** 当前幂等记录的逻辑存储上下文，业务异步恢复链路应原样传递。 */
     private final IdempotencyStorageContext storageContext;
+
+    /** Policy 解析出的业务隔离域。 */
     private final String namespace;
+
+    /** 当前逻辑幂等 Key。 */
     private final String key;
+
+    /** 业务路由元数据，来自请求并做空白归一化。 */
     private final String routeKey;
+
+    /** 当前 generation 的 owner；完成 SUCCESS/FAILED 时必须继续使用它。 */
     private final String ownerToken;
+
+    /** 当前 generation 版本；Recovery 接管或 WINDOWED 窗口重启时递增。 */
     private final long version;
+
+    /** 当前策略模式：WINDOWED 或 DURABLE。 */
     private final IdempotencyMode mode;
+
+    /** true 表示该次 callback 来自显式 recover()，而非普通 execute()。 */
     private final boolean recoveryExecution;
+
+    /** 当前 generation 获得执行权的时间。 */
     private final Instant acquiredAt;
+
+    /** 当前 PROCESSING 执行租约过期时间；只表示可恢复判断点，不表示线程一定死亡。 */
     private final Instant processingExpireAt;
 
     public IdempotencyContext(IdempotencyStorageContext storageContext, String namespace, String key, String routeKey, String ownerToken,

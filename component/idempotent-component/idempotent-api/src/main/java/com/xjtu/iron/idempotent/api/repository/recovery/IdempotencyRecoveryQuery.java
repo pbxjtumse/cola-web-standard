@@ -10,10 +10,19 @@ import java.time.Instant;
  */
 public final class IdempotencyRecoveryQuery {
 
+    /** 要扫描的逻辑 Store。 */
     private final String storeName;
+
+    /** Policy 解析出的业务隔离域。 */
     private final String namespace;
+
+    /** 本次扫描负责的逻辑桶。 */
     private final int scanBucket;
+
+    /** 扫描判断使用的当前时间。 */
     private final Instant now;
+
+    /** 最大返回 candidate 数量。 */
     private final int limit;
 
     public IdempotencyRecoveryQuery(String storeName, String namespace, int scanBucket, Instant now, int limit) {
