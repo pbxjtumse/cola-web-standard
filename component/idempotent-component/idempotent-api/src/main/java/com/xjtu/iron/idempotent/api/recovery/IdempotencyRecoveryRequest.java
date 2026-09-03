@@ -1,6 +1,7 @@
 package com.xjtu.iron.idempotent.api.recovery;
 
 import com.xjtu.iron.idempotent.api.policy.IdempotencyPolicy;
+import com.xjtu.iron.idempotent.api.storage.IdempotencyStorageContext;
 
 /**
  * 外部 Reliable Task 调用 recover() 时使用的请求。
@@ -13,6 +14,9 @@ public final class IdempotencyRecoveryRequest {
     private final String key;
     private final String requestHash;
     private final String routeKey;
+    private final String storeName;
+    private final long shardKey;
+    private final int scanBucket;
     private final String expectedOwnerToken;
     private final Long expectedVersion;
     private final String policyName;
@@ -22,6 +26,10 @@ public final class IdempotencyRecoveryRequest {
         this.key = builder.key;
         this.requestHash = builder.requestHash;
         this.routeKey = builder.routeKey;
+        this.storeName = builder.storeName == null || builder.storeName.isBlank()
+                ? IdempotencyStorageContext.DEFAULT_STORE_NAME : builder.storeName.trim();
+        this.shardKey = builder.shardKey;
+        this.scanBucket = builder.scanBucket;
         this.expectedOwnerToken = builder.expectedOwnerToken;
         this.expectedVersion = builder.expectedVersion;
         this.policyName = builder.policyName;
@@ -33,15 +41,25 @@ public final class IdempotencyRecoveryRequest {
     public String getKey() { return key; }
     public String getRequestHash() { return requestHash; }
     public String getRouteKey() { return routeKey; }
+    public String getStoreName() { return storeName; }
+    public long getShardKey() { return shardKey; }
+    public int getScanBucket() { return scanBucket; }
     public String getExpectedOwnerToken() { return expectedOwnerToken; }
     public Long getExpectedVersion() { return expectedVersion; }
     public String getPolicyName() { return policyName; }
     public IdempotencyPolicy getPolicy() { return policy; }
 
+    public IdempotencyStorageContext storageContext() {
+        return IdempotencyStorageContext.of(storeName, shardKey, scanBucket);
+    }
+
     public static final class Builder {
         private String key;
         private String requestHash;
         private String routeKey;
+        private String storeName = IdempotencyStorageContext.DEFAULT_STORE_NAME;
+        private long shardKey;
+        private int scanBucket;
         private String expectedOwnerToken;
         private Long expectedVersion;
         private String policyName;
@@ -50,11 +68,19 @@ public final class IdempotencyRecoveryRequest {
         public Builder key(String value) { this.key = value; return this; }
         public Builder requestHash(String value) { this.requestHash = value; return this; }
         public Builder routeKey(String value) { this.routeKey = value; return this; }
+        public Builder storeName(String value) { this.storeName = value; return this; }
+        public Builder shardKey(long value) { this.shardKey = value; return this; }
+        public Builder scanBucket(int value) { this.scanBucket = value; return this; }
         public Builder expectedOwnerToken(String value) { this.expectedOwnerToken = value; return this; }
         public Builder expectedVersion(Long value) { this.expectedVersion = value; return this; }
         public Builder policyName(String value) { this.policyName = value; return this; }
         public Builder policy(IdempotencyPolicy value) { this.policy = value; return this; }
 
-        public IdempotencyRecoveryRequest build() { return new IdempotencyRecoveryRequest(this); }
+        public IdempotencyRecoveryRequest build() {
+            if (scanBucket < 0) {
+                throw new IllegalArgumentException("scanBucket must not be negative");
+            }
+            return new IdempotencyRecoveryRequest(this);
+        }
     }
 }
