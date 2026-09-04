@@ -34,7 +34,7 @@ package "Relational Access Component" {
   [transaction / sharding / observation\nintegrations - FUTURE] as Integrations
 }
 
-cloud "Business Persistence" {
+package "Business Persistence Framework" {
   [MyBatis / JPA / jOOQ] as BizPersistence
 }
 
