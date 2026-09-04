@@ -1,0 +1,102 @@
+@startuml
+title idempotent-component v2 - Runtime State View
+
+hide empty description
+skinparam shadowing false
+skinparam linetype ortho
+left to right direction
+
+' 这张图用于“快速看懂运行态”，不替代 00-idempotency-full-state.puml。
+' 颜色只用于区分语义层次，不代表代码中的额外状态。
+
+legend
+|= 颜色 |= 含义 |
+|<#D9EAF7>| PROCESSING / 执行中 |
+|<#DFF2BF>| SUCCESS / 成功终态 |
+|<#FDE9A9>| FAILED / 失败终态 |
+|<#E6E6E6>| DISCARDED / 丢弃终态 |
+|<#FFF4CC>| 派生判定状态 |
+|<#E8DDF5>| Recovery / 接管流程 |
+endlegend
+
+state "ABSENT\n[DOC ONLY]\n尚无记录" as ABSENT #FFFFFF
+state "PROCESSING\n[PERSISTED]\nownerToken + version\nprocessingExpireAt" as PROCESSING #D9EAF7
+state "SUCCESS\n[PERSISTED]\n业务真实成功" as SUCCESS #DFF2BF
+state "FAILED\n[PERSISTED]\nfailureRetryable" as FAILED #FDE9A9
+state "DISCARDED\n[PERSISTED]\n明确终止，不再处理" as DISCARDED #E6E6E6
+
+[*] --> ABSENT
+ABSENT --> PROCESSING : [NORMAL] tryAcquire=ACQUIRED\nowner=A, version=1
+PROCESSING --> SUCCESS : [WRITE] markSuccess\nowner/version CAS=UPDATED
+PROCESSING --> FAILED : [WRITE] markFailed\nowner/version CAS=UPDATED
+PROCESSING --> DISCARDED : [WRITE] markDiscarded\nowner/version CAS=UPDATED
+
+state "PROCESSING_ACTIVE\n[DERIVED]\nlease 未过期" as ACTIVE #FFF4CC
+state "PROCESSING_EXPIRED\n[DERIVED]\nlease 已过期" as EXPIRED #FFF4CC
+state "FAILED_RETRYABLE\n[DERIVED]\n允许恢复" as FAILED_RETRYABLE #FFF4CC
+state "FAILED_FINAL\n[DERIVED]\n不允许恢复" as FAILED_FINAL #FFF4CC
+
+PROCESSING --> ACTIVE : [READ] now < processingExpireAt
+PROCESSING --> EXPIRED : [READ] now >= processingExpireAt
+FAILED --> FAILED_RETRYABLE : [READ] failureRetryable=true
+FAILED --> FAILED_FINAL : [READ] failureRetryable=false
+
+state "RETURN PROCESSING\n[CALL RESULT]" as RET_PROCESSING #FFFFFF
+state "RETURN PROCESSING_EXPIRED\n[CALL RESULT]" as RET_EXPIRED #FFFFFF
+state "RETURN PREVIOUS_FAILED_RETRYABLE\n[CALL RESULT]" as RET_FAILED_RETRYABLE #FFFFFF
+state "RETURN PREVIOUS_FAILED_FINAL\n[CALL RESULT]" as RET_FAILED_FINAL #FFFFFF
+state "REPLAYED\n[CALL RESULT]\n不重新执行业务" as REPLAYED #FFFFFF
+state "PREVIOUS_DISCARDED\n[CALL RESULT]" as PREVIOUS_DISCARDED #FFFFFF
+
+ACTIVE --> RET_PROCESSING : normal execute()
+EXPIRED --> RET_EXPIRED : normal execute()\n不自动接管
+FAILED_RETRYABLE --> RET_FAILED_RETRYABLE : normal execute()
+FAILED_FINAL --> RET_FAILED_FINAL : normal execute()
+SUCCESS --> REPLAYED : duplicate execute()
+DISCARDED --> PREVIOUS_DISCARDED : duplicate execute()
+
+state "RECOVERY_CANDIDATE\n[DOC ONLY]\n扫描候选" as REC_CANDIDATE #E8DDF5
+state "TRY_RECOVER\n[ATOMIC]\nexpectedOwner + expectedVersion" as TRY_RECOVER #E8DDF5
+state "RECOVERY_ACQUIRED\n[REPO RESULT]\nnew owner + version+1" as REC_ACQUIRED #E8DDF5
+state "STALE_CANDIDATE\n[REPO RESULT]" as STALE #E8DDF5
+state "RECOVERY_NOT_ALLOWED\n[CALL RESULT]" as REC_NOT_ALLOWED #FFFFFF
+state "STALE_RECOVERY_CANDIDATE\n[CALL RESULT]" as STALE_RESULT #FFFFFF
+
+EXPIRED --> REC_CANDIDATE : [RECOVERY] recoverProcessingTimeout=true
+FAILED_RETRYABLE --> REC_CANDIDATE : [RECOVERY] recoverFailed=true
+REC_CANDIDATE --> TRY_RECOVER : recover(expectedOwner, expectedVersion)
+TRY_RECOVER --> REC_ACQUIRED : candidate 仍有效
+TRY_RECOVER --> STALE : owner/version 已变化
+TRY_RECOVER --> REC_NOT_ALLOWED : 不允许恢复 / 已终态
+REC_ACQUIRED --> PROCESSING : [RECOVERY] 原子接管\nnew generation
+STALE --> STALE_RESULT
+
+state "WINDOW_ACTIVE\n[WINDOWED ONLY]" as WINDOW_ACTIVE #FFFFFF
+state "WINDOW_EXPIRED\n[WINDOWED ONLY]" as WINDOW_EXPIRED #FFFFFF
+state "NEXT_GENERATION\n[WINDOWED ONLY]\nversion+1" as NEXT_GENERATION #FFFFFF
+
+SUCCESS --> WINDOW_ACTIVE : WINDOWED
+FAILED --> WINDOW_ACTIVE : WINDOWED
+DISCARDED --> WINDOW_ACTIVE : WINDOWED
+WINDOW_ACTIVE --> WINDOW_ACTIVE : FIXED=不推进\nSLIDING=有效访问推进窗口
+WINDOW_ACTIVE --> WINDOW_EXPIRED : now >= windowExpireAt
+WINDOW_EXPIRED --> NEXT_GENERATION : next execute()
+NEXT_GENERATION --> PROCESSING : 重置同一物理记录\n开启新 generation
+
+note bottom of PROCESSING
+真正持久状态只有：
+PROCESSING / SUCCESS / FAILED / DISCARDED。
+ACTIVE / EXPIRED / RETRYABLE / FINAL 都是派生判定。
+end note
+
+note bottom of REC_ACQUIRED
+Recovery 不是第五个持久状态。
+接管成功后仍回到 PROCESSING，只是 ownerToken 改变、version + 1。
+end note
+
+note bottom of WINDOW_EXPIRED
+WINDOWED 的幂等语义到期，不等于物理记录立即删除。
+recordRetentionTtl 可以继续保留旧记录。
+end note
+
+@enduml
