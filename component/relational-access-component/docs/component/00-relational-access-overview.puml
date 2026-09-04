@@ -1,0 +1,83 @@
+@startuml
+title Relational Access Component - L0 Overall Boundary
+
+left to right direction
+skinparam shadowing false
+skinparam linetype polyline
+skinparam componentStyle rectangle
+skinparam nodesep 55
+skinparam ranksep 60
+
+package "Business / Template Layer" {
+  [Business Template\nOrder / Payment / Clearing] as Business
+  [Business Repository Port] as BizRepo
+  [MyBatis / JPA / jOOQ Adapter] as ORM
+}
+
+package "High-level Technical Component APIs\n[Business Template depends here]" {
+  [Idempotency API\nIdempotencyExecutor] as IdemApi
+  [Message API\nMessageTemplate] as MsgApi
+  [Retry API\nRetryExecutor] as RetryApi
+  [Transaction API\nTransactionTemplate] as TxApi
+}
+
+package "Technical Component Storage Adapters\n[Component implementation depends on relational-api]" {
+  [JdbcIdempotencyStorage] as IdemStorage
+  [JdbcOutboxStorage] as OutboxStorage
+  [JdbcTaskStorage] as TaskStorage
+}
+
+package "Relational Access Component" {
+  [relational-api\nRelationalTemplate\nSqlStatement / RowMapper] as RAApi
+  [relational-spi\nConnectionProvider\nDataSourceResolver\nExceptionTranslator] as RASpi
+  [relational-core\nFUTURE] as RACore
+  [transaction / sharding / observation\nintegrations - FUTURE] as Integrations
+}
+
+cloud "Business Persistence" {
+  [MyBatis / JPA / jOOQ] as BizPersistence
+}
+
+database "DataSource / JDBC" as DS
+database "Relational Database" as DB
+
+Business --> IdemApi : high-level capability
+Business --> MsgApi : high-level capability
+Business --> RetryApi : high-level capability
+Business --> TxApi : high-level capability
+Business --> BizRepo : business persistence port
+
+BizRepo --> ORM
+ORM --> BizPersistence
+BizPersistence --> DS
+
+IdemApi --> IdemStorage : storage port implementation
+MsgApi --> OutboxStorage : optional outbox
+IdemStorage --> RAApi
+OutboxStorage --> RAApi
+TaskStorage --> RAApi
+
+RAApi --> RACore : implemented by (future)
+RACore --> RASpi : extension contracts
+Integrations --> RASpi
+Integrations ..> TxApi : transaction bridge
+RACore --> DS
+DS --> DB
+
+note top of Business
+Business Template should stay farther away from JDBC.
+It normally sees high-level component APIs and its own Repository ports.
+end note
+
+note bottom of IdemStorage
+Storage Adapter owns domain-storage translation:
+tryAcquire -> SQL + parameters + route + result interpretation.
+end note
+
+note bottom of RAApi
+Relational Access does NOT understand
+idempotency / order / outbox semantics.
+It executes an already determined relational operation.
+end note
+
+@enduml

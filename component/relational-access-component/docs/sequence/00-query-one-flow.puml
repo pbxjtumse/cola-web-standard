@@ -1,0 +1,63 @@
+@startuml
+title Relational Access - queryOne Future Main Flow
+
+autonumber
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+
+actor "JdbcXXXStorage" as Caller
+participant "RelationalTemplate\n(API)" as RT
+participant "SqlExecutionListener\n(SPI)" as Listener
+participant "DataSourceResolver\n(SPI)" as DSR
+participant "ConnectionProvider\n(SPI)" as CP
+participant "ConnectionHandle" as Handle
+participant "PreparedStatement\n[JDBC]" as PS
+participant "ResultSet\n[JDBC]" as RS
+participant "RowMapper<T>\n(API)" as Mapper
+participant "SqlExceptionTranslator\n(SPI)" as Translator
+database Database as DB
+
+Caller -> RT : queryOne(SqlStatement, RowMapper)
+RT -> Listener : beforeExecute(context)
+RT -> DSR : resolve(context.route.dataSourceKey)
+DSR --> RT : DataSource
+RT -> CP : acquire(context)
+CP --> RT : ConnectionHandle
+RT -> Handle : connection()
+Handle --> RT : Connection
+RT -> PS : prepareStatement(sql)
+RT -> PS : setQueryTimeout / fetchSize / maxRows
+RT -> PS : bind parameters
+RT -> PS : executeQuery()
+PS -> DB : SELECT ...
+DB --> PS : rows
+PS --> RT : ResultSet
+
+RT -> RS : next()
+alt zero row
+  RT --> Caller : Optional.empty()
+else first row exists
+  RT -> Mapper : map(ResultSet)
+  Mapper --> RT : T
+  RT -> RS : next()
+  alt second row exists
+    RT -> Translator : translate NON_UNIQUE_RESULT semantic
+    Translator --> RT : RelationalAccessException
+    RT --> Caller : throw
+  else exactly one row
+    RT --> Caller : Optional<T>
+  end
+end
+
+finally release
+  RT -> RS : close()
+  RT -> PS : close()
+  RT -> Handle : close()
+  note right of Handle
+  OWNED: physical close
+  BORROWED: logical release only
+  end note
+  RT -> Listener : afterSuccess / afterFailure
+end
+
+@enduml

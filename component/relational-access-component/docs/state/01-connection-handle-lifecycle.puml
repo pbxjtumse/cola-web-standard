@@ -1,0 +1,41 @@
+@startuml
+title Relational Access - ConnectionHandle Ownership Lifecycle
+
+hide empty description
+skinparam shadowing false
+skinparam linetype polyline
+left to right direction
+
+state CREATED
+state "ACQUIRED\nOWNED" as OWNED
+state "ACQUIRED\nBORROWED" as BORROWED
+state RELEASE_REQUESTED
+state PHYSICALLY_CLOSED
+state LOGICALLY_RELEASED
+
+[*] --> CREATED
+
+CREATED --> OWNED : no active transaction\nDataSource.getConnection()
+CREATED --> BORROWED : transaction-bound Connection exists\nreuse same physical Connection
+
+OWNED --> RELEASE_REQUESTED : ConnectionHandle.close()
+BORROWED --> RELEASE_REQUESTED : ConnectionHandle.close()
+
+RELEASE_REQUESTED --> PHYSICALLY_CLOSED : ownership = OWNED
+RELEASE_REQUESTED --> LOGICALLY_RELEASED : ownership = BORROWED
+
+PHYSICALLY_CLOSED --> [*]
+LOGICALLY_RELEASED --> [*]
+
+note bottom of OWNED
+Relational Access owns the physical Connection.
+It is responsible for closing/releasing it to the pool.
+end note
+
+note bottom of BORROWED
+The outer Transaction Component owns the Connection.
+Relational Access MUST NOT physically close it.
+Commit/Rollback/physical close happen at transaction end.
+end note
+
+@enduml

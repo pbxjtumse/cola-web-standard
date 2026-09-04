@@ -1,0 +1,134 @@
+@startuml
+title Relational Access Component - L1 API / SPI Boundary
+
+left to right direction
+skinparam shadowing false
+skinparam linetype polyline
+skinparam classAttributeIconSize 0
+skinparam nodesep 45
+skinparam ranksep 55
+
+package "relational-api\n[Storage Adapter Public API]" {
+  interface RelationalTemplate {
+    queryOne(statement, rowMapper)
+    queryList(statement, rowMapper)
+    queryScalar(statement, requiredType)
+    update(statement)
+    insertAndReturnKey(statement, keyType)
+    batchUpdate(statement)
+  }
+
+  interface "RowMapper<T>" as RowMapper {
+    map(ResultSet)
+  }
+
+  class SqlStatement <<record>> {
+    operationName
+    sql
+    parameters
+    options
+    route
+  }
+
+  class BatchSqlStatement <<record>>
+  class SqlParameter <<record>>
+  class SqlExecutionOptions <<record>>
+  class SqlRoute <<record>> {
+    dataSourceKey
+  }
+  class UpdateResult <<record>>
+  class BatchResult <<record>>
+  class "GeneratedKey<T>" as GeneratedKey <<record>>
+  class RelationalAccessException
+  enum RelationalFailureType
+}
+
+package "relational-spi\n[Core / Integration Extension API]" {
+  interface ConnectionProvider {
+    acquire(context)
+  }
+  interface ConnectionHandle {
+    connection()
+    ownership()
+    close()
+  }
+  enum ConnectionOwnership {
+    OWNED
+    BORROWED
+  }
+  interface DataSourceResolver {
+    resolve(context)
+  }
+  interface SqlExceptionTranslator {
+    translate(context, SQLException)
+  }
+  interface RelationalDialect {
+    name()
+    supportsGeneratedKeys()
+  }
+  interface SqlExecutionListener {
+    beforeExecute(context)
+    afterSuccess(context, elapsed)
+    afterFailure(context, elapsed, failure)
+  }
+  class SqlExecutionContext <<record>>
+}
+
+package "Future Implementation Modules\n[NOT implemented in this milestone]" {
+  class DefaultRelationalTemplate <<future>>
+  class JdbcStatementExecutor <<future>>
+  class DefaultConnectionProvider <<future>>
+  class TransactionAwareConnectionProvider <<future>>
+  class StandardSqlStateExceptionTranslator <<future>>
+  class MicrometerSqlExecutionListener <<future>>
+}
+
+RelationalTemplate ..> SqlStatement
+RelationalTemplate ..> BatchSqlStatement
+RelationalTemplate ..> RowMapper
+RelationalTemplate ..> UpdateResult
+RelationalTemplate ..> BatchResult
+RelationalTemplate ..> GeneratedKey
+
+SqlStatement --> SqlParameter
+SqlStatement --> SqlExecutionOptions
+SqlStatement --> SqlRoute
+BatchSqlStatement --> SqlParameter
+BatchSqlStatement --> SqlExecutionOptions
+BatchSqlStatement --> SqlRoute
+RelationalAccessException --> RelationalFailureType
+
+ConnectionProvider ..> SqlExecutionContext
+ConnectionProvider ..> ConnectionHandle
+ConnectionHandle --> ConnectionOwnership
+DataSourceResolver ..> SqlExecutionContext
+SqlExceptionTranslator ..> SqlExecutionContext
+SqlExceptionTranslator ..> RelationalAccessException
+SqlExecutionListener ..> SqlExecutionContext
+SqlExecutionContext --> SqlExecutionOptions
+SqlExecutionContext --> SqlRoute
+
+DefaultRelationalTemplate ..|> RelationalTemplate
+DefaultRelationalTemplate --> JdbcStatementExecutor
+JdbcStatementExecutor ..> ConnectionProvider
+JdbcStatementExecutor ..> DataSourceResolver
+JdbcStatementExecutor ..> SqlExceptionTranslator
+JdbcStatementExecutor ..> RelationalDialect
+JdbcStatementExecutor ..> SqlExecutionListener
+DefaultConnectionProvider ..|> ConnectionProvider
+TransactionAwareConnectionProvider ..|> ConnectionProvider
+StandardSqlStateExceptionTranslator ..|> SqlExceptionTranslator
+MicrometerSqlExecutionListener ..|> SqlExecutionListener
+
+note top of RelationalTemplate
+Level B API:
+JdbcIdempotencyStorage / JdbcOutboxStorage / JdbcTaskStorage use this layer.
+They should NOT reach ConnectionProvider directly.
+end note
+
+note top of ConnectionProvider
+Level C SPI:
+only relational-core and integrations should normally use/implement this layer.
+end note
+
+@enduml
