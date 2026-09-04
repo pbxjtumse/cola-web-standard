@@ -1,5 +1,5 @@
 @startuml
-title Relational Access Component - L0 Overall Boundary
+title Relational Access Component - L0 Overall Boundary (v1 Current)
 
 left to right direction
 skinparam shadowing false
@@ -11,17 +11,16 @@ skinparam ranksep 60
 package "Business / Template Layer" {
   [Business Template\nOrder / Payment / Clearing] as Business
   [Business Repository Port] as BizRepo
-  [MyBatis / JPA / jOOQ Adapter] as ORM
 }
 
 package "High-level Technical Component APIs\n[Business Template depends here]" {
   [Idempotency API\nIdempotencyExecutor] as IdemApi
   [Message API\nMessageTemplate] as MsgApi
   [Retry API\nRetryExecutor] as RetryApi
-  [Transaction API\nTransactionTemplate] as TxApi
+  [Transaction API\nTransactionExecutor] as TxApi
 }
 
-package "Technical Component Storage Adapters\n[Component implementation depends on relational-api]" {
+package "Technical Component Storage Adapters\n[depend on relational-api]" {
   [JdbcIdempotencyStorage] as IdemStorage
   [JdbcOutboxStorage] as OutboxStorage
   [JdbcTaskStorage] as TaskStorage
@@ -29,55 +28,57 @@ package "Technical Component Storage Adapters\n[Component implementation depends
 
 package "Relational Access Component" {
   [relational-api\nRelationalTemplate\nSqlStatement / RowMapper] as RAApi
-  [relational-spi\nConnectionProvider\nDataSourceResolver\nExceptionTranslator] as RASpi
-  [relational-core\nFUTURE] as RACore
-  [transaction / sharding / observation\nintegrations - FUTURE] as Integrations
+  [relational-core\nDefaultRelationalTemplate] as RACore
+  [relational-spi\nConnectionProvider / Resolver\nTranslator / Listener] as RASpi
+  [relational-integration-spring\nSpringTransactionAwareConnectionProvider] as SpringIntegration
 }
 
 package "Business Persistence Framework" {
   [MyBatis / JPA / jOOQ] as BizPersistence
 }
 
+component "Spring Transaction Infrastructure" as SpringTx
 database "DataSource / JDBC" as DS
 database "Relational Database" as DB
 
 Business --> IdemApi : high-level capability
-Business --> MsgApi : high-level capability
-Business --> RetryApi : high-level capability
-Business --> TxApi : high-level capability
-Business --> BizRepo : business persistence port
+Business --> MsgApi
+Business --> RetryApi
+Business --> TxApi
+Business --> BizRepo
 
-BizRepo --> ORM
-ORM --> BizPersistence
-BizPersistence --> DS
+BizRepo --> BizPersistence
+BizPersistence --> SpringTx : transaction-aware access
+SpringTx --> DS
 
-IdemApi --> IdemStorage : storage port implementation
+IdemApi --> IdemStorage
 MsgApi --> OutboxStorage : optional outbox
 IdemStorage --> RAApi
 OutboxStorage --> RAApi
 TaskStorage --> RAApi
 
-RAApi --> RACore : implemented by (future)
-RACore --> RASpi : extension contracts
-Integrations --> RASpi
-Integrations ..> TxApi : transaction bridge
-RACore --> DS
+RAApi <|.. RACore : implements
+RACore --> RASpi : consumes SPI
+SpringIntegration ..|> RASpi : implements ConnectionProvider
+SpringIntegration --> SpringTx : DataSourceUtils
+RACore --> DS : default provider path
 DS --> DB
 
+TxApi --> SpringTx : begin/join/commit/rollback
+
 note top of Business
-Business Template should stay farther away from JDBC.
+Business Template stays farther away from JDBC.
 It normally sees high-level component APIs and its own Repository ports.
 end note
 
 note bottom of IdemStorage
 Storage Adapter owns domain-storage translation:
-tryAcquire -> SQL + parameters + route + result interpretation.
+tryAcquire -> final SQL + parameters + physical table + route + result interpretation.
 end note
 
-note bottom of RAApi
-Relational Access does NOT understand
-idempotency / order / outbox semantics.
-It executes an already determined relational operation.
+note bottom of SpringIntegration
+Spring integration does not create transaction propagation.
+It only makes RelationalTemplate participate in the ambient transaction Connection.
 end note
 
 @enduml

@@ -1,5 +1,5 @@
 @startuml
-title Idempotency -> JDBC Storage -> Relational Access Boundary
+title Idempotency -> Storage -> Relational Access v1 Boundary
 
 autonumber
 skinparam shadowing false
@@ -11,7 +11,9 @@ participant "IdempotencyStorage\n[Storage Port]" as StoragePort
 participant "JdbcIdempotencyStorage\n[Adapter]" as JdbcStorage
 participant "ShardingRouter\n[optional / external]" as Router
 participant "RelationalTemplate\n[relational-api]" as RT
+participant "ConnectionProvider\n[relational-spi]" as CP
 participant "DataSourceResolver\n[relational-spi]" as DSR
+database DataSource as DS
 database Database as DB
 
 Business -> Executor : execute(scene, businessKey, callback)
@@ -20,7 +22,7 @@ StoragePort -> JdbcStorage : implementation call
 
 note over JdbcStorage
 Domain-storage translation boundary:
-tryAcquire -> physical table + SQL + parameters + result interpretation
+tryAcquire -> physical table + final SQL + parameters + result interpretation
 end note
 
 opt sharding enabled
@@ -28,18 +30,21 @@ opt sharding enabled
   Router --> JdbcStorage : dataSourceKey + physicalTable
 end
 
-JdbcStorage -> JdbcStorage : choose TRY_ACQUIRE SQL\nsubstitute safe physical table\nbuild SqlStatement + SqlRoute
+JdbcStorage -> JdbcStorage : choose SQL\ninsert safe physical table\nbuild SqlStatement + SqlRoute
 JdbcStorage -> RT : update(SqlStatement)
 
 note over RT
-Relational Access does NOT know
-what ACQUIRED / PROCESSING / ownerToken means.
+Relational Access knows no ACQUIRED / PROCESSING / ownerToken semantics.
 It only executes a determined relational operation.
 end note
 
-RT -> DSR : resolve(dataSourceKey)
-DSR --> RT : DataSource
-RT -> DB : UPDATE iron_idempotency_xx ...\nWHERE status = ? ...
+RT -> CP : acquire(SqlExecutionContext)
+CP -> DSR : resolve(context)
+DSR --> CP : DataSource
+CP -> DS : get/reuse Connection
+DS --> CP : Connection
+CP --> RT : ConnectionHandle
+RT -> DB : execute final UPDATE/INSERT
 DB --> RT : affectedRows
 RT --> JdbcStorage : UpdateResult
 
@@ -48,10 +53,12 @@ alt affectedRows == 1
   StoragePort --> Executor : ACQUIRED
   Executor -> Business : execute callback
 else affectedRows == 0
-  JdbcStorage -> RT : query current record if domain semantics require
-  RT -> DB : SELECT ...
+  JdbcStorage -> RT : queryOne(current-record SQL) if domain semantics require
+  RT -> CP : acquire(context)
+  CP --> RT : ConnectionHandle
+  RT -> DB : SELECT current record
   DB --> RT : row
-  RT --> JdbcStorage : record
+  RT --> JdbcStorage : Optional<Record>
   JdbcStorage --> StoragePort : PROCESSING / SUCCESS / FAILED / ...
   StoragePort --> Executor : domain storage result
 end
