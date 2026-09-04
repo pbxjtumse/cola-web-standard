@@ -19,5 +19,6 @@ public enum RelationalFailureType {
     DATA_ERROR,
     NON_UNIQUE_RESULT,
     RESULT_MAPPING_ERROR,
+    GENERATED_KEY_UNAVAILABLE,
     UNKNOWN
 }

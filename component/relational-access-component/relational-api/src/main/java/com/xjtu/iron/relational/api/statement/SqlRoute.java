@@ -10,4 +10,18 @@ package com.xjtu.iron.relational.api.statement;
  * @param dataSourceKey 目标数据源键；null 表示默认数据源
  */
 public record SqlRoute(String dataSourceKey) {
+
+    private static final SqlRoute DEFAULT_ROUTE = new SqlRoute(null);
+
+    public static SqlRoute defaultRoute() {
+        return DEFAULT_ROUTE;
+    }
+
+    public static SqlRoute of(String dataSourceKey) {
+        return new SqlRoute(dataSourceKey);
+    }
+
+    public boolean isDefaultRoute() {
+        return dataSourceKey == null || dataSourceKey.isBlank();
+    }
 }

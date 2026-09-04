@@ -13,4 +13,14 @@ public record SqlExecutionOptions(
         Integer fetchSize,
         Integer maxRows
 ) {
+
+    private static final SqlExecutionOptions DEFAULTS = new SqlExecutionOptions(null, null, null);
+
+    public static SqlExecutionOptions defaults() {
+        return DEFAULTS;
+    }
+
+    public static SqlExecutionOptions timeout(Duration timeout) {
+        return new SqlExecutionOptions(timeout, null, null);
+    }
 }

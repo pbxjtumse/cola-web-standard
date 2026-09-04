@@ -1,5 +1,6 @@
 package com.xjtu.iron.relational.api.statement;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -18,4 +19,34 @@ public record SqlStatement(
         SqlExecutionOptions options,
         SqlRoute route
 ) {
+
+    public SqlStatement {
+        parameters = parameters == null ? List.of() : List.copyOf(parameters);
+        options = options == null ? SqlExecutionOptions.defaults() : options;
+        route = route == null ? SqlRoute.defaultRoute() : route;
+    }
+
+    /**
+     * 最常用的快捷构造：普通参数自动包装为 SqlParameter。
+     */
+    public static SqlStatement of(String operationName, String sql, Object... parameters) {
+        List<SqlParameter> sqlParameters = parameters == null
+                ? List.of()
+                : Arrays.stream(parameters).map(SqlParameter::of).toList();
+        return new SqlStatement(
+                operationName,
+                sql,
+                sqlParameters,
+                SqlExecutionOptions.defaults(),
+                SqlRoute.defaultRoute()
+        );
+    }
+
+    public SqlStatement withOptions(SqlExecutionOptions newOptions) {
+        return new SqlStatement(operationName, sql, parameters, newOptions, route);
+    }
+
+    public SqlStatement withRoute(SqlRoute newRoute) {
+        return new SqlStatement(operationName, sql, parameters, options, newRoute);
+    }
 }

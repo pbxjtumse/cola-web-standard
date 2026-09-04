@@ -18,4 +18,34 @@ public record BatchSqlStatement(
         SqlExecutionOptions options,
         SqlRoute route
 ) {
+
+    public BatchSqlStatement {
+        batches = batches == null
+                ? List.of()
+                : batches.stream().map(List::copyOf).toList();
+        options = options == null ? SqlExecutionOptions.defaults() : options;
+        route = route == null ? SqlRoute.defaultRoute() : route;
+    }
+
+    public static BatchSqlStatement of(
+            String operationName,
+            String sql,
+            List<List<SqlParameter>> batches
+    ) {
+        return new BatchSqlStatement(
+                operationName,
+                sql,
+                batches,
+                SqlExecutionOptions.defaults(),
+                SqlRoute.defaultRoute()
+        );
+    }
+
+    public BatchSqlStatement withOptions(SqlExecutionOptions newOptions) {
+        return new BatchSqlStatement(operationName, sql, batches, newOptions, route);
+    }
+
+    public BatchSqlStatement withRoute(SqlRoute newRoute) {
+        return new BatchSqlStatement(operationName, sql, batches, options, newRoute);
+    }
 }

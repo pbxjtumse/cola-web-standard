@@ -12,6 +12,7 @@ import java.util.Map;
  * 高基数业务标签。</p>
  *
  * @param operationName 稳定逻辑操作名
+ * @param kind 实际执行种类
  * @param sql 最终 SQL
  * @param route 已确定的数据源路由
  * @param options Statement 执行选项
@@ -19,9 +20,14 @@ import java.util.Map;
  */
 public record SqlExecutionContext(
         String operationName,
+        SqlExecutionKind kind,
         String sql,
         SqlRoute route,
         SqlExecutionOptions options,
         Map<String, Object> attributes
 ) {
+
+    public SqlExecutionContext {
+        attributes = attributes == null ? Map.of() : Map.copyOf(attributes);
+    }
 }

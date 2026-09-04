@@ -1,6 +1,7 @@
 package com.xjtu.iron.relational.spi;
 
 import java.sql.Connection;
+import java.sql.SQLException;
 
 /**
  * Connection 的资源句柄与所有权边界。
@@ -19,5 +20,5 @@ public interface ConnectionHandle extends AutoCloseable {
      * OWNED 应物理关闭；BORROWED 仅逻辑释放。
      */
     @Override
-    void close();
+    void close() throws SQLException;
 }
