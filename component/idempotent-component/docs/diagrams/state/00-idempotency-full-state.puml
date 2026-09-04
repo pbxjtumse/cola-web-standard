@@ -4,6 +4,9 @@ title idempotent-component v2 - Full State Model (Shard-Ready Storage)
 hide empty description
 skinparam shadowing false
 skinparam linetype ortho
+skinparam nodesep 80
+skinparam ranksep 100
+skinparam ArrowThickness 1.5
 left to right direction
 
 legend
