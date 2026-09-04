@@ -3,9 +3,12 @@ title idempotent-component v2 - Full State Model (Shard-Ready Storage)
 
 hide empty description
 skinparam shadowing false
-skinparam linetype ortho
-skinparam nodesep 80
-skinparam ranksep 100
+' Prefer natural polyline routing over rigid orthogonal channels.
+' The full-state diagram contains several fan-out/fan-in areas; polyline keeps
+' semantic groups readable and avoids forcing unrelated edges into one grid.
+skinparam linetype polyline
+skinparam nodesep 55
+skinparam ranksep 75
 skinparam ArrowThickness 1.5
 left to right direction
 
@@ -19,6 +22,8 @@ endlegend
 
 ' ============================================================================
 ' 1. Persisted lifecycle
+'    Layout intent: keep the acquire/execute spine horizontal; terminal states
+'    are allowed to float naturally instead of forcing a strict grid.
 ' ============================================================================
 state "ABSENT\n[DOC ONLY]\n尚无物理记录" as ABSENT
 state "PROCESSING\n[PERSISTED]\nIdempotencyStatus.PROCESSING\nownerToken + version\nprocessingExpireAt" as PROCESSING
@@ -26,8 +31,8 @@ state "SUCCESS\n[PERSISTED]\nIdempotencyStatus.SUCCESS\n业务真实成功\nopti
 state "FAILED\n[PERSISTED]\nIdempotencyStatus.FAILED\nfailureRetryable" as FAILED
 state "DISCARDED\n[PERSISTED]\nIdempotencyStatus.DISCARDED\n明确终止，不再处理" as DISCARDED
 
-[*] --> ABSENT
-ABSENT --> PROCESSING : tryAcquire = ACQUIRED\n首次原子抢占\nowner=A, version=1
+[*] -right-> ABSENT
+ABSENT -right-> PROCESSING : tryAcquire = ACQUIRED\n首次原子抢占\nowner=A, version=1
 
 PROCESSING --> SUCCESS : markSuccess\nownerToken + version CAS\nWriteStatus=UPDATED
 PROCESSING --> FAILED : markFailed\nownerToken + version CAS\nWriteStatus=UPDATED
@@ -39,6 +44,8 @@ FAILED --> PROCESSING : recover retryable FAILED\nexpectedOwner/version match\nn
 
 ' ============================================================================
 ' 2. Normal execute() derived decisions
+'    Duplicate/derived branches deliberately drop below persisted states so
+'    they do not compete with the main acquire -> execute -> business spine.
 ' ============================================================================
 state "PROCESSING_ACTIVE\n[DERIVED]\nAcquireStatus.PROCESSING_ACTIVE\nprocessingExpireAt > now" as D_ACTIVE
 state "PROCESSING_EXPIRED\n[DERIVED]\nAcquireStatus.PROCESSING_EXPIRED\nprocessingExpireAt <= now" as D_EXPIRED
@@ -49,33 +56,35 @@ state "HISTORICAL_DISCARDED\n[REPO RESULT]\nAcquireStatus.DISCARDED" as A_DISCAR
 state "KEY_CONFLICT\n[REPO RESULT]\nAcquireStatus.KEY_CONFLICT" as A_CONFLICT
 state "PROVIDER_ERROR\n[REPO RESULT]\nAcquireStatus.PROVIDER_ERROR" as A_ERROR
 
-PROCESSING --> D_ACTIVE : normal duplicate\nnow < processingExpireAt
-PROCESSING --> D_EXPIRED : normal duplicate\nnow >= processingExpireAt
-FAILED --> D_FAILED_RETRYABLE : failureRetryable=true
-FAILED --> D_FAILED_FINAL : failureRetryable=false
-SUCCESS --> A_SUCCESS : duplicate execute()
-DISCARDED --> A_DISCARDED : duplicate execute()
+PROCESSING -down-> D_ACTIVE : normal duplicate\nnow < processingExpireAt
+PROCESSING -down-> D_EXPIRED : normal duplicate\nnow >= processingExpireAt
+FAILED -down-> D_FAILED_RETRYABLE : failureRetryable=true
+FAILED -down-> D_FAILED_FINAL : failureRetryable=false
+SUCCESS -down-> A_SUCCESS : duplicate execute()
+DISCARDED -down-> A_DISCARDED : duplicate execute()
 
 state "EXECUTE\n[CORE ACTION]\nStateMachine.execute()" as ACTION_EXECUTE
 state "REPLAY\n[CORE ACTION]\nStateMachine.replay()" as ACTION_REPLAY
 state "RETURN\n[CORE ACTION]\nStateMachine.returning(...)" as ACTION_RETURN
 
-PROCESSING --> ACTION_EXECUTE : tryAcquire=ACQUIRED\n仅新 generation
-A_SUCCESS --> ACTION_REPLAY : SUCCESS
-A_DISCARDED --> ACTION_RETURN : PREVIOUS_DISCARDED
-D_ACTIVE --> ACTION_RETURN : PROCESSING
-D_EXPIRED --> ACTION_RETURN : PROCESSING_EXPIRED
-D_FAILED_RETRYABLE --> ACTION_RETURN : PREVIOUS_FAILED_RETRYABLE
-D_FAILED_FINAL --> ACTION_RETURN : PREVIOUS_FAILED_FINAL
-A_CONFLICT --> ACTION_RETURN : KEY_CONFLICT
-A_ERROR --> ACTION_RETURN : REPOSITORY_ERROR
+PROCESSING -right-> ACTION_EXECUTE : tryAcquire=ACQUIRED\n仅新 generation
+A_SUCCESS -right-> ACTION_REPLAY : SUCCESS
+A_DISCARDED -right-> ACTION_RETURN : PREVIOUS_DISCARDED
+D_ACTIVE -right-> ACTION_RETURN : PROCESSING
+D_EXPIRED -right-> ACTION_RETURN : PROCESSING_EXPIRED
+D_FAILED_RETRYABLE -right-> ACTION_RETURN : PREVIOUS_FAILED_RETRYABLE
+D_FAILED_FINAL -right-> ACTION_RETURN : PREVIOUS_FAILED_FINAL
+A_CONFLICT -right-> ACTION_RETURN : KEY_CONFLICT
+A_ERROR -right-> ACTION_RETURN : REPOSITORY_ERROR
 
 state "BUSINESS CALLBACK\ncurrent owner/version\nrecoveryExecution=false/true" as BUSINESS
-ACTION_EXECUTE --> BUSINESS
+ACTION_EXECUTE -right-> BUSINESS
 ACTION_REPLAY --> SUCCESS : 不重新执行业务\n读取历史成功语义/结果
 
 ' ============================================================================
 ' 3. Completion / write CAS results
+'    UPDATED stays on the business spine. Exceptional CAS results fan downward
+'    and converge only after their repository meanings are visible.
 ' ============================================================================
 state "UPDATED\n[REPO RESULT]\nWriteStatus.UPDATED" as W_UPDATED
 state "STALE_OWNER\n[REPO RESULT]\nWriteStatus.STALE_OWNER" as W_STALE
@@ -83,11 +92,11 @@ state "ALREADY_FINAL\n[REPO RESULT]\nWriteStatus.ALREADY_FINAL" as W_FINAL
 state "NOT_FOUND\n[REPO RESULT]\nWriteStatus.NOT_FOUND" as W_NOT_FOUND
 state "WRITE_PROVIDER_ERROR\n[REPO RESULT]\nWriteStatus.PROVIDER_ERROR" as W_ERROR
 
-BUSINESS --> W_UPDATED : markSuccess / markFailed\n或 low-level markDiscarded\nCAS 命中
-BUSINESS --> W_STALE : owner/version 已换代
-BUSINESS --> W_FINAL : 当前记录已终态
-BUSINESS --> W_NOT_FOUND : 记录不存在
-BUSINESS --> W_ERROR : Provider exception
+BUSINESS -right-> W_UPDATED : markSuccess / markFailed\n或 low-level markDiscarded\nCAS 命中
+BUSINESS -down-> W_STALE : owner/version 已换代
+BUSINESS -down-> W_FINAL : 当前记录已终态
+BUSINESS -down-> W_NOT_FOUND : 记录不存在
+BUSINESS -down-> W_ERROR : Provider exception
 
 W_UPDATED --> SUCCESS : markSuccess
 W_UPDATED --> FAILED : markFailed
@@ -95,10 +104,10 @@ W_UPDATED --> DISCARDED : markDiscarded\nIdempotencyOperations/message path
 
 state "OWNERSHIP_LOST\n[CALL RESULT]\nIdempotencyResultStatus.OWNERSHIP_LOST" as R_OWNERSHIP_LOST
 state "REPOSITORY_ERROR\n[CALL RESULT]\nIdempotencyResultStatus.REPOSITORY_ERROR" as R_REPOSITORY_ERROR
-W_STALE --> R_OWNERSHIP_LOST : Executor completion rejected
-W_FINAL --> R_OWNERSHIP_LOST : Executor completion rejected
-W_NOT_FOUND --> R_REPOSITORY_ERROR
-W_ERROR --> R_REPOSITORY_ERROR
+W_STALE -right-> R_OWNERSHIP_LOST : Executor completion rejected
+W_FINAL -right-> R_OWNERSHIP_LOST : Executor completion rejected
+W_NOT_FOUND -right-> R_REPOSITORY_ERROR
+W_ERROR -right-> R_REPOSITORY_ERROR
 
 note bottom of W_STALE
 Tx-B 场景：markSuccess 返回 STALE_OWNER / ALREADY_FINAL 时，
@@ -108,6 +117,9 @@ end note
 
 ' ============================================================================
 ' 4. Reliable Recovery: scan candidate -> second CAS -> new generation
+'    Recovery is intentionally pushed below the normal duplicate branches.
+'    The decision node may fan naturally; do not force all outcomes through
+'    shared orthogonal channels.
 ' ============================================================================
 state "RECOVERY_CANDIDATE\n[DOC ONLY]\nPROCESSING_EXPIRED\n或 FAILED_RETRYABLE\n由 storeName + scanBucket 扫描" as REC_CANDIDATE
 state "RECOVERY_ATOMIC_DECISION\nRepository.tryRecover()\nexpectedOwner + expectedVersion" as REC_DECISION <<choice>>
@@ -122,9 +134,9 @@ state "REC_NOT_FOUND\n[REPO RESULT]\nRecoveryStatus.NOT_FOUND" as REC_NOT_FOUND
 state "REC_KEY_CONFLICT\n[REPO RESULT]\nRecoveryStatus.KEY_CONFLICT" as REC_CONFLICT
 state "REC_PROVIDER_ERROR\n[REPO RESULT]\nRecoveryStatus.PROVIDER_ERROR" as REC_ERROR
 
-D_EXPIRED --> REC_CANDIDATE : recoveryMode=EXTERNAL_TASK\nrecoverProcessingTimeout=true
-D_FAILED_RETRYABLE --> REC_CANDIDATE : recoveryMode=EXTERNAL_TASK\nrecoverFailed=true
-REC_CANDIDATE --> REC_DECISION : recover(expectedOwner, expectedVersion)
+D_EXPIRED -down-> REC_CANDIDATE : recoveryMode=EXTERNAL_TASK\nrecoverProcessingTimeout=true
+D_FAILED_RETRYABLE -down-> REC_CANDIDATE : recoveryMode=EXTERNAL_TASK\nrecoverFailed=true
+REC_CANDIDATE -right-> REC_DECISION : recover(expectedOwner, expectedVersion)
 
 REC_DECISION --> REC_ACQUIRED : 仍是可恢复旧 generation
 REC_DECISION --> REC_STALE : owner/version 已变化
@@ -157,20 +169,22 @@ end note
 
 ' ============================================================================
 ' 5. WINDOWED overlay
+'    Keep the window lifecycle on the outside of the core execution/recovery
+'    graph. These are overlay semantics, not another execution decision chain.
 ' ============================================================================
 state "WINDOW_ACTIVE\n[DOC ONLY]\nnow < windowExpireAt" as WINDOW_ACTIVE
 state "WINDOW_EXPIRED\n[DOC ONLY]\nnow >= windowExpireAt" as WINDOW_EXPIRED
 state "NEW_GENERATION\n[DOC ONLY]\nnext execute()\nversion+1" as WINDOW_NEW
 
-WINDOW_ACTIVE --> WINDOW_ACTIVE : duplicate access\nFIXED: 不推进\nSLIDING: 推进 windowExpireAt
-WINDOW_ACTIVE --> WINDOW_EXPIRED : now >= windowExpireAt
-WINDOW_EXPIRED --> WINDOW_NEW : next normal tryAcquire()
+WINDOW_ACTIVE -right-> WINDOW_ACTIVE : duplicate access\nFIXED: 不推进\nSLIDING: 推进 windowExpireAt
+WINDOW_ACTIVE -right-> WINDOW_EXPIRED : now >= windowExpireAt
+WINDOW_EXPIRED -right-> WINDOW_NEW : next normal tryAcquire()
 WINDOW_NEW --> PROCESSING : 同一物理记录重置为 PROCESSING\nversion+1
 
-PROCESSING --> WINDOW_ACTIVE : WINDOWED only
-SUCCESS --> WINDOW_ACTIVE : WINDOWED only
-FAILED --> WINDOW_ACTIVE : WINDOWED only
-DISCARDED --> WINDOW_ACTIVE : WINDOWED only
+PROCESSING -up-> WINDOW_ACTIVE : WINDOWED only
+SUCCESS -up-> WINDOW_ACTIVE : WINDOWED only
+FAILED -up-> WINDOW_ACTIVE : WINDOWED only
+DISCARDED -up-> WINDOW_ACTIVE : WINDOWED only
 
 note bottom of WINDOW_EXPIRED
 语义窗口结束 != 物理记录删除。
