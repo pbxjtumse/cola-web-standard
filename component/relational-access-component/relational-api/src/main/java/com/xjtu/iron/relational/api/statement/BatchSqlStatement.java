@@ -9,11 +9,13 @@ import java.util.List;
  * @param sql 批量执行的固定 SQL
  * @param batches 每个元素代表一次 addBatch 所需的完整位置参数列表
  * @param options Statement 执行选项
+ * @param route 已由上层确定的数据源路由
  */
 public record BatchSqlStatement(
         String operationName,
         String sql,
         List<List<SqlParameter>> batches,
-        SqlExecutionOptions options
+        SqlExecutionOptions options,
+        SqlRoute route
 ) {
 }

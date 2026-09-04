@@ -9,11 +9,13 @@ import java.util.List;
  * @param sql 已经由上层 Storage Adapter 确定的 SQL；Relational Access 不负责理解领域语义
  * @param parameters 按 ? 占位符顺序排列的位置参数
  * @param options 本次 Statement 执行选项
+ * @param route 已由上层确定的数据源路由；Relational Access 不负责计算 shard
  */
 public record SqlStatement(
         String operationName,
         String sql,
         List<SqlParameter> parameters,
-        SqlExecutionOptions options
+        SqlExecutionOptions options,
+        SqlRoute route
 ) {
 }
