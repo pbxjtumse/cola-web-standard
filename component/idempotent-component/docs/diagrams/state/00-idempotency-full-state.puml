@@ -7,11 +7,11 @@ skinparam linetype ortho
 left to right direction
 
 legend
-[PERSISTED]  = IdempotencyStatus，真正写入 JDBC / Redis
-[DERIVED]    = 由当前记录 + 时间 + failureRetryable 计算，不写入 status 字段
-[REPO RESULT]= Repository 原子操作返回值
-[CALL RESULT]= IdempotencyExecutor / IdempotencyOperations 对上层返回值
-[DOC ONLY]   = 为解释生命周期增加的概念节点，不是代码枚举
+[PERSISTED]   = IdempotencyStatus，真正写入 JDBC / Redis
+[DERIVED]     = 由当前记录 + 时间 + failureRetryable 计算，不写入 status 字段
+[REPO RESULT] = Repository 原子操作返回值
+[CALL RESULT] = IdempotencyExecutor / IdempotencyOperations 对上层返回值
+[DOC ONLY]    = 为解释生命周期增加的概念节点，不是代码枚举
 endlegend
 
 ' ============================================================================
@@ -46,12 +46,12 @@ state "HISTORICAL_DISCARDED\n[REPO RESULT]\nAcquireStatus.DISCARDED" as A_DISCAR
 state "KEY_CONFLICT\n[REPO RESULT]\nAcquireStatus.KEY_CONFLICT" as A_CONFLICT
 state "PROVIDER_ERROR\n[REPO RESULT]\nAcquireStatus.PROVIDER_ERROR" as A_ERROR
 
-PROCESSING ..> D_ACTIVE : normal duplicate\nnow < processingExpireAt
-PROCESSING ..> D_EXPIRED : normal duplicate\nnow >= processingExpireAt
-FAILED ..> D_FAILED_RETRYABLE : failureRetryable=true
-FAILED ..> D_FAILED_FINAL : failureRetryable=false
-SUCCESS ..> A_SUCCESS : duplicate execute()
-DISCARDED ..> A_DISCARDED : duplicate execute()
+PROCESSING --> D_ACTIVE : normal duplicate\nnow < processingExpireAt
+PROCESSING --> D_EXPIRED : normal duplicate\nnow >= processingExpireAt
+FAILED --> D_FAILED_RETRYABLE : failureRetryable=true
+FAILED --> D_FAILED_FINAL : failureRetryable=false
+SUCCESS --> A_SUCCESS : duplicate execute()
+DISCARDED --> A_DISCARDED : duplicate execute()
 
 state "EXECUTE\n[CORE ACTION]\nStateMachine.execute()" as ACTION_EXECUTE
 state "REPLAY\n[CORE ACTION]\nStateMachine.replay()" as ACTION_REPLAY
@@ -119,8 +119,8 @@ state "REC_NOT_FOUND\n[REPO RESULT]\nRecoveryStatus.NOT_FOUND" as REC_NOT_FOUND
 state "REC_KEY_CONFLICT\n[REPO RESULT]\nRecoveryStatus.KEY_CONFLICT" as REC_CONFLICT
 state "REC_PROVIDER_ERROR\n[REPO RESULT]\nRecoveryStatus.PROVIDER_ERROR" as REC_ERROR
 
-D_EXPIRED ..> REC_CANDIDATE : recoveryMode=EXTERNAL_TASK\nrecoverProcessingTimeout=true
-D_FAILED_RETRYABLE ..> REC_CANDIDATE : recoveryMode=EXTERNAL_TASK\nrecoverFailed=true
+D_EXPIRED --> REC_CANDIDATE : recoveryMode=EXTERNAL_TASK\nrecoverProcessingTimeout=true
+D_FAILED_RETRYABLE --> REC_CANDIDATE : recoveryMode=EXTERNAL_TASK\nrecoverFailed=true
 REC_CANDIDATE --> REC_DECISION : recover(expectedOwner, expectedVersion)
 
 REC_DECISION --> REC_ACQUIRED : 仍是可恢复旧 generation
@@ -164,10 +164,10 @@ WINDOW_ACTIVE --> WINDOW_EXPIRED : now >= windowExpireAt
 WINDOW_EXPIRED --> WINDOW_NEW : next normal tryAcquire()
 WINDOW_NEW --> PROCESSING : 同一物理记录重置为 PROCESSING\nversion+1
 
-PROCESSING ..> WINDOW_ACTIVE : WINDOWED only
-SUCCESS ..> WINDOW_ACTIVE : WINDOWED only
-FAILED ..> WINDOW_ACTIVE : WINDOWED only
-DISCARDED ..> WINDOW_ACTIVE : WINDOWED only
+PROCESSING --> WINDOW_ACTIVE : WINDOWED only
+SUCCESS --> WINDOW_ACTIVE : WINDOWED only
+FAILED --> WINDOW_ACTIVE : WINDOWED only
+DISCARDED --> WINDOW_ACTIVE : WINDOWED only
 
 note bottom of WINDOW_EXPIRED
 语义窗口结束 != 物理记录删除。
@@ -213,10 +213,6 @@ IdempotencyResultStatus（高层 Executor，一次调用结果，不持久化）
 - VALIDATION_FAILED
 end note
 
-ACTION_RETURN ..> EXECUTOR_RESULTS
-ACTION_REPLAY ..> EXECUTOR_RESULTS
-BUSINESS ..> EXECUTOR_RESULTS
-
 note as OPERATION_RESULTS
 IdempotencyOperations（给 message/task/workflow 的低层状态 API）
 
@@ -241,11 +237,6 @@ Write projection：
 它们是 API 投影，不是 IdempotencyStatus。
 end note
 
-PROCESSING ..> OPERATION_RESULTS
-SUCCESS ..> OPERATION_RESULTS
-FAILED ..> OPERATION_RESULTS
-DISCARDED ..> OPERATION_RESULTS
-
 note as STORAGE_NOTE
 V2 Storage Identity / Routing
 
@@ -262,7 +253,5 @@ shardKey / scanBucket 不允许漂移，漂移 -> KEY_CONFLICT。
 routeKey / requestHash 是业务身份保护；
 Repository 仍通过 UNIQUE / row lock / Lua / owner-version CAS 保证正确性。
 end note
-
-PROCESSING .. STORAGE_NOTE
 
 @enduml
