@@ -8,12 +8,12 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * PROCESSING -> SUCCESS 条件写请求。
+ * PROCESSING -> DISCARDED 条件写请求。
  *
- * <p>Provider 实现必须把 {@code status=PROCESSING && ownerToken && version} 放进条件更新。
- * 如果更新 0 行，调用方需要知道是 stale owner、已经终态还是存储异常。</p>
+ * <p>DISCARDED 是明确终态，适合“业务确认无需执行但也不应被重试”的场景。
+ * 它和 SUCCESS 一样必须通过 ownerToken + version 条件写入。</p>
  */
-public final class IdempotencySuccessRequest {
+public final class IdempotencyDiscardRequest {
 
     /** 逻辑存储上下文。 */
     private final IdempotencyStorageContext storageContext;
@@ -30,7 +30,7 @@ public final class IdempotencySuccessRequest {
     /** 当前 generation version。 */
     private final long version;
 
-    /** 可选结果载荷，由 ResultPolicy capture 产生。 */
+    /** 可选结果载荷；重复命中 DISCARDED 时不会走 ResultPolicy replay。 */
     private final String resultPayload;
 
     /** 幂等模式。 */
@@ -48,7 +48,7 @@ public final class IdempotencySuccessRequest {
     /** Core 传入的统一当前时间。 */
     private final Instant now;
 
-    public IdempotencySuccessRequest(IdempotencyStorageContext storageContext, String namespace, String key, String ownerToken, long version,
+    public IdempotencyDiscardRequest(IdempotencyStorageContext storageContext, String namespace, String key, String ownerToken, long version,
                                      String resultPayload, IdempotencyMode mode, Duration idempotencyWindow,
                                      IdempotencyWindowPolicy windowPolicy, Duration recordRetentionTtl, Instant now) {
         this.storageContext = storageContext;

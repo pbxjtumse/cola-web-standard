@@ -1,16 +1,21 @@
 CREATE TABLE IF NOT EXISTS iron_idempotency_record (
     id BIGINT NOT NULL AUTO_INCREMENT,
 
+    -- Shard-Ready Storage：逻辑 Store 与在线/扫描路由元数据。
+    store_name VARCHAR(64) NOT NULL DEFAULT 'default',
+    shard_key BIGINT NOT NULL DEFAULT 0,
+    scan_bucket INT NOT NULL DEFAULT 0,
+
     namespace VARCHAR(128) NOT NULL,
     idempotency_key VARCHAR(256) NOT NULL,
 
-    -- 路由元数据：未来分库分表 / Reliable Task 恢复时必须带回。
+    -- 业务路由元数据，例如 tenant / merchant；不再承担存储分片职责。
     route_key VARCHAR(256) NULL,
 
-    -- 同一个 idempotencyKey 必须对应同一个业务请求指纹。
+    -- 同一个幂等身份必须对应同一个业务请求指纹。
     request_hash VARCHAR(128) NULL,
 
-    -- 持久状态严格保持三态：PROCESSING / SUCCESS / FAILED。
+    -- V2 持久状态：PROCESSING / SUCCESS / FAILED / DISCARDED。
     status VARCHAR(32) NOT NULL,
     owner_token VARCHAR(128) NULL,
     version BIGINT NOT NULL DEFAULT 0,
@@ -35,9 +40,11 @@ CREATE TABLE IF NOT EXISTS iron_idempotency_record (
     completed_at TIMESTAMP(3) NULL,
 
     PRIMARY KEY (id),
-    UNIQUE KEY uk_iron_idempotency_namespace_key (namespace, idempotency_key),
-    KEY idx_iron_idempotency_recovery (
-        recovery_mode, status, processing_expire_at, updated_at
+    UNIQUE KEY uk_iron_idempotency_identity (store_name, namespace, idempotency_key),
+    KEY idx_iron_idempotency_recovery_scan (
+        store_name, scan_bucket, recovery_mode, status, processing_expire_at, id
     ),
-    KEY idx_iron_idempotency_route (route_key, status, processing_expire_at)
+    KEY idx_iron_idempotency_shard (
+        store_name, shard_key, namespace, idempotency_key
+    )
 );

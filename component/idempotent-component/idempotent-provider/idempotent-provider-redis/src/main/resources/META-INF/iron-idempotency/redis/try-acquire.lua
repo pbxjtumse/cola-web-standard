@@ -3,17 +3,9 @@
 --
 -- KEYS[1] redis hash key
 -- ARGV:
--- 1 nowMs
--- 2 ownerToken
--- 3 requestHash
--- 4 routeKey
--- 5 processingTimeoutMs
--- 6 idempotencyWindowMs
--- 7 windowPolicy
--- 8 recordRetentionTtlMs
--- 9 recoveryMode
--- 10 namespace
--- 11 logicalKey
+-- 1 nowMs, 2 ownerToken, 3 requestHash, 4 routeKey, 5 processingTimeoutMs,
+-- 6 idempotencyWindowMs, 7 windowPolicy, 8 recordRetentionTtlMs, 9 recoveryMode,
+-- 10 storeName, 11 shardKey, 12 scanBucket, 13 namespace, 14 logicalKey
 local key = KEYS[1]
 local now = tonumber(ARGV[1])
 local owner = ARGV[2]
@@ -24,8 +16,11 @@ local windowMs = tonumber(ARGV[6])
 local windowPolicy = ARGV[7]
 local retentionMs = tonumber(ARGV[8])
 local recoveryMode = ARGV[9]
-local namespace = ARGV[10]
-local logicalKey = ARGV[11]
+local storeName = ARGV[10]
+local shardKey = ARGV[11]
+local scanBucket = ARGV[12]
+local namespace = ARGV[13]
+local logicalKey = ARGV[14]
 
 local function h(name)
     local value = redis.call('HGET', key, name)
@@ -38,20 +33,18 @@ local function physical_expire_at(windowExpireAt)
 end
 
 local function apply_physical_expiry(expireAt)
-    if expireAt and expireAt > 0 then
-        redis.call('PEXPIREAT', key, expireAt)
-    end
+    if expireAt and expireAt > 0 then redis.call('PEXPIREAT', key, expireAt) end
 end
 
 local function snapshot(code, rollover)
     return {
         tostring(code), rollover and '1' or '0',
+        h('store_name'), h('shard_key'), h('scan_bucket'),
         h('namespace'), h('key'), h('route_key'), h('request_hash'),
         h('status'), h('owner_token'), h('version'), h('result_payload'),
         h('failure_code'), h('failure_message'), h('failure_retryable'),
         h('recovery_mode'), h('window_policy'), h('processing_expire_at'),
-        h('window_expire_at'), h('retention_expire_at'), h('created_at'),
-        h('updated_at'), h('completed_at')
+        h('window_expire_at'), h('retention_expire_at'), h('created_at'), h('updated_at'), h('completed_at')
     }
 end
 
@@ -59,6 +52,9 @@ local function start_generation(version, createdAt)
     local windowExpireAt = now + windowMs
     local retentionExpireAt = physical_expire_at(windowExpireAt)
     redis.call('HSET', key,
+        'store_name', storeName,
+        'shard_key', shardKey,
+        'scan_bucket', scanBucket,
         'namespace', namespace,
         'key', logicalKey,
         'route_key', routeKey,
@@ -85,16 +81,18 @@ local function touch_sliding_window()
     if windowPolicy ~= 'SLIDING_ON_ACCESS' then return end
     local nextWindow = now + windowMs
     local nextRetention = physical_expire_at(nextWindow)
-    redis.call('HSET', key,
-        'window_expire_at', tostring(nextWindow),
-        'retention_expire_at', tostring(nextRetention),
-        'updated_at', tostring(now))
+    redis.call('HSET', key, 'window_expire_at', tostring(nextWindow), 'retention_expire_at', tostring(nextRetention), 'updated_at', tostring(now))
     apply_physical_expiry(nextRetention)
 end
 
 if redis.call('EXISTS', key) == 0 then
     start_generation(1, now)
     return snapshot(1, false)
+end
+
+-- shardKey / scanBucket 是存储路由身份，不能因为 WINDOWED 新 generation 而漂移。
+if h('shard_key') ~= shardKey or h('scan_bucket') ~= scanBucket then
+    return snapshot(7, false)
 end
 
 -- 语义窗口结束后，即使记录因为 retention 仍存在，也开启新的 generation。
@@ -105,37 +103,31 @@ if oldWindowExpireAt > 0 and oldWindowExpireAt <= now then
     return snapshot(1, true)
 end
 
--- 在有效窗口内，同一个 key 不能跨 route 或跨业务请求指纹复用。
-local oldRoute = h('route_key')
-if oldRoute ~= routeKey then
-    return snapshot(7, false)
-end
+-- 在有效窗口内，同一个 key 不能跨业务 route 或跨请求指纹复用。
+if h('route_key') ~= routeKey then return snapshot(7, false) end
 local oldHash = h('request_hash')
-if oldHash ~= '' and requestHash ~= '' and oldHash ~= requestHash then
-    return snapshot(7, false)
-end
+if oldHash ~= '' and requestHash ~= '' and oldHash ~= requestHash then return snapshot(7, false) end
 
 local status = h('status')
 if status == 'SUCCESS' then
     touch_sliding_window()
     return snapshot(2, false)
 end
-
+if status == 'DISCARDED' then
+    touch_sliding_window()
+    return snapshot(8, false)
+end
 if status == 'PROCESSING' then
     local processingExpireAt = tonumber(h('processing_expire_at')) or 0
     if processingExpireAt > now then
         touch_sliding_window()
         return snapshot(3, false)
     end
-    -- 只返回派生判定状态，不修改持久 status。
     return snapshot(4, false)
 end
-
 if status == 'FAILED' then
     touch_sliding_window()
-    if h('failure_retryable') == '1' then
-        return snapshot(5, false)
-    end
+    if h('failure_retryable') == '1' then return snapshot(5, false) end
     return snapshot(6, false)
 end
 
