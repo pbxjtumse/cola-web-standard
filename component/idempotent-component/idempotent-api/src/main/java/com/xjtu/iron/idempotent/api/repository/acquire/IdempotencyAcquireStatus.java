@@ -3,8 +3,8 @@ package com.xjtu.iron.idempotent.api.repository.acquire;
 /**
  * 普通 {@code execute()} 调用 Repository.tryAcquire() 后的判定结果。
  *
- * <p>PROCESSING_ACTIVE / PROCESSING_EXPIRED / FAILED_* 都是派生判定，
- * 不是数据库持久 status；持久状态仍只有 PROCESSING/SUCCESS/FAILED。</p>
+ * <p>PROCESSING_ACTIVE / PROCESSING_EXPIRED / FAILED_* 都是派生判定，不是数据库持久 status；
+ * V2 持久状态为 PROCESSING / SUCCESS / FAILED / DISCARDED。</p>
  */
 public enum IdempotencyAcquireStatus {
 
@@ -13,6 +13,9 @@ public enum IdempotencyAcquireStatus {
 
     /** 已有 SUCCESS；Executor 应直接 replay，不再执行业务。 */
     SUCCESS,
+
+    /** 已有 DISCARDED；上层应返回“历史已丢弃”语义，不再执行业务。 */
+    DISCARDED,
 
     /** 已有 PROCESSING 且 processingExpireAt > now。 */
     PROCESSING_ACTIVE,

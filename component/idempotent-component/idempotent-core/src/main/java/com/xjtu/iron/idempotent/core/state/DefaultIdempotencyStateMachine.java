@@ -22,6 +22,7 @@ public final class DefaultIdempotencyStateMachine implements IdempotencyStateMac
         return switch (status) {
             case ACQUIRED -> IdempotencyStateDecision.execute();
             case SUCCESS -> IdempotencyStateDecision.replay();
+            case DISCARDED -> IdempotencyStateDecision.returning(IdempotencyResultStatus.PREVIOUS_DISCARDED);
             case PROCESSING_ACTIVE -> IdempotencyStateDecision.returning(IdempotencyResultStatus.PROCESSING);
             case PROCESSING_EXPIRED -> IdempotencyStateDecision.returning(IdempotencyResultStatus.PROCESSING_EXPIRED);
             case FAILED_RETRYABLE -> IdempotencyStateDecision.returning(IdempotencyResultStatus.PREVIOUS_FAILED_RETRYABLE);
@@ -35,16 +36,16 @@ public final class DefaultIdempotencyStateMachine implements IdempotencyStateMac
      * 显式 recover() 的状态解释。
      *
      * <p>只有 RECOVERY_ACQUIRED 才能执行恢复业务；STALE_CANDIDATE 表示扫描快照已经过期，当前 generation
-     * 已经变化，旧恢复任务必须直接退出。</p>
+     * 已经变化，旧恢复任务必须直接退出。DISCARDED 是明确终态，同样禁止恢复。</p>
      */
     @Override
     public IdempotencyStateDecision onRecovery(IdempotencyRecoveryStatus status) {
         return switch (status) {
             case RECOVERY_ACQUIRED -> IdempotencyStateDecision.execute();
             case SUCCESS -> IdempotencyStateDecision.replay();
+            case DISCARDED -> IdempotencyStateDecision.returning(IdempotencyResultStatus.PREVIOUS_DISCARDED);
             case PROCESSING_ACTIVE -> IdempotencyStateDecision.returning(IdempotencyResultStatus.PROCESSING);
-            case NOT_RECOVERABLE, FAILED_FINAL, NOT_FOUND ->
-                    IdempotencyStateDecision.returning(IdempotencyResultStatus.RECOVERY_NOT_ALLOWED);
+            case NOT_RECOVERABLE, FAILED_FINAL, NOT_FOUND -> IdempotencyStateDecision.returning(IdempotencyResultStatus.RECOVERY_NOT_ALLOWED);
             case STALE_CANDIDATE -> IdempotencyStateDecision.returning(IdempotencyResultStatus.STALE_RECOVERY_CANDIDATE);
             case KEY_CONFLICT -> IdempotencyStateDecision.returning(IdempotencyResultStatus.KEY_CONFLICT);
             case PROVIDER_ERROR -> IdempotencyStateDecision.returning(IdempotencyResultStatus.REPOSITORY_ERROR);

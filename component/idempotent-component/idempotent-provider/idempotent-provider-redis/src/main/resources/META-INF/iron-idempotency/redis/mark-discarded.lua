@@ -1,5 +1,5 @@
--- mark-success.lua
--- PROCESSING -> SUCCESS，必须同时校验 owner_token + version。
+-- mark-discarded.lua
+-- PROCESSING -> DISCARDED。DISCARDED 是明确终态，后续重复请求不得重新执行业务。
 -- ARGV: 1 ownerToken, 2 version, 3 resultPayload, 4 nowMs, 5 mode,
 --       6 idempotencyWindowMs, 7 windowPolicy, 8 recordRetentionTtlMs
 local key = KEYS[1]
@@ -40,7 +40,7 @@ if mode == 'WINDOWED' and policy == 'SLIDING_ON_ACCESS' then
 end
 
 redis.call('HSET', key,
-    'status', 'SUCCESS',
+    'status', 'DISCARDED',
     'result_payload', ARGV[3],
     'failure_code', '',
     'failure_message', '',

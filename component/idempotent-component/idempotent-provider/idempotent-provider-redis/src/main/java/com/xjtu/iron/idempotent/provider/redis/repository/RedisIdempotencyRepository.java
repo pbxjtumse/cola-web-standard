@@ -1,15 +1,14 @@
 package com.xjtu.iron.idempotent.provider.redis.repository;
 
-import com.xjtu.iron.idempotent.provider.redis.key.RedisIdempotencyKeyBuilder;
-
-import com.xjtu.iron.idempotent.api.policy.IdempotencyMode;
-import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryMode;
-import com.xjtu.iron.idempotent.api.state.IdempotencyStatus;
 import com.xjtu.iron.idempotent.api.policy.IdempotencyWindowPolicy;
+import com.xjtu.iron.idempotent.api.recovery.IdempotencyRecoveryMode;
 import com.xjtu.iron.idempotent.api.repository.*;
 import com.xjtu.iron.idempotent.api.repository.acquire.*;
 import com.xjtu.iron.idempotent.api.repository.recovery.*;
 import com.xjtu.iron.idempotent.api.repository.write.*;
+import com.xjtu.iron.idempotent.api.state.IdempotencyStatus;
+import com.xjtu.iron.idempotent.api.storage.IdempotencyStorageContext;
+import com.xjtu.iron.idempotent.provider.redis.key.RedisIdempotencyKeyBuilder;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -24,26 +23,33 @@ import java.util.Optional;
 /**
  * WINDOWED Redis 幂等状态仓储。
  *
- * <p>与 JDBC 的领域语义保持一致，但把“读取 + 判断 + 修改”全部放进 Lua 中原子执行，避免
- * GET -> Java 判断 -> SET 的 Check-Then-Act 竞态。Redis 是 WINDOWED 的默认 Provider，不参与本地业务事务。</p>
- *
- * <p>三个时间必须分开理解：</p>
- * <ul>
- *     <li>processing_expire_at：当前 generation 的执行租约；</li>
- *     <li>window_expire_at：同 key 仍属于同一次逻辑请求的语义窗口；</li>
- *     <li>retention_expire_at：旧记录的物理保留截止时间，Redis PEXPIREAT 使用它。</li>
- * </ul>
+ * <p>V2 与 JDBC 共用 storeName/shardKey/scanBucket、四态状态机和 owner/version generation 语义。
+ * Redis 当前仍不提供 Recovery 全量扫描能力，但 Hash 中会完整保存 Storage 元数据，保证协议一致。</p>
  */
 public final class RedisIdempotencyRepository implements IdempotencyRepository {
 
     public static final String PROVIDER_NAME = "redis";
 
+    /** Spring Redis 字符串客户端，所有 Lua 脚本都以 Hash 结构读写幂等状态。 */
     private final StringRedisTemplate redis;
+
+    /** 统一构造 Redis key，避免 Provider 内多处拼接导致命名漂移。 */
     private final RedisIdempotencyKeyBuilder keyBuilder;
+
+    /** 普通 execute() 抢占/判定脚本。 */
     private final DefaultRedisScript<List> acquireScript;
+
+    /** 显式 recover() 二次 CAS 接管脚本。 */
     private final DefaultRedisScript<List> recoveryScript;
+
+    /** PROCESSING -> SUCCESS 条件写脚本。 */
     private final DefaultRedisScript<List> successScript;
+
+    /** PROCESSING -> FAILED 条件写脚本。 */
     private final DefaultRedisScript<List> failedScript;
+
+    /** PROCESSING -> DISCARDED 条件写脚本。 */
+    private final DefaultRedisScript<List> discardedScript;
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     public RedisIdempotencyRepository(StringRedisTemplate redis, String keyPrefix) {
@@ -53,6 +59,7 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
         this.recoveryScript = script("META-INF/iron-idempotency/redis/try-recover.lua");
         this.successScript = script("META-INF/iron-idempotency/redis/mark-success.lua");
         this.failedScript = script("META-INF/iron-idempotency/redis/mark-failed.lua");
+        this.discardedScript = script("META-INF/iron-idempotency/redis/mark-discarded.lua");
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -64,13 +71,8 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
     }
 
     @Override
-    public String providerName() {
-        return PROVIDER_NAME;
-    }
+    public String providerName() { return PROVIDER_NAME; }
 
-    /**
-     * Redis 当前只承诺 WINDOWED；result payload 可以保存，但 Redis + 业务数据库不构成本地事务。
-     */
     @Override
     public IdempotencyRepositoryCapabilities capabilities() {
         return IdempotencyRepositoryCapabilities.builder()
@@ -82,22 +84,18 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
                 .build();
     }
 
-    /**
-     * WINDOWED 普通状态抢占。
-     *
-     * <p>Lua 一次完成：首次创建 PROCESSING、窗口是否过期、requestHash/routeKey 冲突、PROCESSING active/expired、
-     * FAILED 判定以及 WINDOWED version+1 重启。脚本返回的状态就是 Repository 原子事实，之后才交给 StateMachine。</p>
-     */
     @Override
     public IdempotencyAcquireResult tryAcquire(IdempotencyAcquireRequest request) {
         if (!request.getMode().isWindowed()) {
             return IdempotencyAcquireResult.providerError(new IllegalArgumentException("redis repository supports WINDOWED only"));
         }
         try {
-            // 一个 Redis round-trip 内完成所有状态判断与必要写入，避免多个节点在 Java 层分别读取后再竞争写回。
+            IdempotencyStorageContext storage = requireStorage(request.getStorageContext());
+
+            // Lua 内一次完成 EXISTS/HGET/状态判断/HSET/PEXPIREAT，避免 Java 端读后再写的竞态。
             List<?> raw = redis.execute(
                     acquireScript,
-                    Collections.singletonList(key(request.getNamespace(), request.getKey())),
+                    Collections.singletonList(key(storage, request.getNamespace(), request.getKey())),
                     String.valueOf(request.getNow().toEpochMilli()),
                     request.getOwnerToken(),
                     empty(request.getRequestHash()),
@@ -107,6 +105,9 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
                     request.getWindowPolicy().name(),
                     String.valueOf(request.getRecordRetentionTtl().toMillis()),
                     request.getRecoveryMode().name(),
+                    storage.getStoreName(),
+                    String.valueOf(storage.getShardKey()),
+                    String.valueOf(storage.getScanBucket()),
                     request.getNamespace(),
                     request.getKey());
             return parseAcquire(raw);
@@ -115,21 +116,18 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
         }
     }
 
-    /**
-     * WINDOWED 显式恢复抢占。
-     *
-     * <p>默认 WINDOWED recoveryMode=NONE，因此通常不会调用。启用 EXTERNAL_TASK 后，脚本仍必须校验
-     * expectedOwner + expectedVersion；扫描 candidate 本身永远不是执行许可。</p>
-     */
     @Override
     public IdempotencyRecoveryResult tryRecover(IdempotencyRecoveryAcquireRequest request) {
         if (!request.getMode().isWindowed()) {
             return IdempotencyRecoveryResult.providerError(new IllegalArgumentException("redis repository supports WINDOWED only"));
         }
         try {
+            IdempotencyStorageContext storage = requireStorage(request.getStorageContext());
+
+            // expectedOwner/expectedVersion 由脚本在 Redis 端校验，STALE_CANDIDATE 不回到 Java 再判断。
             List<?> raw = redis.execute(
                     recoveryScript,
-                    Collections.singletonList(key(request.getNamespace(), request.getKey())),
+                    Collections.singletonList(key(storage, request.getNamespace(), request.getKey())),
                     String.valueOf(request.getNow().toEpochMilli()),
                     request.getNewOwnerToken(),
                     empty(request.getRequestHash()),
@@ -138,103 +136,86 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
                     request.isRecoverProcessingTimeout() ? "1" : "0",
                     request.isRecoverFailed() ? "1" : "0",
                     empty(request.getExpectedOwnerToken()),
-                    request.getExpectedVersion() == null ? "" : String.valueOf(request.getExpectedVersion()));
+                    request.getExpectedVersion() == null ? "" : String.valueOf(request.getExpectedVersion()),
+                    String.valueOf(storage.getShardKey()),
+                    String.valueOf(storage.getScanBucket()));
             return parseRecovery(raw);
         } catch (Exception error) {
             return IdempotencyRecoveryResult.providerError(error);
         }
     }
 
-    /**
-     * Lua 原子完成 PROCESSING -> SUCCESS。
-     *
-     * <p>脚本必须同时校验 ownerToken + version，防止已经失效的旧 generation 写入成功结果。</p>
-     */
-    /**
-     * 当前 generation 的 PROCESSING -> SUCCESS 原子完成。
-     * ownerToken + version 不匹配时脚本必须返回 STALE_OWNER，旧 generation 无权完成新状态。
-     */
     @Override
     public IdempotencyWriteResult markSuccess(IdempotencySuccessRequest request) {
         try {
+            IdempotencyStorageContext storage = requireStorage(request.getStorageContext());
+
+            // SUCCESS 写入仍是 owner/version 条件更新；锁是否存在不影响这里的最终裁决。
             List<?> raw = redis.execute(
                     successScript,
-                    Collections.singletonList(key(request.getNamespace(), request.getKey())),
-                    request.getOwnerToken(),
-                    String.valueOf(request.getVersion()),
-                    empty(request.getResultPayload()),
-                    String.valueOf(request.getNow().toEpochMilli()),
-                    request.getMode().name(),
-                    millis(request.getIdempotencyWindow()),
-                    request.getWindowPolicy().name(),
-                    String.valueOf(request.getRecordRetentionTtl().toMillis()));
+                    Collections.singletonList(key(storage, request.getNamespace(), request.getKey())),
+                    request.getOwnerToken(), String.valueOf(request.getVersion()), empty(request.getResultPayload()),
+                    String.valueOf(request.getNow().toEpochMilli()), request.getMode().name(), millis(request.getIdempotencyWindow()),
+                    request.getWindowPolicy().name(), String.valueOf(request.getRecordRetentionTtl().toMillis()));
             return parseWrite(raw);
         } catch (Exception error) {
             return IdempotencyWriteResult.providerError(error);
         }
     }
 
-    /**
-     * Lua 原子完成 PROCESSING -> FAILED，并保存 failureCode / retryable。
-     * 普通 execute() 不会因为 retryable=true 自动重试。</p>
-     */
-    /**
-     * 当前 generation 的 PROCESSING -> FAILED 原子完成。
-     * 与 markSuccess 一样，失败状态也必须受 ownerToken + version 保护。
-     */
     @Override
     public IdempotencyWriteResult markFailed(IdempotencyFailureRequest request) {
         try {
+            IdempotencyStorageContext storage = requireStorage(request.getStorageContext());
+
+            // FAILED 记录业务失败语义；retryable 只影响外部 recover()，普通 execute() 不会自动重试。
             List<?> raw = redis.execute(
                     failedScript,
-                    Collections.singletonList(key(request.getNamespace(), request.getKey())),
-                    request.getOwnerToken(),
-                    String.valueOf(request.getVersion()),
-                    empty(request.getFailure().getCode()),
-                    empty(request.getFailure().getMessage()),
-                    request.getFailure().isRetryable() ? "1" : "0",
-                    String.valueOf(request.getNow().toEpochMilli()),
-                    request.getMode().name(),
-                    millis(request.getIdempotencyWindow()),
-                    request.getWindowPolicy().name(),
-                    String.valueOf(request.getRecordRetentionTtl().toMillis()));
+                    Collections.singletonList(key(storage, request.getNamespace(), request.getKey())),
+                    request.getOwnerToken(), String.valueOf(request.getVersion()), empty(request.getFailure().getCode()),
+                    empty(request.getFailure().getMessage()), request.getFailure().isRetryable() ? "1" : "0",
+                    String.valueOf(request.getNow().toEpochMilli()), request.getMode().name(), millis(request.getIdempotencyWindow()),
+                    request.getWindowPolicy().name(), String.valueOf(request.getRecordRetentionTtl().toMillis()));
             return parseWrite(raw);
         } catch (Exception error) {
             return IdempotencyWriteResult.providerError(error);
         }
     }
 
-    /**
-     * 查询当前 Redis Hash 快照。
-     *
-     * <p>该方法只用于查询/诊断，不应拿它实现“先 find 再 update”的并发状态机；
-     * 所有状态转换必须继续走 Lua。</p>
-     */
     @Override
-    public Optional<IdempotencyRecord> find(String namespace, String key) {
-        Map<Object, Object> values = redis.opsForHash().entries(key(namespace, key));
+    public IdempotencyWriteResult markDiscarded(IdempotencyDiscardRequest request) {
+        try {
+            IdempotencyStorageContext storage = requireStorage(request.getStorageContext());
+
+            // DISCARDED 是明确终态，重复请求返回 PREVIOUS_DISCARDED，不进入结果回放分支。
+            List<?> raw = redis.execute(
+                    discardedScript,
+                    Collections.singletonList(key(storage, request.getNamespace(), request.getKey())),
+                    request.getOwnerToken(), String.valueOf(request.getVersion()), empty(request.getResultPayload()),
+                    String.valueOf(request.getNow().toEpochMilli()), request.getMode().name(), millis(request.getIdempotencyWindow()),
+                    request.getWindowPolicy().name(), String.valueOf(request.getRecordRetentionTtl().toMillis()));
+            return parseWrite(raw);
+        } catch (Exception error) {
+            return IdempotencyWriteResult.providerError(error);
+        }
+    }
+
+    @Override
+    public Optional<IdempotencyRecord> find(IdempotencyStorageContext storageContext, String namespace, String logicalKey) {
+        IdempotencyStorageContext storage = requireStorage(storageContext);
+        Map<Object, Object> values = redis.opsForHash().entries(key(storage, namespace, logicalKey));
         if (values == null || values.isEmpty()) {
             return Optional.empty();
         }
         return Optional.of(fromMap(values));
     }
 
-    /**
-     * 把 Lua 数字协议翻译成 Java 决策对象。
-     *
-     * <p>脚本返回数字而不是字符串枚举，是为了让 Lua 返回协议简单稳定；
-     * 这里是唯一的协议映射边界。</p>
-     *
-     * <p>1 ACQUIRED, 2 SUCCESS, 3 ACTIVE, 4 EXPIRED,
-     * 5 FAILED_RETRYABLE, 6 FAILED_FINAL, 7 CONFLICT。</p>
-     */
-    /**
-     * 把 Lua 返回数组转换成稳定 AcquireStatus；Core 只依赖领域状态，不感知脚本内部字段布局。
-     */
     private IdempotencyAcquireResult parseAcquire(List<?> raw) {
         if (raw == null || raw.isEmpty()) {
             return IdempotencyAcquireResult.providerError(new IllegalStateException("empty acquire script result"));
         }
+
+        // Lua 返回数字协议，Java 侧只做状态枚举映射，不再重新解释业务规则。
         int code = Integer.parseInt(text(raw.get(0)));
         boolean rollover = raw.size() > 1 && "1".equals(text(raw.get(1)));
         IdempotencyRecord record = snapshot(raw, 2);
@@ -246,20 +227,11 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
             case 5 -> IdempotencyAcquireResult.of(IdempotencyAcquireStatus.FAILED_RETRYABLE, record);
             case 6 -> IdempotencyAcquireResult.of(IdempotencyAcquireStatus.FAILED_FINAL, record);
             case 7 -> IdempotencyAcquireResult.of(IdempotencyAcquireStatus.KEY_CONFLICT, record);
-            default -> IdempotencyAcquireResult.providerError(
-                    new IllegalStateException("unknown acquire code: " + code));
+            case 8 -> IdempotencyAcquireResult.of(IdempotencyAcquireStatus.DISCARDED, record);
+            default -> IdempotencyAcquireResult.providerError(new IllegalStateException("unknown acquire code: " + code));
         };
     }
 
-    /**
-     * 恢复 Lua 返回码协议。
-     *
-     * <p>1 ACQUIRED, 2 SUCCESS, 3 ACTIVE, 4 NOT_RECOVERABLE, 5 FAILED_FINAL,
-     * 6 NOT_FOUND, 7 CONFLICT, 8 STALE。</p>
-     */
-    /**
-     * 把 Recovery Lua 结果转换成 RECOVERY_ACQUIRED / STALE_CANDIDATE / NOT_RECOVERABLE 等稳定语义。
-     */
     private IdempotencyRecoveryResult parseRecovery(List<?> raw) {
         if (raw == null || raw.isEmpty()) {
             return IdempotencyRecoveryResult.providerError(new IllegalStateException("empty recovery script result"));
@@ -276,23 +248,17 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
             case 6 -> IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.NOT_FOUND, null);
             case 7 -> IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.KEY_CONFLICT, record);
             case 8 -> IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.STALE_CANDIDATE, record);
-            default -> IdempotencyRecoveryResult.providerError(
-                    new IllegalStateException("unknown recovery code: " + code));
+            case 9 -> IdempotencyRecoveryResult.of(IdempotencyRecoveryStatus.DISCARDED, record);
+            default -> IdempotencyRecoveryResult.providerError(new IllegalStateException("unknown recovery code: " + code));
         };
     }
 
-    /**
-     * markSuccess/markFailed Lua 返回码协议。
-     *
-     * <p>1 UPDATED, 2 NOT_FOUND, 3 STALE_OWNER, 4 ALREADY_FINAL。</p>
-     */
-    /**
-     * 把 markSuccess/markFailed 脚本结果转换成 UPDATED / STALE_OWNER / ALREADY_FINAL / PROVIDER_ERROR。
-     */
     private IdempotencyWriteResult parseWrite(List<?> raw) {
         if (raw == null || raw.isEmpty()) {
             return IdempotencyWriteResult.providerError(new IllegalStateException("empty write script result"));
         }
+
+        // 写脚本同样返回语义状态，Core 依赖它区分 stale owner 与 already final。
         int code = Integer.parseInt(text(raw.get(0)));
         IdempotencyRecord record = raw.size() > 1 ? snapshot(raw, 1) : null;
         return switch (code) {
@@ -300,46 +266,51 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
             case 2 -> IdempotencyWriteResult.of(IdempotencyWriteStatus.NOT_FOUND, null);
             case 3 -> IdempotencyWriteResult.of(IdempotencyWriteStatus.STALE_OWNER, record);
             case 4 -> IdempotencyWriteResult.of(IdempotencyWriteStatus.ALREADY_FINAL, record);
-            default -> IdempotencyWriteResult.providerError(
-                    new IllegalStateException("unknown write code: " + code));
+            default -> IdempotencyWriteResult.providerError(new IllegalStateException("unknown write code: " + code));
         };
     }
 
     /**
-     * snapshot 字段顺序共 19 个：namespace,key,routeKey,requestHash,status,owner,version,result,
-     * failureCode,failureMessage,retryable,recoveryMode,windowPolicy,processingExpireAt,
-     * windowExpireAt,retentionExpireAt,createdAt,updatedAt,completedAt。
+     * V2 snapshot 共 22 个字段：storeName,shardKey,scanBucket,namespace,key,routeKey,requestHash,status,owner,version,result,
+     * failureCode,failureMessage,retryable,recoveryMode,windowPolicy,processingExpireAt,windowExpireAt,retentionExpireAt,
+     * createdAt,updatedAt,completedAt。
      */
     private IdempotencyRecord snapshot(List<?> values, int offset) {
-        if (values.size() < offset + 19) {
+        if (values.size() < offset + 22) {
             return null;
         }
         return IdempotencyRecord.builder()
-                .namespace(nullable(text(values.get(offset))))
-                .key(nullable(text(values.get(offset + 1))))
-                .routeKey(nullable(text(values.get(offset + 2))))
-                .requestHash(nullable(text(values.get(offset + 3))))
-                .status(IdempotencyStatus.valueOf(text(values.get(offset + 4))))
-                .ownerToken(nullable(text(values.get(offset + 5))))
-                .version(Long.parseLong(text(values.get(offset + 6))))
-                .resultPayload(nullable(text(values.get(offset + 7))))
-                .failureCode(nullable(text(values.get(offset + 8))))
-                .failureMessage(nullable(text(values.get(offset + 9))))
-                .failureRetryable("1".equals(text(values.get(offset + 10))))
-                .recoveryMode(enumValue(IdempotencyRecoveryMode.class, text(values.get(offset + 11)), IdempotencyRecoveryMode.NONE))
-                .windowPolicy(enumValue(IdempotencyWindowPolicy.class,
-                        text(values.get(offset + 12)), IdempotencyWindowPolicy.FIXED_FROM_FIRST_ACQUIRE))
-                .processingExpireAt(epochMillis(text(values.get(offset + 13))))
-                .windowExpireAt(epochMillis(text(values.get(offset + 14))))
-                .retentionExpireAt(epochMillis(text(values.get(offset + 15))))
-                .createdAt(epochMillis(text(values.get(offset + 16))))
-                .updatedAt(epochMillis(text(values.get(offset + 17))))
-                .completedAt(epochMillis(text(values.get(offset + 18))))
+                .storeName(nullable(text(values.get(offset))))
+                .shardKey(Long.parseLong(text(values.get(offset + 1))))
+                .scanBucket(Integer.parseInt(text(values.get(offset + 2))))
+                .namespace(nullable(text(values.get(offset + 3))))
+                .key(nullable(text(values.get(offset + 4))))
+                .routeKey(nullable(text(values.get(offset + 5))))
+                .requestHash(nullable(text(values.get(offset + 6))))
+                .status(IdempotencyStatus.valueOf(text(values.get(offset + 7))))
+                .ownerToken(nullable(text(values.get(offset + 8))))
+                .version(Long.parseLong(text(values.get(offset + 9))))
+                .resultPayload(nullable(text(values.get(offset + 10))))
+                .failureCode(nullable(text(values.get(offset + 11))))
+                .failureMessage(nullable(text(values.get(offset + 12))))
+                .failureRetryable("1".equals(text(values.get(offset + 13))))
+                .recoveryMode(enumValue(IdempotencyRecoveryMode.class, text(values.get(offset + 14)), IdempotencyRecoveryMode.NONE))
+                .windowPolicy(enumValue(IdempotencyWindowPolicy.class, text(values.get(offset + 15)), IdempotencyWindowPolicy.FIXED_FROM_FIRST_ACQUIRE))
+                .processingExpireAt(epochMillis(text(values.get(offset + 16))))
+                .windowExpireAt(epochMillis(text(values.get(offset + 17))))
+                .retentionExpireAt(epochMillis(text(values.get(offset + 18))))
+                .createdAt(epochMillis(text(values.get(offset + 19))))
+                .updatedAt(epochMillis(text(values.get(offset + 20))))
+                .completedAt(epochMillis(text(values.get(offset + 21))))
                 .build();
     }
 
     private IdempotencyRecord fromMap(Map<Object, Object> values) {
+        // find() 是只读诊断/查询路径，直接把 Redis Hash 当前内容映射成统一 Record 快照。
         return IdempotencyRecord.builder()
+                .storeName(value(values, "store_name"))
+                .shardKey(Long.parseLong(value(values, "shard_key")))
+                .scanBucket(Integer.parseInt(value(values, "scan_bucket")))
                 .namespace(value(values, "namespace"))
                 .key(value(values, "key"))
                 .routeKey(nullable(value(values, "route_key")))
@@ -352,8 +323,7 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
                 .failureMessage(nullable(value(values, "failure_message")))
                 .failureRetryable("1".equals(value(values, "failure_retryable")))
                 .recoveryMode(enumValue(IdempotencyRecoveryMode.class, value(values, "recovery_mode"), IdempotencyRecoveryMode.NONE))
-                .windowPolicy(enumValue(IdempotencyWindowPolicy.class,
-                        value(values, "window_policy"), IdempotencyWindowPolicy.FIXED_FROM_FIRST_ACQUIRE))
+                .windowPolicy(enumValue(IdempotencyWindowPolicy.class, value(values, "window_policy"), IdempotencyWindowPolicy.FIXED_FROM_FIRST_ACQUIRE))
                 .processingExpireAt(epochMillis(value(values, "processing_expire_at")))
                 .windowExpireAt(epochMillis(value(values, "window_expire_at")))
                 .retentionExpireAt(epochMillis(value(values, "retention_expire_at")))
@@ -363,13 +333,15 @@ public final class RedisIdempotencyRepository implements IdempotencyRepository {
                 .build();
     }
 
-    private String key(String namespace, String logicalKey) {
-        return keyBuilder.build(namespace, logicalKey);
+    private String key(IdempotencyStorageContext storage, String namespace, String logicalKey) {
+        return keyBuilder.build(storage.getStoreName(), namespace, logicalKey);
     }
 
-    private String millis(java.time.Duration value) {
-        return value == null ? "0" : String.valueOf(value.toMillis());
+    private IdempotencyStorageContext requireStorage(IdempotencyStorageContext storage) {
+        return Objects.requireNonNull(storage, "storageContext must not be null");
     }
+
+    private String millis(java.time.Duration value) { return value == null ? "0" : String.valueOf(value.toMillis()); }
 
     private String value(Map<Object, Object> values, String key) {
         Object value = values.get(key);

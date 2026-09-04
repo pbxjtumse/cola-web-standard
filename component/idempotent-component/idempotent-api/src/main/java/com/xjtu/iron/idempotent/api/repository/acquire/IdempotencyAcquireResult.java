@@ -5,9 +5,16 @@ import com.xjtu.iron.idempotent.api.repository.IdempotencyRecord;
 /** 普通 tryAcquire 的决策结果。 */
 public final class IdempotencyAcquireResult {
 
+    /** Repository 派生出的普通抢占状态。 */
     private final IdempotencyAcquireStatus status;
+
+    /** 与状态对应的幂等记录快照；Provider 异常或 NOT_FOUND 类场景可能为空。 */
     private final IdempotencyRecord record;
+
+    /** WINDOWED 窗口结束后是否在旧物理记录上开启了新 generation。 */
     private final boolean windowRollover;
+
+    /** Provider 异常；只有 PROVIDER_ERROR 时通常非空。 */
     private final Throwable error;
 
     private IdempotencyAcquireResult(IdempotencyAcquireStatus status, IdempotencyRecord record, boolean windowRollover, Throwable error) {

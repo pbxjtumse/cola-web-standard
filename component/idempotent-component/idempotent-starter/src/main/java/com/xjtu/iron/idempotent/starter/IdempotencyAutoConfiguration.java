@@ -320,6 +320,7 @@ public class IdempotencyAutoConfiguration {
                 ? source.getRecoverFailed()
                 : (windowed ? root.getWindowed().isRecoverFailed() : root.getDurable().isRecoverFailed());
 
+        // 命名 Policy 的 null 字段统一在这里继承全局默认值，Core 层拿到的是已闭合的稳定策略。
         IdempotencyPolicy.Builder builder = IdempotencyPolicy.builder()
                 .name(name)
                 .mode(mode)
@@ -336,6 +337,7 @@ public class IdempotencyAutoConfiguration {
                 .lockOptions(mergeLock(source, globalLock));
 
         if (windowed) {
+            // DURABLE 不设置 idempotencyWindow；WINDOWED 才需要窗口与保留时间。
             builder.idempotencyWindow(
                             source.getIdempotencyWindow() == null
                                     ? root.getWindowed().getIdempotencyWindow()
@@ -352,6 +354,7 @@ public class IdempotencyAutoConfiguration {
 
     private IdempotencyLockOptions mergeLock(IdempotencyProperties.Policy policy, IdempotencyLockOptions global) {
 
+        // lockEnabled=null 表示继承全局短锁开关；false 是显式关闭当前 Policy 短锁。
         boolean enabled = policy.getLockEnabled() == null
                 ? global.isEnabled() : policy.getLockEnabled();
 
