@@ -1,0 +1,63 @@
+@startuml
+title Future Migration - Idempotency Tx-A / Tx-B / Tx-C with Relational Access
+
+autonumber
+skinparam shadowing false
+
+actor "Idempotency Executor / Integration" as IDEM
+participant "TransactionExecutor" as TX
+participant "JdbcIdempotencyStorage\n(future Relational-based)" as Storage
+participant "RelationalTemplate" as RT
+participant "SpringTransactionAwareConnectionProvider" as SCP
+participant "Business / MyBatis" as Biz
+database Database as DB
+
+== Tx-A: acquire state must commit before business callback ==
+IDEM -> TX : execute(REQUIRES_NEW, state-tx)
+TX -> TX : begin Tx-A / bind Connection-A
+TX -> Storage : tryAcquire()
+Storage -> RT : update(INSERT/CAS SQL)
+RT -> SCP : acquire -> transaction-bound A
+SCP --> RT : BORROWED A
+RT -> DB : persist PROCESSING
+TX -> DB : COMMIT Tx-A
+TX --> IDEM : ACQUIRED
+
+== Tx-B: business + markSuccess one atomic local transaction ==
+IDEM -> TX : execute(REQUIRED, business-tx)
+TX -> TX : begin/join Tx-B / bind Connection-B
+TX -> Biz : execute real business
+Biz -> DB : business SQL via MyBatis / Connection-B
+TX -> Storage : markSuccess(owner, version)
+Storage -> RT : update(mark-success CAS)
+RT -> SCP : acquire -> transaction-bound B
+SCP --> RT : BORROWED B
+RT -> DB : idempotency SUCCESS SQL / same Connection-B
+TX -> DB : COMMIT Tx-B atomically
+TX --> IDEM : success
+
+alt business / markSuccess fails
+  TX -> DB : ROLLBACK Tx-B
+
+  == Tx-C: persist failure in independent transaction ==
+  IDEM -> TX : execute(REQUIRES_NEW, failure-state-tx)
+  TX -> TX : begin Tx-C / bind Connection-C
+  TX -> Storage : markFailed(...)
+  Storage -> RT : update(mark-failed CAS)
+  RT -> SCP : acquire -> transaction-bound C
+  SCP --> RT : BORROWED C
+  RT -> DB : persist FAILED
+  TX -> DB : COMMIT Tx-C
+end
+
+note bottom of RT
+RelationalTemplate never decides REQUIRED / REQUIRES_NEW.
+It only executes SQL on the Connection supplied by its Provider.
+end note
+
+note bottom of IDEM
+Current JdbcExecutionManager transaction semantics are not deleted blindly.
+They migrate upward into idempotency + transaction integration orchestration.
+end note
+
+@enduml

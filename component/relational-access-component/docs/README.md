@@ -1,23 +1,42 @@
-# Relational Access UML Index
+# Relational Access v1 Design Docs
 
-当前文档只描述设计边界与接口关系，不代表已有执行实现。
+当前文档与 `relational-api / relational-spi / relational-core / relational-integration-spring` 代码一一对应。
 
-## Component
+## 推荐阅读顺序
 
-- `component/00-relational-access-overview.puml`：Iron Components 总体位置，明确业务模板、技术组件 Storage 与 Relational Access 的依赖层级。
-- `component/01-api-spi-boundary.puml`：relational-api / relational-spi 契约边界以及未来 core/integration 的位置。
+1. `design/00-class-responsibility.md`：先知道每个类为什么存在、谁依赖、能不能删。
+2. `component/00-relational-access-overview.puml`：整个 Iron Components 中的位置。
+3. `component/01-api-spi-boundary.puml`：业务模板 / Storage / SPI 三层边界。
+4. `component/02-core-class-diagram.puml`：当前真实代码类图。
+5. `sequence/03-update-main-flow.puml`：先理解最简单也最重要的 update/CAS。
+6. `sequence/00-query-one-flow.puml`：查询、RowMapper、NON_UNIQUE_RESULT。
+7. `sequence/04-batch-update-flow.puml`：JDBC batch。
+8. `state/00-sql-execution-lifecycle.puml`：DefaultRelationalTemplate 完整生命周期。
+9. `state/01-connection-handle-lifecycle.puml`：OWNED/BORROWED 的真正意义。
+10. `sequence/05-spring-shared-transaction.puml`：业务 MyBatis 与 RelationalTemplate 如何共享同一 Connection。
+11. `sequence/06-idempotency-txabc-migration.puml`：当前幂等 JdbcExecutionManager 的 Tx-A/Tx-B/Tx-C 如何迁移。
+12. `sequence/01-idempotency-storage-flow.puml`：幂等语义 -> Storage -> SQL -> Relational Access。
 
-## State
+## 当前版本明确不做
 
-- `state/00-sql-execution-lifecycle.puml`：一次 SQL 执行从 CREATED 到资源释放的完整生命周期。
-- `state/01-connection-handle-lifecycle.puml`：OWNED / BORROWED Connection 的所有权状态模型。
+- ORM Entity / Repository 自动生成
+- SQL AST / Dynamic SQL DSL
+- 自动分页 count SQL
+- 分库分表算法
+- 自动 Retry
+- 在 Relational Core 内 begin/commit/rollback
+- MySQL/PostgreSQL vendor-specific translator
+- Spring Boot Starter 自动装配（下一步）
 
-## Sequence
+## 当前最重要的边界
 
-- `sequence/00-query-one-flow.puml`：普通 queryOne 的未来执行主链。
-- `sequence/01-idempotency-storage-flow.puml`：Idempotency 领域语义如何转换为 SQL/Route，再交给 Relational Access。
-- `sequence/02-business-mybatis-shared-transaction.puml`：业务使用 MyBatis、基础组件使用 RelationalTemplate 时如何通过同一事务 Connection 协同。
+```text
+Transaction Component / Integration
+    -> 决定 REQUIRED / REQUIRES_NEW / commit / rollback
 
-## 阅读顺序
+Relational Access
+    -> 决定如何安全执行 SQL、如何拿/释放当前 Connection、如何翻译 JDBC 失败
 
-建议：`00-overview -> 01-api-spi-boundary -> idempotency-storage-flow -> shared-transaction -> state diagrams`。
+JdbcXXXStorage
+    -> 决定最终 SQL、参数、物理表、存储结果语义
+```

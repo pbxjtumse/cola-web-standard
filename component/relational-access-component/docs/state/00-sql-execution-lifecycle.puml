@@ -1,71 +1,63 @@
 @startuml
-title Relational Access - SQL Execution Lifecycle
+title Relational Access v1 - SQL Execution Lifecycle (matches DefaultRelationalTemplate)
 
 hide empty description
 skinparam shadowing false
-skinparam linetype polyline
 left to right direction
 
 state CREATED
 state VALIDATING
-state RESOLVING_DATASOURCE
+state CONTEXT_READY
+state OBSERVATION_BEFORE
 state ACQUIRING_CONNECTION
 state PREPARING_STATEMENT
+state CONFIGURING_STATEMENT
 state BINDING_PARAMETERS
 state EXECUTING
-state MAPPING_RESULT
-state BUILDING_RESULT
-state TRANSLATING_EXCEPTION
-state RELEASING_RESOURCES
-state NOTIFYING_LISTENER
+state MAPPING_OR_BUILDING_RESULT
+state CLOSING_JDBC_RESOURCES
+state RELEASING_CONNECTION_HANDLE
+state TRANSLATING_SQL_EXCEPTION
+state OBSERVATION_SUCCESS
+state OBSERVATION_FAILURE
 state SUCCEEDED
-state TERMINATED_WITH_ERROR
+state FAILED
 
 [*] --> CREATED
-CREATED --> VALIDATING : RelationalTemplate method called
+CREATED --> VALIDATING : public API called
+VALIDATING --> CONTEXT_READY : valid SqlStatement
+VALIDATING --> FAILED : IllegalArgumentException\ncaller configuration bug
 
-VALIDATING --> RESOLVING_DATASOURCE : statement/options valid
-VALIDATING --> RELEASING_RESOURCES : invalid request\n(no JDBC resources yet)
-
-RESOLVING_DATASOURCE --> ACQUIRING_CONNECTION : DataSource resolved
-RESOLVING_DATASOURCE --> TRANSLATING_EXCEPTION : resolution failure
-
+CONTEXT_READY --> OBSERVATION_BEFORE : build SqlExecutionContext
+OBSERVATION_BEFORE --> ACQUIRING_CONNECTION : listener errors are swallowed
 ACQUIRING_CONNECTION --> PREPARING_STATEMENT : ConnectionHandle acquired
-ACQUIRING_CONNECTION --> TRANSLATING_EXCEPTION : SQLException
-
-PREPARING_STATEMENT --> BINDING_PARAMETERS : PreparedStatement created
-PREPARING_STATEMENT --> TRANSLATING_EXCEPTION : SQLException
-
-BINDING_PARAMETERS --> EXECUTING : parameters/options bound
-BINDING_PARAMETERS --> TRANSLATING_EXCEPTION : SQLException
-
-EXECUTING --> MAPPING_RESULT : query
-EXECUTING --> BUILDING_RESULT : update / batch / generated-key
-EXECUTING --> TRANSLATING_EXCEPTION : SQLException
-
-MAPPING_RESULT --> BUILDING_RESULT : mapping complete
-MAPPING_RESULT --> TRANSLATING_EXCEPTION : SQLException / mapping failure
-
-BUILDING_RESULT --> RELEASING_RESOURCES : result ready
-TRANSLATING_EXCEPTION --> RELEASING_RESOURCES : stable failure created
-
-RELEASING_RESOURCES --> NOTIFYING_LISTENER : ResultSet / Statement / Handle released
-NOTIFYING_LISTENER --> SUCCEEDED : no recorded failure
-NOTIFYING_LISTENER --> TERMINATED_WITH_ERROR : recorded failure
-
+PREPARING_STATEMENT --> CONFIGURING_STATEMENT : PreparedStatement created
+CONFIGURING_STATEMENT --> BINDING_PARAMETERS
+BINDING_PARAMETERS --> EXECUTING
+EXECUTING --> MAPPING_OR_BUILDING_RESULT
+MAPPING_OR_BUILDING_RESULT --> CLOSING_JDBC_RESOURCES
+CLOSING_JDBC_RESOURCES --> RELEASING_CONNECTION_HANDLE
+RELEASING_CONNECTION_HANDLE --> OBSERVATION_SUCCESS
+OBSERVATION_SUCCESS --> SUCCEEDED : listener errors are swallowed
 SUCCEEDED --> [*]
-TERMINATED_WITH_ERROR --> [*]
 
-note bottom of TRANSLATING_EXCEPTION
-SQLException is translated to
-RelationalAccessException + RelationalFailureType.
-Relational Access itself does NOT retry SQL.
-end note
+ACQUIRING_CONNECTION --> TRANSLATING_SQL_EXCEPTION : SQLException
+PREPARING_STATEMENT --> TRANSLATING_SQL_EXCEPTION : SQLException
+CONFIGURING_STATEMENT --> TRANSLATING_SQL_EXCEPTION : SQLException
+BINDING_PARAMETERS --> TRANSLATING_SQL_EXCEPTION : SQLException
+EXECUTING --> TRANSLATING_SQL_EXCEPTION : SQLException
+CLOSING_JDBC_RESOURCES --> TRANSLATING_SQL_EXCEPTION : SQLException
+RELEASING_CONNECTION_HANDLE --> TRANSLATING_SQL_EXCEPTION : SQLException
 
-note bottom of RELEASING_RESOURCES
-ConnectionHandle.close() follows ownership:
-OWNED -> physical close
-BORROWED -> logical release only
+MAPPING_OR_BUILDING_RESULT --> OBSERVATION_FAILURE : NON_UNIQUE / mapping / generated-key error
+TRANSLATING_SQL_EXCEPTION --> OBSERVATION_FAILURE : SqlExceptionTranslator
+OBSERVATION_FAILURE --> FAILED : listener error cannot replace original failure
+FAILED --> [*]
+
+note bottom of TRANSLATING_SQL_EXCEPTION
+Standard translator is conservative.
+MySQL/PostgreSQL-specific deadlock/duplicate-key
+classification can be added later as a Translator implementation.
 end note
 
 @enduml
