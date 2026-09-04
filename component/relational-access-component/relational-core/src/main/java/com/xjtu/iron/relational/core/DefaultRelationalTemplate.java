@@ -106,7 +106,7 @@ public final class DefaultRelationalTemplate implements RelationalTemplate {
                     if (resultSet.next()) {
                         throw nonUniqueResult(context);
                     }
-                    return Optional.ofNullable(value);
+                    return Optional.of(value);
                 }
             }
         });
@@ -263,7 +263,18 @@ public final class DefaultRelationalTemplate implements RelationalTemplate {
             ResultSet resultSet
     ) {
         try {
-            return rowMapper.map(resultSet);
+            T value = rowMapper.map(resultSet);
+            if (value == null) {
+                throw new RelationalAccessException(
+                        RelationalFailureType.RESULT_MAPPING_ERROR,
+                        context.operationName(),
+                        null,
+                        null,
+                        "RowMapper must not return null, operation=" + context.operationName(),
+                        null
+                );
+            }
+            return value;
         } catch (RelationalAccessException exception) {
             throw exception;
         } catch (Exception exception) {

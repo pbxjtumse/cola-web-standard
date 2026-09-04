@@ -26,7 +26,7 @@ public final class SingleDataSourceResolver implements DataSourceResolver {
     public DataSource resolve(SqlExecutionContext context) {
         if (!context.route().isDefaultRoute()) {
             throw new RelationalAccessException(
-                    RelationalFailureType.UNKNOWN,
+                    RelationalFailureType.DATA_SOURCE_ROUTING_ERROR,
                     context.operationName(),
                     null,
                     null,

@@ -9,6 +9,7 @@ package com.xjtu.iron.relational.api.exception;
 public enum RelationalFailureType {
 
     CONNECTION_ERROR,
+    DATA_SOURCE_ROUTING_ERROR,
     TIMEOUT,
     DEADLOCK,
     LOCK_TIMEOUT,
