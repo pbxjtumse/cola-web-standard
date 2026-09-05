@@ -11,22 +11,29 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>relational-integration-spring</artifactId>
+    <artifactId>relational-spring-boot-starter</artifactId>
+    <name>relational-spring-boot-starter</name>
+    <description>Relational Access 的 Spring Boot 自动装配入口。</description>
 
     <dependencies>
         <dependency>
             <groupId>com.xjtu.iron</groupId>
-            <artifactId>relational-spi</artifactId>
+            <artifactId>relational-core</artifactId>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-jdbc</artifactId>
+            <groupId>com.xjtu.iron</groupId>
+            <artifactId>relational-integration-spring</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.xjtu.iron</groupId>
-            <artifactId>relational-core</artifactId>
-            <version>${project.version}</version>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

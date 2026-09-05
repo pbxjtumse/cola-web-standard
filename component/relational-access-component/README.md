@@ -1,7 +1,7 @@
 # Relational Access Component
 
-> 当前阶段：**v1 JDBC Foundation / Core Main Flow**  
-> 当前已经包含 `relational-api`、`relational-spi`、`relational-core` 与 `relational-integration-spring`；Spring Boot Starter、数据库厂商 Translator、Sharding Integration 仍未实现。
+> 当前阶段：**v1 JDBC Foundation / Usable Baseline**  
+> 当前已经包含 `relational-api`、`relational-spi`、`relational-core`、`relational-integration-spring` 与 `relational-spring-boot-starter`，并补齐 H2 主链测试与 Spring 同事务回滚测试。
 
 ## 1. 组件定位
 
@@ -27,6 +27,14 @@ RelationalTemplate
     -> JDBC
 ```
 
+最重要的边界：
+
+```text
+Storage 决定：执行什么 SQL、参数是什么、结果如何解释。
+Relational Access 决定：如何安全、统一地执行这条 SQL。
+Transaction 决定：事务何时 begin / commit / rollback，以及 REQUIRED / REQUIRES_NEW 等传播语义。
+```
+
 ## 2. Maven modules
 
 ```text
@@ -35,6 +43,7 @@ relational-access-component
 ├── relational-spi
 ├── relational-core
 ├── relational-integration-spring
+├── relational-spring-boot-starter
 └── docs
 ```
 
@@ -86,7 +95,63 @@ Spring 本地事务参与桥：
 
 它不 begin/commit/rollback；只通过 `DataSourceUtils` 获取和释放 transaction-bound Connection。
 
-## 3. API 分级
+### relational-spring-boot-starter
+
+单 DataSource / Primary DataSource 场景的默认自动装配：
+
+```text
+DataSource
+    -> SingleDataSourceResolver
+    -> SpringTransactionAwareConnectionProvider
+    -> StandardSqlExceptionTranslator
+    -> DefaultRelationalTemplate
+```
+
+业务若提供自定义 `DataSourceResolver`、`ConnectionProvider`、`SqlExceptionTranslator` 或 `RelationalTemplate` Bean，Starter 会让位。
+
+## 3. Spring Boot 使用
+
+引入：
+
+```xml
+<dependency>
+    <groupId>com.xjtu.iron</groupId>
+    <artifactId>relational-spring-boot-starter</artifactId>
+</dependency>
+```
+
+只要应用已有标准 `DataSource`，即可直接注入：
+
+```java
+private final RelationalTemplate relationalTemplate;
+```
+
+Storage 示例：
+
+```java
+UpdateResult result = relationalTemplate.update(
+        SqlStatement.of(
+                "idempotency.try-acquire",
+                """
+                UPDATE iron_idempotency
+                   SET owner_token = ?, status = ?, updated_at = ?
+                 WHERE idempotency_key = ?
+                   AND status = ?
+                """,
+                ownerToken,
+                PROCESSING,
+                now,
+                idempotencyKey,
+                INIT
+        )
+);
+
+return result.affectedRows() == 1;
+```
+
+Relational Access 不知道 `ACQUIRED / PROCESSING / ownerToken` 的含义；`affectedRows` 到幂等结果的解释仍属于 `JdbcIdempotencyStorage`。
+
+## 4. API 分级
 
 ### Level A：业务模板依赖高层技术能力
 
@@ -125,25 +190,25 @@ JdbcTaskStorage
 
 `relational-core`、Spring transaction integration、未来 observability/sharding integration 才依赖 `ConnectionProvider` 等 SPI。
 
-## 4. SQL 的归属
+## 5. SQL 的归属
 
 SQL 仍然存在，但不散到 Relational Core。
 
 ```text
-tryAcquire()                         幂等领域语义
+tryAcquire()                          幂等领域语义
     ↓
-JdbcIdempotencyStorage              存储语义
+JdbcIdempotencyStorage               存储语义
     ↓
 UPDATE ... WHERE status = ?          SQL / 物理表语义
     ↓
-RelationalTemplate.update(...)      通用关系型执行语义
+RelationalTemplate.update(...)       通用关系型执行语义
     ↓
 PreparedStatement.executeUpdate()    JDBC 机制
 ```
 
 Relational Access 不知道 `ownerToken / PROCESSING / Outbox / Order` 是什么。
 
-## 5. 事务边界
+## 6. 事务边界
 
 Relational Core **不创建事务**。
 
@@ -157,7 +222,9 @@ RelationalTemplate -> Spring Provider ┘
 
 因此 Tx-A / Tx-B / Tx-C 的传播策略仍属于 idempotency + transaction integration，而不是 `RelationalTemplate`。
 
-## 6. v1 明确不做
+当前 `relational-integration-spring` 已用真实 H2 测试验证：同一个 Spring 本地事务内，`JdbcTemplate` 与 `RelationalTemplate` 的写入会一起提交或一起回滚。
+
+## 7. v1 明确不做
 
 - ORM / Entity / Repository 自动实现
 - `@Table` / `@Column`
@@ -169,9 +236,14 @@ RelationalTemplate -> Spring Provider ┘
 - 数据库连接池
 - Schema Migration
 - MySQL/PostgreSQL vendor-specific Translator（下一阶段按需求增加）
-- Spring Boot Starter 自动装配（下一阶段）
 
-## 7. 代码和 UML 阅读入口
+## 8. 验证命令
+
+```bash
+mvn -pl :relational-core,:relational-integration-spring,:relational-spring-boot-starter -am test
+```
+
+## 9. 代码和 UML 阅读入口
 
 从 `docs/README.md` 开始。
 

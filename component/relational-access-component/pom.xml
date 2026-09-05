@@ -21,5 +21,6 @@
         <module>relational-spi</module>
         <module>relational-core</module>
         <module>relational-integration-spring</module>
+        <module>relational-spring-boot-starter</module>
     </modules>
 </project>
